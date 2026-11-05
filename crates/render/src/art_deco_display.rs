@@ -1,18 +1,26 @@
 //! Art Deco display rendering
 //!
-//! Provides a 1920s-inspired Art Deco display with:
-//! - Sunburst and fan corner decorations
-//! - Stepped/ziggurat border patterns
-//! - Chevron dividers and accents
-//! - Gold, copper, brass metallic color schemes
-//! - Geometric background patterns
+//! A 1920s-inspired frame: polished-metal rules, stepped (ziggurat)
+//! silhouettes, sunburst fans, chevron and zigzag bands, and strict
+//! bilateral symmetry. Every ornament is filled or double-ruled rather than
+//! hairline, sized from the configured widths and the panel size, and
+//! coloured from the resolved theme colours (the "metal" gradients are
+//! derived from the configured colour, so a copper or silver palette gets
+//! copper or silver metal).
+//!
+//! Layout contract (unchanged across redesigns): the frame rectangle is
+//! inset by `border_width + 4`, the content area by `content_padding`
+//! inside that plus the header height, and groups are separated by
+//! `divider_width + 2 * divider_padding`.
 
 use anyhow::Result;
 use cairo::Context;
+use std::f64::consts::{FRAC_PI_2, PI};
 
-use crate::combo_traits::FrameRenderer;
 use crate::background::Color;
-use crate::pango_text::{pango_show_text, pango_text_extents};
+use crate::combo_traits::FrameRenderer;
+use crate::pango_text::get_font_description;
+use pangocairo::functions::{create_layout, show_layout};
 
 pub use rg_sens_types::display_configs::art_deco::*;
 
@@ -64,1190 +72,222 @@ impl FrameRenderer for ArtDecoRenderer {
     }
 }
 
-/// Draw a sunburst/fan pattern from a corner
-fn draw_sunburst_corner(
-    cr: &Context,
-    cx: f64,
-    cy: f64,
-    size: f64,
-    ray_count: usize,
-    start_angle: f64,
-    sweep: f64,
-    color: &Color,
-    line_width: f64,
-) {
+// ---------------------------------------------------------------------------
+// Colour and geometry helpers
+// ---------------------------------------------------------------------------
+
+/// Detail unit for ornaments that have no configured size: a 48th of the
+/// panel's shorter side, kept legible.
+fn unit(w: f64, h: f64) -> f64 {
+    (w.min(h) / 48.0).clamp(4.0, 12.0)
+}
+
+fn set_color(cr: &Context, c: &Color) {
+    cr.set_source_rgba(c.r, c.g, c.b, c.a);
+}
+
+fn set_color_alpha(cr: &Context, c: &Color, alpha: f64) {
+    cr.set_source_rgba(c.r, c.g, c.b, c.a * alpha);
+}
+
+fn lighten(c: &Color, k: f64) -> Color {
+    Color::new(
+        c.r + (1.0 - c.r) * k,
+        c.g + (1.0 - c.g) * k,
+        c.b + (1.0 - c.b) * k,
+        c.a,
+    )
+}
+
+fn darken(c: &Color, k: f64) -> Color {
+    Color::new(c.r * (1.0 - k), c.g * (1.0 - k), c.b * (1.0 - k), c.a)
+}
+
+/// Polished metal: dark – bright – dark along the given axis, derived from
+/// the colour itself so every palette keeps its hue.
+fn metal_gradient(c: &Color, x0: f64, y0: f64, x1: f64, y1: f64) -> cairo::LinearGradient {
+    let g = cairo::LinearGradient::new(x0, y0, x1, y1);
+    let d = darken(c, 0.30);
+    let b = lighten(c, 0.40);
+    g.add_color_stop_rgba(0.0, d.r, d.g, d.b, c.a);
+    g.add_color_stop_rgba(0.5, b.r, b.g, b.b, c.a);
+    g.add_color_stop_rgba(1.0, d.r, d.g, d.b, c.a);
+    g
+}
+
+/// A rule that fades to transparent at both ends.
+fn fading_gradient(
+    c: &Color,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    alpha: f64,
+) -> cairo::LinearGradient {
+    let g = cairo::LinearGradient::new(x0, y0, x1, y1);
+    g.add_color_stop_rgba(0.0, c.r, c.g, c.b, 0.0);
+    g.add_color_stop_rgba(0.18, c.r, c.g, c.b, c.a * alpha);
+    g.add_color_stop_rgba(0.82, c.r, c.g, c.b, c.a * alpha);
+    g.add_color_stop_rgba(1.0, c.r, c.g, c.b, 0.0);
+    g
+}
+
+/// A rule that is transparent at (x0, y0) and solid at (x1, y1).
+fn fade_in_gradient(
+    c: &Color,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    alpha: f64,
+) -> cairo::LinearGradient {
+    let g = cairo::LinearGradient::new(x0, y0, x1, y1);
+    g.add_color_stop_rgba(0.0, c.r, c.g, c.b, 0.0);
+    g.add_color_stop_rgba(1.0, c.r, c.g, c.b, c.a * alpha);
+    g
+}
+
+fn diamond_path(cr: &Context, cx: f64, cy: f64, r: f64) {
+    cr.new_sub_path();
+    cr.move_to(cx, cy - r);
+    cr.line_to(cx + r, cy);
+    cr.line_to(cx, cy + r);
+    cr.line_to(cx - r, cy);
+    cr.close_path();
+}
+
+/// A filled metal diamond with a thin dark edge: the "jewel" of the style.
+fn jewel(cr: &Context, cx: f64, cy: f64, r: f64, c: &Color) {
     cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let rays = ray_count.max(3);
-    let angle_step = sweep / (rays - 1) as f64;
-
-    for i in 0..rays {
-        let angle = start_angle + i as f64 * angle_step;
-        let end_x = cx + size * angle.cos();
-        let end_y = cy + size * angle.sin();
-
-        cr.move_to(cx, cy);
-        cr.line_to(end_x, end_y);
-    }
+    diamond_path(cr, cx, cy, r);
+    let g = metal_gradient(c, cx - r, cy, cx + r, cy);
+    cr.set_source(&g).ok();
+    cr.fill_preserve().ok();
+    let d = darken(c, 0.45);
+    set_color(cr, &d);
+    cr.set_line_width(1.0);
     cr.stroke().ok();
     cr.restore().ok();
 }
 
-/// Draw an Art Deco stepped/ziggurat corner decoration with stair-step pattern
-fn draw_art_deco_ziggurat_corner(
-    cr: &Context,
-    corner_x: f64,
-    corner_y: f64,
-    size: f64,
-    flip_h: bool,
-    flip_v: bool,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let h_dir = if flip_h { -1.0 } else { 1.0 };
-    let v_dir = if flip_v { -1.0 } else { 1.0 };
-
-    let steps = 4;
-    let step_size = size / (steps as f64 + 1.0);
-
-    // Draw stair-step pattern
-    // Start from outer corner, step inward diagonally
-    cr.move_to(corner_x, corner_y + v_dir * size);
-
+/// Rectangle with staircase corners (`steps` steps over depth `d`).
+fn stepped_rect_path(cr: &Context, x: f64, y: f64, w: f64, h: f64, d: f64, steps: usize) {
+    let steps = steps.max(1);
+    let s = d / steps as f64;
+    let n = steps as f64;
+    cr.new_sub_path();
+    cr.move_to(x + d, y);
+    cr.line_to(x + w - d, y);
     for i in 0..steps {
-        let step_x = corner_x + h_dir * (i as f64 * step_size);
-        let step_y = corner_y + v_dir * ((steps - i) as f64 * step_size);
-        let next_step_x = corner_x + h_dir * ((i + 1) as f64 * step_size);
-
-        cr.line_to(step_x, step_y);
-        cr.line_to(next_step_x, step_y);
+        let (px, py) = (x + w - d + i as f64 * s, y + i as f64 * s);
+        cr.line_to(px + s, py);
+        cr.line_to(px + s, py + s);
     }
-
-    // Final segment to end
-    cr.line_to(corner_x + h_dir * size, corner_y);
-    cr.stroke().ok();
-
-    // Draw a second inner stair pattern for more detail
-    let inner_offset = step_size * 0.5;
-    cr.move_to(
-        corner_x + h_dir * inner_offset,
-        corner_y + v_dir * (size - inner_offset),
-    );
-
-    for i in 0..(steps - 1) {
-        let step_x = corner_x + h_dir * (inner_offset + i as f64 * step_size);
-        let step_y = corner_y + v_dir * ((steps - 1 - i) as f64 * step_size);
-        let next_step_x = corner_x + h_dir * (inner_offset + (i + 1) as f64 * step_size);
-
-        cr.line_to(step_x, step_y);
-        cr.line_to(next_step_x, step_y);
+    cr.line_to(x + w, y + h - d);
+    for i in 0..steps {
+        let (px, py) = (x + w - i as f64 * s, y + h - d + i as f64 * s);
+        cr.line_to(px, py + s);
+        cr.line_to(px - s, py + s);
     }
-
-    cr.line_to(
-        corner_x + h_dir * (size - inner_offset),
-        corner_y + v_dir * inner_offset,
-    );
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw a diamond shape
-fn draw_diamond(cr: &Context, cx: f64, cy: f64, size: f64, color: &Color, filled: bool) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-
-    cr.move_to(cx, cy - size);
-    cr.line_to(cx + size, cy);
-    cr.line_to(cx, cy + size);
-    cr.line_to(cx - size, cy);
+    cr.line_to(x + d, y + h);
+    for i in 0..steps {
+        let (px, py) = (x + d - i as f64 * s, y + h - i as f64 * s);
+        cr.line_to(px - s, py);
+        cr.line_to(px - s, py - s);
+    }
+    cr.line_to(x, y + d);
+    for i in 0..steps {
+        let (px, py) = (x + i as f64 * s, y + d - i as f64 * s);
+        cr.line_to(px, py - s);
+        cr.line_to(px + s, py - s);
+    }
+    let _ = n;
     cr.close_path();
-
-    if filled {
-        cr.fill().ok();
-    } else {
-        cr.stroke().ok();
-    }
-    cr.restore().ok();
 }
 
-/// Draw Art Deco L-bracket corner with hexagon medallion
-/// This draws an L-shaped bracket with multiple parallel lines and a hexagon at the corner
-fn draw_art_deco_hexagon_corner(
-    cr: &Context,
-    corner_x: f64,
-    corner_y: f64,
-    size: f64,
-    flip_h: bool,
-    flip_v: bool,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let h_dir = if flip_h { -1.0 } else { 1.0 };
-    let v_dir = if flip_v { -1.0 } else { 1.0 };
-
-    let hex_size = size * 0.22;
-    let hex_cx = corner_x + h_dir * size * 0.35;
-    let hex_cy = corner_y + v_dir * size * 0.35;
-    let line_spacing = size * 0.08;
-
-    // Draw outer hexagon (flat-topped)
-    cr.new_path();
-    for i in 0..6 {
-        let angle = std::f64::consts::PI / 6.0 + i as f64 * std::f64::consts::PI / 3.0;
-        let px = hex_cx + hex_size * angle.cos();
-        let py = hex_cy + hex_size * angle.sin();
-        if i == 0 {
-            cr.move_to(px, py);
-        } else {
-            cr.line_to(px, py);
-        }
-    }
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw inner hexagon
-    let inner_hex = hex_size * 0.55;
-    cr.new_path();
-    for i in 0..6 {
-        let angle = std::f64::consts::PI / 6.0 + i as f64 * std::f64::consts::PI / 3.0;
-        let px = hex_cx + inner_hex * angle.cos();
-        let py = hex_cy + inner_hex * angle.sin();
-        if i == 0 {
-            cr.move_to(px, py);
-        } else {
-            cr.line_to(px, py);
-        }
-    }
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw horizontal lines extending from corner
-    for i in 0..3 {
-        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
-        cr.move_to(corner_x, y_offset);
-        cr.line_to(corner_x + h_dir * size, y_offset);
-    }
-    cr.stroke().ok();
-
-    // Draw vertical lines extending from corner
-    for i in 0..3 {
-        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
-        cr.move_to(x_offset, corner_y);
-        cr.line_to(x_offset, corner_y + v_dir * size);
-    }
-    cr.stroke().ok();
-
-    cr.restore().ok();
+/// Depth of the staircase corners of a `Stepped` border: as much as the
+/// configured corner size allows without reaching into the content area.
+fn step_depth(config: &ArtDecoFrameConfig) -> f64 {
+    config.corner_size.min(config.content_padding).max(6.0)
 }
 
-/// Draw Art Deco L-bracket corner with octagon medallion
-fn draw_art_deco_octagon_corner(
-    cr: &Context,
-    corner_x: f64,
-    corner_y: f64,
-    size: f64,
-    flip_h: bool,
-    flip_v: bool,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let h_dir = if flip_h { -1.0 } else { 1.0 };
-    let v_dir = if flip_v { -1.0 } else { 1.0 };
-
-    let oct_size = size * 0.22;
-    let oct_cx = corner_x + h_dir * size * 0.35;
-    let oct_cy = corner_y + v_dir * size * 0.35;
-    let line_spacing = size * 0.08;
-
-    // Draw octagon
-    cr.new_path();
-    for i in 0..8 {
-        let angle = std::f64::consts::PI / 8.0 + i as f64 * std::f64::consts::PI / 4.0;
-        let px = oct_cx + oct_size * angle.cos();
-        let py = oct_cy + oct_size * angle.sin();
-        if i == 0 {
-            cr.move_to(px, py);
-        } else {
-            cr.line_to(px, py);
-        }
-    }
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw horizontal lines extending from corner
-    for i in 0..3 {
-        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
-        cr.move_to(corner_x, y_offset);
-        cr.line_to(corner_x + h_dir * size, y_offset);
-    }
-    cr.stroke().ok();
-
-    // Draw vertical lines extending from corner
-    for i in 0..3 {
-        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
-        cr.move_to(x_offset, corner_y);
-        cr.line_to(x_offset, corner_y + v_dir * size);
-    }
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw Art Deco L-bracket corner with concentric circles
-fn draw_art_deco_circle_corner(
-    cr: &Context,
-    corner_x: f64,
-    corner_y: f64,
-    size: f64,
-    flip_h: bool,
-    flip_v: bool,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let h_dir = if flip_h { -1.0 } else { 1.0 };
-    let v_dir = if flip_v { -1.0 } else { 1.0 };
-
-    let circle_radius = size * 0.18;
-    let circle_cx = corner_x + h_dir * size * 0.35;
-    let circle_cy = corner_y + v_dir * size * 0.35;
-    let line_spacing = size * 0.08;
-
-    // Draw concentric circles
-    cr.arc(
-        circle_cx,
-        circle_cy,
-        circle_radius,
-        0.0,
-        std::f64::consts::TAU,
-    );
-    cr.stroke().ok();
-    cr.arc(
-        circle_cx,
-        circle_cy,
-        circle_radius * 0.6,
-        0.0,
-        std::f64::consts::TAU,
-    );
-    cr.stroke().ok();
-    // Center dot
-    cr.arc(
-        circle_cx,
-        circle_cy,
-        line_width * 1.5,
-        0.0,
-        std::f64::consts::TAU,
-    );
-    cr.fill().ok();
-
-    // Draw horizontal lines extending from corner
-    for i in 0..3 {
-        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
-        cr.move_to(corner_x, y_offset);
-        cr.line_to(corner_x + h_dir * size, y_offset);
-    }
-    cr.stroke().ok();
-
-    // Draw vertical lines extending from corner
-    for i in 0..3 {
-        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
-        cr.move_to(x_offset, corner_y);
-        cr.line_to(x_offset, corner_y + v_dir * size);
-    }
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw Art Deco L-bracket corner with stacked diamonds
-fn draw_art_deco_diamond_corner(
-    cr: &Context,
-    corner_x: f64,
-    corner_y: f64,
-    size: f64,
-    flip_h: bool,
-    flip_v: bool,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let h_dir = if flip_h { -1.0 } else { 1.0 };
-    let v_dir = if flip_v { -1.0 } else { 1.0 };
-
-    let diamond_size = size * 0.15;
-    let diamond_cx = corner_x + h_dir * size * 0.35;
-    let diamond_cy = corner_y + v_dir * size * 0.35;
-    let line_spacing = size * 0.08;
-
-    // Draw stacked diamonds (large outer, smaller inner)
-    // Outer diamond
-    cr.move_to(diamond_cx, diamond_cy - diamond_size);
-    cr.line_to(diamond_cx + diamond_size, diamond_cy);
-    cr.line_to(diamond_cx, diamond_cy + diamond_size);
-    cr.line_to(diamond_cx - diamond_size, diamond_cy);
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Inner diamond
-    let inner_size = diamond_size * 0.5;
-    cr.move_to(diamond_cx, diamond_cy - inner_size);
-    cr.line_to(diamond_cx + inner_size, diamond_cy);
-    cr.line_to(diamond_cx, diamond_cy + inner_size);
-    cr.line_to(diamond_cx - inner_size, diamond_cy);
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Small diamonds at the tips
-    let tip_size = diamond_size * 0.3;
-    let tip_dist = diamond_size + tip_size + 2.0;
-
-    // Diamond above/below
-    cr.move_to(diamond_cx, diamond_cy - tip_dist);
-    cr.line_to(diamond_cx + tip_size, diamond_cy - tip_dist + tip_size);
-    cr.line_to(diamond_cx, diamond_cy - tip_dist + tip_size * 2.0);
-    cr.line_to(diamond_cx - tip_size, diamond_cy - tip_dist + tip_size);
-    cr.close_path();
-    cr.fill().ok();
-
-    cr.move_to(diamond_cx, diamond_cy + tip_dist);
-    cr.line_to(diamond_cx + tip_size, diamond_cy + tip_dist - tip_size);
-    cr.line_to(diamond_cx, diamond_cy + tip_dist - tip_size * 2.0);
-    cr.line_to(diamond_cx - tip_size, diamond_cy + tip_dist - tip_size);
-    cr.close_path();
-    cr.fill().ok();
-
-    // Draw horizontal lines extending from corner
-    for i in 0..3 {
-        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
-        cr.move_to(corner_x, y_offset);
-        cr.line_to(corner_x + h_dir * size, y_offset);
-    }
-    cr.stroke().ok();
-
-    // Draw vertical lines extending from corner
-    for i in 0..3 {
-        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
-        cr.move_to(x_offset, corner_y);
-        cr.line_to(x_offset, corner_y + v_dir * size);
-    }
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw Art Deco double-line L bracket corner
-fn draw_art_deco_double_bracket(
-    cr: &Context,
-    corner_x: f64,
-    corner_y: f64,
-    size: f64,
-    flip_h: bool,
-    flip_v: bool,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let h_dir = if flip_h { -1.0 } else { 1.0 };
-    let v_dir = if flip_v { -1.0 } else { 1.0 };
-
-    let line_spacing = size * 0.12;
-
-    // Draw outer L bracket
-    cr.move_to(corner_x + h_dir * size, corner_y);
-    cr.line_to(corner_x, corner_y);
-    cr.line_to(corner_x, corner_y + v_dir * size);
-    cr.stroke().ok();
-
-    // Draw inner L bracket (offset)
-    cr.move_to(
-        corner_x + h_dir * (size - line_spacing * 2.0),
-        corner_y + v_dir * line_spacing,
-    );
-    cr.line_to(
-        corner_x + h_dir * line_spacing,
-        corner_y + v_dir * line_spacing,
-    );
-    cr.line_to(
-        corner_x + h_dir * line_spacing,
-        corner_y + v_dir * (size - line_spacing * 2.0),
-    );
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw Art Deco geometric stack corner (nested squares with lines)
-fn draw_art_deco_geometric_stack(
-    cr: &Context,
-    corner_x: f64,
-    corner_y: f64,
-    size: f64,
-    flip_h: bool,
-    flip_v: bool,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let h_dir = if flip_h { -1.0 } else { 1.0 };
-    let v_dir = if flip_v { -1.0 } else { 1.0 };
-
-    let sq_size = size * 0.18;
-    let sq_cx = corner_x + h_dir * size * 0.35;
-    let sq_cy = corner_y + v_dir * size * 0.35;
-    let line_spacing = size * 0.08;
-
-    // Draw outer square (rotated 45 degrees - diamond orientation)
-    cr.move_to(sq_cx, sq_cy - sq_size);
-    cr.line_to(sq_cx + sq_size, sq_cy);
-    cr.line_to(sq_cx, sq_cy + sq_size);
-    cr.line_to(sq_cx - sq_size, sq_cy);
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw inner square
-    let inner_sq = sq_size * 0.55;
-    cr.move_to(sq_cx, sq_cy - inner_sq);
-    cr.line_to(sq_cx + inner_sq, sq_cy);
-    cr.line_to(sq_cx, sq_cy + inner_sq);
-    cr.line_to(sq_cx - inner_sq, sq_cy);
-    cr.close_path();
-    cr.stroke().ok();
-
-    // Draw horizontal lines extending from corner
-    for i in 0..3 {
-        let y_offset = corner_y + v_dir * (i as f64 * line_spacing);
-        cr.move_to(corner_x, y_offset);
-        cr.line_to(corner_x + h_dir * size, y_offset);
-    }
-    cr.stroke().ok();
-
-    // Draw vertical lines extending from corner
-    for i in 0..3 {
-        let x_offset = corner_x + h_dir * (i as f64 * line_spacing);
-        cr.move_to(x_offset, corner_y);
-        cr.line_to(x_offset, corner_y + v_dir * size);
-    }
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw chevron/arrow pattern
-fn draw_chevron(
-    cr: &Context,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    color: &Color,
-    line_width: f64,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a);
-    cr.set_line_width(line_width);
-
-    let mid_x = x + width / 2.0;
-
-    cr.move_to(x, y + height);
-    cr.line_to(mid_x, y);
-    cr.line_to(x + width, y + height);
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw vertical lines background pattern
-fn draw_vertical_lines_pattern(
-    cr: &Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    spacing: f64,
-    color: &Color,
-) {
-    // (.max(1.0): a non-positive spacing would hang the loop below)
-    let spacing = spacing.max(1.0);
-
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.15);
-    cr.set_line_width(1.0);
-
-    let mut px = x + spacing;
-    while px < x + w {
-        cr.move_to(px, y);
-        cr.line_to(px, y + h);
-        px += spacing;
-    }
-    cr.stroke().ok();
-    cr.restore().ok();
-}
-
-/// Draw diamond grid background pattern
-fn draw_diamond_grid_pattern(
-    cr: &Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    spacing: f64,
-    color: &Color,
-) {
-    cr.save().ok();
-    cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.1);
-    cr.set_line_width(0.5);
-
-    // Draw diagonal lines in both directions
-    // (.max(1.0): a non-positive spacing would hang the loops below)
-    let diagonal_spacing = spacing.max(1.0);
-
-    // Top-left to bottom-right diagonals
-    let mut start = x;
-    while start < x + w + h {
-        cr.move_to(start, y);
-        cr.line_to(start - h, y + h);
-        start += diagonal_spacing;
-    }
-
-    // Top-right to bottom-left diagonals
-    start = x;
-    while start < x + w + h {
-        cr.move_to(start - h, y);
-        cr.line_to(start, y + h);
-        start += diagonal_spacing;
-    }
-
-    cr.stroke().ok();
-    cr.restore().ok();
-}
-
-/// Draw sunburst background pattern from center
-fn draw_sunburst_background(
-    cr: &Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    rays: usize,
-    color: &Color,
-) {
-    cr.save().ok();
-    cr.rectangle(x, y, w, h);
-    cr.clip();
-
-    let cx = x + w / 2.0;
-    let cy = y + h / 2.0;
-    let max_radius = (w.powi(2) + h.powi(2)).sqrt();
-
-    cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.08);
-    cr.set_line_width(1.0);
-
-    let angle_step = std::f64::consts::TAU / rays as f64;
-    for i in 0..rays {
-        let angle = i as f64 * angle_step;
-        cr.move_to(cx, cy);
-        cr.line_to(cx + max_radius * angle.cos(), cy + max_radius * angle.sin());
-    }
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw chevron background pattern
-fn draw_chevron_background(
-    cr: &Context,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    spacing: f64,
-    color: &Color,
-) {
-    cr.save().ok();
-    cr.rectangle(x, y, w, h);
-    cr.clip();
-
-    cr.set_source_rgba(color.r, color.g, color.b, color.a * 0.1);
-    cr.set_line_width(1.0);
-
-    // (.max(1.0): a non-positive spacing would hang the loop below)
-    let chevron_height = spacing.max(1.0);
-    let mut py = y;
-    while py < y + h + chevron_height {
-        let mid_x = x + w / 2.0;
-        cr.move_to(x, py + chevron_height);
-        cr.line_to(mid_x, py);
-        cr.line_to(x + w, py + chevron_height);
-        py += chevron_height * 2.0;
-    }
-    cr.stroke().ok();
-
-    cr.restore().ok();
-}
-
-/// Draw corner decorations based on style
-fn draw_corner_decorations(
-    cr: &Context,
-    config: &ArtDecoFrameConfig,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-) {
-    let accent_color = config.accent_color.resolve(&config.theme);
-    let size = config.corner_size;
-
-    match config.corner_style {
-        CornerStyle::Fan => {
-            // Top-left
-            draw_sunburst_corner(
-                cr,
-                x,
-                y,
-                size,
-                8,
-                0.0,
-                std::f64::consts::FRAC_PI_2,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right
-            draw_sunburst_corner(
-                cr,
-                x + w,
-                y,
-                size,
-                8,
-                std::f64::consts::FRAC_PI_2,
-                std::f64::consts::FRAC_PI_2,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right
-            draw_sunburst_corner(
-                cr,
-                x + w,
-                y + h,
-                size,
-                8,
-                std::f64::consts::PI,
-                std::f64::consts::FRAC_PI_2,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left
-            draw_sunburst_corner(
-                cr,
-                x,
-                y + h,
-                size,
-                8,
-                -std::f64::consts::FRAC_PI_2,
-                std::f64::consts::FRAC_PI_2,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::Ziggurat => {
-            // Top-left: stair steps going right and down
-            draw_art_deco_ziggurat_corner(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right: stair steps going left and down
-            draw_art_deco_ziggurat_corner(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right: stair steps going left and up
-            draw_art_deco_ziggurat_corner(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left: stair steps going right and up
-            draw_art_deco_ziggurat_corner(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::Diamond => {
-            // Top-left
-            draw_art_deco_diamond_corner(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right
-            draw_art_deco_diamond_corner(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right
-            draw_art_deco_diamond_corner(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left
-            draw_art_deco_diamond_corner(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::Bracket => {
-            cr.save().ok();
-            cr.set_source_rgba(
-                accent_color.r,
-                accent_color.g,
-                accent_color.b,
-                accent_color.a,
-            );
-            cr.set_line_width(config.accent_width);
-
-            let line_spacing = size * 0.12;
-            let num_lines = 4;
-
-            // Top-left - multiple parallel L-brackets
-            for i in 0..num_lines {
-                let offset = i as f64 * line_spacing;
-                let arm_len = size - offset * 1.5;
-                if arm_len > 0.0 {
-                    cr.move_to(x + offset, y + arm_len);
-                    cr.line_to(x + offset, y + offset);
-                    cr.line_to(x + arm_len, y + offset);
-                }
-            }
-            cr.stroke().ok();
-
-            // Top-right
-            for i in 0..num_lines {
-                let offset = i as f64 * line_spacing;
-                let arm_len = size - offset * 1.5;
-                if arm_len > 0.0 {
-                    cr.move_to(x + w - arm_len, y + offset);
-                    cr.line_to(x + w - offset, y + offset);
-                    cr.line_to(x + w - offset, y + arm_len);
-                }
-            }
-            cr.stroke().ok();
-
-            // Bottom-right
-            for i in 0..num_lines {
-                let offset = i as f64 * line_spacing;
-                let arm_len = size - offset * 1.5;
-                if arm_len > 0.0 {
-                    cr.move_to(x + w - offset, y + h - arm_len);
-                    cr.line_to(x + w - offset, y + h - offset);
-                    cr.line_to(x + w - arm_len, y + h - offset);
-                }
-            }
-            cr.stroke().ok();
-
-            // Bottom-left
-            for i in 0..num_lines {
-                let offset = i as f64 * line_spacing;
-                let arm_len = size - offset * 1.5;
-                if arm_len > 0.0 {
-                    cr.move_to(x + arm_len, y + h - offset);
-                    cr.line_to(x + offset, y + h - offset);
-                    cr.line_to(x + offset, y + h - arm_len);
-                }
-            }
-            cr.stroke().ok();
-
-            cr.restore().ok();
-        }
-        CornerStyle::Hexagon => {
-            // Top-left: lines go right and down
-            draw_art_deco_hexagon_corner(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right: lines go left and down
-            draw_art_deco_hexagon_corner(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right: lines go left and up
-            draw_art_deco_hexagon_corner(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left: lines go right and up
-            draw_art_deco_hexagon_corner(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::Octagon => {
-            // Top-left
-            draw_art_deco_octagon_corner(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right
-            draw_art_deco_octagon_corner(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right
-            draw_art_deco_octagon_corner(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left
-            draw_art_deco_octagon_corner(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::Circle => {
-            // Top-left
-            draw_art_deco_circle_corner(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right
-            draw_art_deco_circle_corner(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right
-            draw_art_deco_circle_corner(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left
-            draw_art_deco_circle_corner(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::DoubleBracket => {
-            // Top-left
-            draw_art_deco_double_bracket(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right
-            draw_art_deco_double_bracket(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right
-            draw_art_deco_double_bracket(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left
-            draw_art_deco_double_bracket(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::GeometricStack => {
-            // Top-left
-            draw_art_deco_geometric_stack(
-                cr,
-                x,
-                y,
-                size,
-                false,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Top-right
-            draw_art_deco_geometric_stack(
-                cr,
-                x + w,
-                y,
-                size,
-                true,
-                false,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-right
-            draw_art_deco_geometric_stack(
-                cr,
-                x + w,
-                y + h,
-                size,
-                true,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-            // Bottom-left
-            draw_art_deco_geometric_stack(
-                cr,
-                x,
-                y + h,
-                size,
-                false,
-                true,
-                &accent_color,
-                config.accent_width,
-            );
-        }
-        CornerStyle::None => {}
-    }
-}
-
-/// Draw border based on style
-fn draw_border(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64, h: f64) {
-    let border_color = config.border_color.resolve(&config.theme);
-
-    cr.save().ok();
-    cr.set_source_rgba(
-        border_color.r,
-        border_color.g,
-        border_color.b,
-        border_color.a,
-    );
-    cr.set_line_width(config.border_width);
-
+/// The frame silhouette: a rectangle, or a stepped one for `Stepped`.
+fn frame_path(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64, h: f64) {
     match config.border_style {
-        BorderStyle::Sunburst => {
-            // Simple rectangle with sunburst corners handled separately
+        BorderStyle::Stepped => stepped_rect_path(cr, x, y, w, h, step_depth(config), 3),
+        _ => {
+            cr.new_sub_path();
             cr.rectangle(x, y, w, h);
-            cr.stroke().ok();
-        }
-        BorderStyle::Chevron => {
-            // Draw border with chevron accents at midpoints
-            cr.rectangle(x, y, w, h);
-            cr.stroke().ok();
-
-            // Add small chevrons at edge midpoints
-            let chevron_size = 8.0;
-            draw_chevron(
-                cr,
-                x + w / 2.0 - chevron_size / 2.0,
-                y - chevron_size / 2.0,
-                chevron_size,
-                chevron_size / 2.0,
-                &border_color,
-                config.border_width,
-            );
-            draw_chevron(
-                cr,
-                x + w / 2.0 - chevron_size / 2.0,
-                y + h - chevron_size / 2.0,
-                chevron_size,
-                chevron_size / 2.0,
-                &border_color,
-                config.border_width,
-            );
-        }
-        BorderStyle::Stepped => {
-            // Draw stepped border with insets
-            let step = 4.0;
-            cr.rectangle(x, y, w, h);
-            cr.stroke().ok();
-            cr.rectangle(x + step, y + step, w - step * 2.0, h - step * 2.0);
-            cr.stroke().ok();
-        }
-        BorderStyle::Geometric => {
-            // Clean double-line border
-            cr.rectangle(x, y, w, h);
-            cr.stroke().ok();
-            cr.set_line_width(config.border_width / 2.0);
-            cr.rectangle(x + 4.0, y + 4.0, w - 8.0, h - 8.0);
-            cr.stroke().ok();
-        }
-        BorderStyle::Ornate => {
-            // Full ornate border with multiple elements
-            cr.rectangle(x, y, w, h);
-            cr.stroke().ok();
-
-            // Inner decorative line
-            cr.set_line_width(config.border_width / 2.0);
-            cr.rectangle(x + 6.0, y + 6.0, w - 12.0, h - 12.0);
-            cr.stroke().ok();
-
-            // Diamond accents at midpoints
-            let diamond_size = 4.0;
-            draw_diamond(cr, x + w / 2.0, y, diamond_size, &border_color, true);
-            draw_diamond(cr, x + w / 2.0, y + h, diamond_size, &border_color, true);
-            draw_diamond(cr, x, y + h / 2.0, diamond_size, &border_color, true);
-            draw_diamond(cr, x + w, y + h / 2.0, diamond_size, &border_color, true);
         }
     }
+}
 
+/// Zigzag polyline from (x0, y) to (x1, y) with the given period and
+/// amplitude; starts and ends on the centre line.
+fn zigzag_path(cr: &Context, x0: f64, x1: f64, y: f64, period: f64, amplitude: f64) {
+    let len = x1 - x0;
+    if len <= 0.0 || period <= 0.0 {
+        return;
+    }
+    let n = (len / period).round().max(1.0);
+    let p = len / n;
+    cr.new_sub_path();
+    cr.move_to(x0, y);
+    let mut px = x0;
+    for i in 0..n as usize {
+        let _ = i;
+        cr.line_to(px + p * 0.25, y - amplitude);
+        cr.line_to(px + p * 0.75, y + amplitude);
+        px += p;
+    }
+    cr.line_to(x1, y);
+}
+
+// ---------------------------------------------------------------------------
+// Text
+// ---------------------------------------------------------------------------
+
+/// Uppercase, letter-spaced title layout (the "reads as Deco" typography).
+fn title_layout(cr: &Context, text: &str, family: &str, size: f64) -> pango::Layout {
+    let desc = get_font_description(
+        family,
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+        size,
+    );
+    let layout = create_layout(cr);
+    layout.set_font_description(Some(&desc));
+    layout.set_text(&text.to_uppercase());
+    let attrs = pango::AttrList::new();
+    let tracking = (size * 0.22 * pango::SCALE as f64) as i32;
+    attrs.insert(pango::AttrInt::new_letter_spacing(tracking));
+    layout.set_attributes(Some(&attrs));
+    layout
+}
+
+// ---------------------------------------------------------------------------
+// Background
+// ---------------------------------------------------------------------------
+
+fn draw_background(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64, h: f64) {
+    let bg = config.background_color.resolve(&config.theme);
+    cr.save().ok();
+    frame_path(cr, config, x, y, w, h);
+    cr.clip();
+    set_color(cr, &bg);
+    cr.paint().ok();
+    // Vertical vignette: deeper at the top and bottom edges.
+    let vig = cairo::LinearGradient::new(0.0, y, 0.0, y + h);
+    vig.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.30);
+    vig.add_color_stop_rgba(0.16, 0.0, 0.0, 0.0, 0.0);
+    vig.add_color_stop_rgba(0.84, 0.0, 0.0, 0.0, 0.0);
+    vig.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.30);
+    cr.set_source(&vig).ok();
+    cr.paint().ok();
+    draw_background_pattern(cr, config, x, y, w, h);
     cr.restore().ok();
 }
 
-/// Draw background pattern
 fn draw_background_pattern(
     cr: &Context,
     config: &ArtDecoFrameConfig,
@@ -1256,152 +296,536 @@ fn draw_background_pattern(
     w: f64,
     h: f64,
 ) {
-    let pattern_color = config.pattern_color.resolve(&config.theme);
-
+    let c = config.pattern_color.resolve(&config.theme);
+    let spacing = config.pattern_spacing.max(4.0);
+    cr.save().ok();
     match config.background_pattern {
-        BackgroundPattern::Solid => {} // No pattern
+        BackgroundPattern::Solid => {}
         BackgroundPattern::VerticalLines => {
-            draw_vertical_lines_pattern(cr, x, y, w, h, config.pattern_spacing, &pattern_color);
+            set_color_alpha(cr, &c, 0.14);
+            cr.set_line_width(1.0);
+            let mut px = x + spacing;
+            while px < x + w {
+                cr.move_to(px.round() + 0.5, y);
+                cr.line_to(px.round() + 0.5, y + h);
+                px += spacing;
+            }
+            cr.stroke().ok();
         }
         BackgroundPattern::DiamondGrid => {
-            draw_diamond_grid_pattern(cr, x, y, w, h, config.pattern_spacing, &pattern_color);
+            // 45° lattice.
+            set_color_alpha(cr, &c, 0.10);
+            cr.set_line_width(1.0);
+            let step = spacing * 2.0;
+            let mut d = -h;
+            while d < w {
+                cr.move_to(x + d, y);
+                cr.line_to(x + d + h, y + h);
+                cr.move_to(x + d + h, y);
+                cr.line_to(x + d, y + h);
+                d += step;
+            }
+            cr.stroke().ok();
         }
         BackgroundPattern::Sunburst => {
-            draw_sunburst_background(cr, x, y, w, h, config.sunburst_rays, &pattern_color);
+            // Rays from the bottom centre: a rising sun behind the content.
+            set_color_alpha(cr, &c, 0.09);
+            cr.set_line_width(1.0);
+            let rays = config.sunburst_rays.max(4);
+            let (cx, cy) = (x + w / 2.0, y + h);
+            let r = (w * w + h * h).sqrt();
+            for i in 0..=rays {
+                let a = PI + PI * i as f64 / rays as f64;
+                cr.move_to(cx, cy);
+                cr.line_to(cx + r * a.cos(), cy + r * a.sin());
+            }
+            cr.stroke().ok();
         }
         BackgroundPattern::Chevrons => {
-            draw_chevron_background(cr, x, y, w, h, config.pattern_spacing, &pattern_color);
+            set_color_alpha(cr, &c, 0.10);
+            cr.set_line_width(1.0);
+            let period = spacing * 2.0;
+            let mut py = y + spacing;
+            while py < y + h + spacing {
+                zigzag_path(cr, x, x + w, py, period, spacing * 0.4);
+                py += spacing;
+            }
+            cr.stroke().ok();
         }
+    }
+    cr.restore().ok();
+}
+
+// ---------------------------------------------------------------------------
+// Border
+// ---------------------------------------------------------------------------
+
+fn draw_border(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64, h: f64, u: f64) {
+    let c = config.border_color.resolve(&config.theme);
+    let bw = config.border_width.max(0.5);
+    cr.save().ok();
+
+    // Outer rule: polished metal.
+    frame_path(cr, config, x, y, w, h);
+    let metal = metal_gradient(&c, 0.0, y, 0.0, y + h);
+    cr.set_source(&metal).ok();
+    cr.set_line_width(bw);
+    cr.stroke().ok();
+
+    let inner_w = (bw * 0.4).max(1.0);
+    let inset = bw * 1.5 + 2.0;
+    match config.border_style {
+        BorderStyle::Geometric | BorderStyle::Ornate | BorderStyle::Stepped => {
+            // Inner rule.
+            set_color_alpha(cr, &c, 0.75);
+            cr.set_line_width(inner_w);
+            let (ix, iy, iw, ih) = (x + inset, y + inset, w - inset * 2.0, h - inset * 2.0);
+            match config.border_style {
+                BorderStyle::Stepped => {
+                    let d = (step_depth(config) - inset).max(3.0);
+                    stepped_rect_path(cr, ix, iy, iw, ih, d, 3);
+                }
+                _ => {
+                    cr.new_sub_path();
+                    cr.rectangle(ix, iy, iw, ih);
+                }
+            }
+            cr.stroke().ok();
+        }
+        BorderStyle::Chevron => {
+            // A zigzag band inside the rule, clear of the corners.
+            let amp = (u * 0.35).max(1.5);
+            let cy_off = inset + amp;
+            let skip = config.corner_size.max(u * 2.0);
+            let period = (u * 1.6).max(6.0);
+            set_color_alpha(cr, &c, 0.85);
+            cr.set_line_width(config.accent_width.max(1.0));
+            zigzag_path(cr, x + skip, x + w - skip, y + cy_off, period, amp);
+            zigzag_path(cr, x + skip, x + w - skip, y + h - cy_off, period, amp);
+            cr.save().ok();
+            cr.translate(x + cy_off, y);
+            cr.rotate(FRAC_PI_2);
+            zigzag_path(cr, skip, h - skip, 0.0, period, amp);
+            cr.restore().ok();
+            cr.save().ok();
+            cr.translate(x + w - cy_off, y);
+            cr.rotate(FRAC_PI_2);
+            zigzag_path(cr, skip, h - skip, 0.0, period, amp);
+            cr.restore().ok();
+            cr.stroke().ok();
+        }
+        BorderStyle::Sunburst => {
+            // A halo of ray ticks around each corner, inside the rule.
+            let r0 = config.corner_size.max(u * 2.0) * 1.25;
+            let len = u * 1.6;
+            set_color_alpha(cr, &c, 0.8);
+            cr.set_line_width(config.accent_width.max(1.0));
+            for (cx, cy, a0) in [
+                (x + bw, y + bw, 0.0),
+                (x + w - bw, y + bw, FRAC_PI_2),
+                (x + w - bw, y + h - bw, PI),
+                (x + bw, y + h - bw, PI + FRAC_PI_2),
+            ] {
+                for i in 0..9 {
+                    let a = a0 + FRAC_PI_2 * (i as f64 + 0.5) / 9.0;
+                    cr.move_to(cx + r0 * a.cos(), cy + r0 * a.sin());
+                    cr.line_to(cx + (r0 + len) * a.cos(), cy + (r0 + len) * a.sin());
+                }
+            }
+            cr.stroke().ok();
+        }
+    }
+
+    if matches!(config.border_style, BorderStyle::Ornate) {
+        // Jewels at the edge midpoints, sitting on the outer rule.
+        let r = (u * 0.8).max(bw * 1.5);
+        for (cx, cy) in [
+            (x + w / 2.0, y),
+            (x + w / 2.0, y + h),
+            (x, y + h / 2.0),
+            (x + w, y + h / 2.0),
+        ] {
+            jewel(cr, cx, cy, r, &c);
+        }
+    }
+    cr.restore().ok();
+}
+
+// ---------------------------------------------------------------------------
+// Corners
+// ---------------------------------------------------------------------------
+
+/// Draw `f` at each corner. `f` draws the top-left ornament with the origin
+/// just inside the rule and +x, +y pointing into the panel; the other
+/// corners are mirrored.
+fn for_each_corner<F: Fn(&Context)>(
+    cr: &Context,
+    config: &ArtDecoFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    f: F,
+) {
+    let bw = config.border_width.max(0.5);
+    let corners = [
+        (x + bw, y + bw, 1.0, 1.0),
+        (x + w - bw, y + bw, -1.0, 1.0),
+        (x + w - bw, y + h - bw, -1.0, -1.0),
+        (x + bw, y + h - bw, 1.0, -1.0),
+    ];
+    for (cx, cy, sx, sy) in corners {
+        cr.save().ok();
+        // Keep ornaments inside the frame silhouette (stepped corners cut
+        // them like everything else).
+        frame_path(cr, config, x, y, w, h);
+        cr.clip();
+        cr.translate(cx, cy);
+        cr.scale(sx, sy);
+        f(cr);
+        cr.restore().ok();
     }
 }
 
-/// Draw the header
-fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64) -> f64 {
+fn draw_corner_decorations(
+    cr: &Context,
+    config: &ArtDecoFrameConfig,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    u: f64,
+) {
+    let c = config.accent_color.resolve(&config.theme);
+    let r = config.corner_size.max(4.0);
+    let lw = config.accent_width.max(1.0);
+    let bw = config.border_width.max(0.5);
+
+    match config.corner_style {
+        CornerStyle::None => {}
+        CornerStyle::Fan => for_each_corner(cr, config, x, y, w, h, |cr| {
+            // Quarter sunburst: alternating metal wedges, a rim and a hub.
+            let wedges = 5;
+            let g = metal_gradient(&c, 0.0, 0.0, r, 0.0);
+            for i in 0..wedges {
+                let a0 = FRAC_PI_2 * i as f64 / wedges as f64;
+                let a1 = FRAC_PI_2 * (i + 1) as f64 / wedges as f64;
+                cr.new_sub_path();
+                cr.move_to(0.0, 0.0);
+                cr.arc(0.0, 0.0, r, a0, a1);
+                cr.close_path();
+                if i % 2 == 0 {
+                    cr.set_source(&g).ok();
+                } else {
+                    set_color_alpha(cr, &c, 0.14);
+                }
+                cr.fill().ok();
+            }
+            set_color_alpha(cr, &c, 0.95);
+            cr.set_line_width(lw * 1.2);
+            cr.new_sub_path();
+            cr.arc(0.0, 0.0, r, 0.0, FRAC_PI_2);
+            cr.stroke().ok();
+            cr.new_sub_path();
+            cr.move_to(0.0, 0.0);
+            cr.arc(0.0, 0.0, r * 0.26, 0.0, FRAC_PI_2);
+            cr.close_path();
+            let hub = darken(&c, 0.35);
+            set_color(cr, &hub);
+            cr.fill().ok();
+        }),
+        CornerStyle::Ziggurat => for_each_corner(cr, config, x, y, w, h, |cr| {
+            // The staircase from the reference: five steps between the two
+            // edge runs, a small square at the end of the top run.
+            let s = r / 8.0;
+            let g = metal_gradient(&c, 0.0, r, r, 0.0);
+            cr.set_source(&g).ok();
+            cr.set_line_width(lw * 1.4);
+            cr.new_sub_path();
+            cr.move_to(0.0, r);
+            cr.line_to(0.0, r * 0.625);
+            for i in 0..5 {
+                let px = i as f64 * s;
+                let py = r * 0.625 - i as f64 * s;
+                cr.line_to(px + s, py);
+                cr.line_to(px + s, py - s);
+            }
+            cr.line_to(r, 0.0);
+            cr.stroke().ok();
+            cr.rectangle(r * 0.75, 0.0, s * 0.8, s * 0.8);
+            cr.fill().ok();
+            // Inner echo.
+            set_color_alpha(cr, &c, 0.45);
+            cr.set_line_width(lw * 0.8);
+            let o = s * 1.6;
+            cr.new_sub_path();
+            cr.move_to(o, r * 0.75);
+            cr.line_to(o, r * 0.5 + o * 0.5);
+            for i in 0..3 {
+                let px = o + i as f64 * s;
+                let py = r * 0.5 + o * 0.5 - i as f64 * s;
+                cr.line_to(px + s, py);
+                cr.line_to(px + s, py - s);
+            }
+            cr.line_to(r * 0.75, o);
+            cr.stroke().ok();
+        }),
+        CornerStyle::Diamond => for_each_corner(cr, config, x, y, w, h, |cr| {
+            let d = r * 0.32;
+            jewel(cr, d + lw, d + lw, d, &c);
+            set_color_alpha(cr, &c, 0.8);
+            cr.set_line_width(lw);
+            cr.move_to(d * 2.0 + lw * 2.0, d + lw);
+            cr.line_to(r, d + lw);
+            cr.move_to(d + lw, d * 2.0 + lw * 2.0);
+            cr.line_to(d + lw, r);
+            cr.stroke().ok();
+            cr.arc(r, d + lw, lw, 0.0, 2.0 * PI);
+            cr.fill().ok();
+            cr.arc(d + lw, r, lw, 0.0, 2.0 * PI);
+            cr.fill().ok();
+        }),
+        CornerStyle::Bracket => for_each_corner(cr, config, x, y, w, h, |cr| {
+            let t = (bw + 1.0).max(lw);
+            let g = metal_gradient(&c, 0.0, r, r, 0.0);
+            cr.set_source(&g).ok();
+            cr.set_line_width(t);
+            cr.move_to(t / 2.0, r);
+            cr.line_to(t / 2.0, t / 2.0);
+            cr.line_to(r, t / 2.0);
+            cr.stroke().ok();
+            set_color_alpha(cr, &c, 0.6);
+            cr.set_line_width(lw);
+            let o = t + u * 0.6;
+            cr.move_to(o, r * 0.6);
+            cr.line_to(o, o);
+            cr.line_to(r * 0.6, o);
+            cr.stroke().ok();
+        }),
+        CornerStyle::DoubleBracket => for_each_corner(cr, config, x, y, w, h, |cr| {
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            for (o, len) in [(lw, r), (lw + u * 0.7, r * 0.62)] {
+                cr.move_to(o, len);
+                cr.line_to(o, o);
+                cr.line_to(len, o);
+            }
+            cr.stroke().ok();
+            // Step between the two brackets.
+            let o = lw + u * 0.35;
+            cr.set_line_width(lw * 0.8);
+            cr.move_to(o, r * 0.8);
+            cr.line_to(o, o);
+            cr.line_to(r * 0.8, o);
+            cr.stroke().ok();
+        }),
+        CornerStyle::Hexagon | CornerStyle::Octagon | CornerStyle::Circle => {
+            let sides = match config.corner_style {
+                CornerStyle::Hexagon => 6,
+                CornerStyle::Octagon => 8,
+                _ => 0,
+            };
+            for_each_corner(cr, config, x, y, w, h, |cr| {
+                let m = r * 0.42;
+                let rad = r * 0.3;
+                let bgc = config.background_color.resolve(&config.theme);
+                // Lines from the medallion along both edges.
+                set_color_alpha(cr, &c, 0.8);
+                cr.set_line_width(lw);
+                cr.move_to(m, m);
+                cr.line_to(r * 1.4, m);
+                cr.move_to(m, m);
+                cr.line_to(m, r * 1.4);
+                cr.stroke().ok();
+                // Medallion: dark disc, metal ring, hub.
+                medallion_path(cr, m, m, rad, sides);
+                set_color(cr, &bgc);
+                cr.fill_preserve().ok();
+                let g = metal_gradient(&c, m - rad, m, m + rad, m);
+                cr.set_source(&g).ok();
+                cr.set_line_width(lw * 1.5);
+                cr.stroke().ok();
+                medallion_path(cr, m, m, rad * 0.45, sides);
+                cr.set_source(&g).ok();
+                cr.fill().ok();
+            });
+        }
+        CornerStyle::GeometricStack => for_each_corner(cr, config, x, y, w, h, |cr| {
+            jewel(cr, r * 0.3, r * 0.3, r * 0.2, &c);
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            cr.new_sub_path();
+            cr.arc(r * 0.62, r * 0.62, r * 0.12, 0.0, 2.0 * PI);
+            cr.stroke().ok();
+            cr.move_to(r * 0.52, r * 0.3);
+            cr.line_to(r * 1.2, r * 0.3);
+            cr.move_to(r * 0.3, r * 0.52);
+            cr.line_to(r * 0.3, r * 1.2);
+            cr.stroke().ok();
+            set_color_alpha(cr, &c, 0.5);
+            cr.move_to(r * 0.72, r * 0.62);
+            cr.line_to(r * 1.2, r * 0.62);
+            cr.move_to(r * 0.62, r * 0.72);
+            cr.line_to(r * 0.62, r * 1.2);
+            cr.stroke().ok();
+        }),
+    }
+}
+
+fn medallion_path(cr: &Context, cx: f64, cy: f64, r: f64, sides: usize) {
+    cr.new_sub_path();
+    if sides == 0 {
+        cr.arc(cx, cy, r, 0.0, 2.0 * PI);
+        return;
+    }
+    for i in 0..sides {
+        let a = -FRAC_PI_2 + 2.0 * PI * i as f64 / sides as f64;
+        let (px, py) = (cx + r * a.cos(), cy + r * a.sin());
+        if i == 0 {
+            cr.move_to(px, py);
+        } else {
+            cr.line_to(px, py);
+        }
+    }
+    cr.close_path();
+}
+
+// ---------------------------------------------------------------------------
+// Header
+// ---------------------------------------------------------------------------
+
+/// Draw the header; returns its height (0 when hidden).
+fn draw_header(cr: &Context, config: &ArtDecoFrameConfig, x: f64, y: f64, w: f64, u: f64) -> f64 {
     if !config.show_header || config.header_text.is_empty() {
         return 0.0;
     }
-
-    let (font_family, font_size) = config.header_font.resolve(&config.theme);
-    let header_color = config.header_color.resolve(&config.theme);
-    let accent_color = config.accent_color.resolve(&config.theme);
-
-    let header_height = font_size + 20.0;
-    let padding = 12.0;
+    let (family, size) = config.header_font.resolve(&config.theme);
+    let hc = config.header_color.resolve(&config.theme);
+    let ac = config.accent_color.resolve(&config.theme);
+    let hh = size + 20.0;
+    let clear = config.corner_size.max(u * 2.0) + u;
 
     cr.save().ok();
-
-    let text_extents = pango_text_extents(
-        cr,
-        &config.header_text,
-        &font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        font_size,
-    );
-    let (text_width, text_height) = (text_extents.width(), text_extents.height());
-    let text_x = x + (w - text_width) / 2.0;
-    let text_y = y + header_height / 2.0 + text_height / 2.0;
+    let layout = title_layout(cr, &config.header_text, &family, size);
+    let (tw, th) = layout.pixel_size();
+    let (tw, th) = (tw as f64, th as f64);
+    let tx = x + (w - tw) / 2.0;
+    let ty = y + (hh - th) / 2.0;
+    let mid = y + hh / 2.0;
 
     match config.header_style {
+        HeaderStyle::None => {}
         HeaderStyle::Centered => {
-            // Draw decorative lines on sides
-            cr.set_source_rgba(
-                accent_color.r,
-                accent_color.g,
-                accent_color.b,
-                accent_color.a,
-            );
-            cr.set_line_width(2.0);
-
-            // Left side decoration
-            let left_end = text_x - 20.0;
-            if left_end > x + padding {
-                cr.move_to(x + padding, y + header_height / 2.0);
-                cr.line_to(left_end - 10.0, y + header_height / 2.0);
+            // Rules fading in towards the title, jewel at each end.
+            let gap = u * 1.6;
+            let jr = (u * 0.55).max(3.0);
+            let left_end = tx - gap;
+            let right_start = tx + tw + gap;
+            cr.set_line_width(1.5);
+            if left_end - jr * 2.0 > x + clear {
+                let g = fade_in_gradient(&ac, x + clear, 0.0, left_end, 0.0, 0.9);
+                cr.set_source(&g).ok();
+                cr.move_to(x + clear, mid);
+                cr.line_to(left_end - jr * 2.0, mid);
                 cr.stroke().ok();
-                draw_diamond(
-                    cr,
-                    left_end - 5.0,
-                    y + header_height / 2.0,
-                    4.0,
-                    &accent_color,
-                    true,
-                );
+                jewel(cr, left_end - jr, mid, jr, &ac);
             }
-
-            // Right side decoration
-            let right_start = text_x + text_width + 20.0;
-            if right_start < x + w - padding {
-                draw_diamond(
-                    cr,
-                    right_start + 5.0,
-                    y + header_height / 2.0,
-                    4.0,
-                    &accent_color,
-                    true,
-                );
-                cr.move_to(right_start + 10.0, y + header_height / 2.0);
-                cr.line_to(x + w - padding, y + header_height / 2.0);
+            if right_start + jr * 2.0 < x + w - clear {
+                let g = fade_in_gradient(&ac, x + w - clear, 0.0, right_start, 0.0, 0.9);
+                cr.set_source(&g).ok();
+                cr.move_to(right_start + jr * 2.0, mid);
+                cr.line_to(x + w - clear, mid);
                 cr.stroke().ok();
+                jewel(cr, right_start + jr, mid, jr, &ac);
             }
         }
         HeaderStyle::Banner => {
-            // Full-width banner background
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, 0.2);
-            cr.rectangle(x, y, w, header_height);
+            // A tinted band closed by a double rule with a centre jewel.
+            set_color_alpha(cr, &ac, 0.14);
+            cr.rectangle(x, y, w, hh);
             cr.fill().ok();
-
-            // Banner border
-            cr.set_source_rgba(
-                accent_color.r,
-                accent_color.g,
-                accent_color.b,
-                accent_color.a,
-            );
+            let rule_y = y + hh - 1.0;
+            let g = metal_gradient(&ac, x, 0.0, x + w, 0.0);
+            cr.set_source(&g).ok();
+            cr.set_line_width(2.0);
+            cr.move_to(x, rule_y);
+            cr.line_to(x + w, rule_y);
+            cr.stroke().ok();
+            set_color_alpha(cr, &ac, 0.5);
             cr.set_line_width(1.0);
-            cr.move_to(x, y + header_height);
-            cr.line_to(x + w, y + header_height);
+            cr.move_to(x, rule_y - 3.5);
+            cr.line_to(x + w, rule_y - 3.5);
+            cr.stroke().ok();
+            jewel(cr, x + w / 2.0, rule_y - 1.0, (u * 0.6).max(3.0), &ac);
+            // Chevron notches at the ends of the band.
+            set_color_alpha(cr, &ac, 0.55);
+            let n = u * 0.9;
+            cr.move_to(x + clear, mid - n);
+            cr.line_to(x + clear + n, mid);
+            cr.line_to(x + clear, mid + n);
+            cr.move_to(x + w - clear, mid - n);
+            cr.line_to(x + w - clear - n, mid);
+            cr.line_to(x + w - clear, mid + n);
+            cr.set_line_width(1.5);
             cr.stroke().ok();
         }
         HeaderStyle::Stepped => {
-            // Stepped header with tiered effect
-            let step_height = header_height / 3.0;
-            cr.set_source_rgba(accent_color.r, accent_color.g, accent_color.b, 0.15);
-
-            // Three tiers getting narrower
-            for i in 0..3 {
-                let tier_inset = i as f64 * 20.0;
-                let tier_y = y + i as f64 * step_height;
-                cr.rectangle(x + tier_inset, tier_y, w - tier_inset * 2.0, step_height);
+            // A ziggurat rising behind the title: three tiers, widest at
+            // the base, with a metal outline on the steps.
+            let tiers = 3;
+            let tier_h = hh / tiers as f64;
+            let inset = ((w - tw) / 2.0 - u * 2.0).max(0.0) / tiers as f64;
+            for i in 0..tiers {
+                let ins = (tiers - 1 - i) as f64 * inset;
+                set_color_alpha(cr, &ac, 0.08 + 0.06 * i as f64);
+                cr.rectangle(x + ins, y + i as f64 * tier_h, w - ins * 2.0, tier_h);
+                cr.fill().ok();
             }
-            cr.fill().ok();
+            let g = metal_gradient(&ac, x, 0.0, x + w, 0.0);
+            cr.set_source(&g).ok();
+            cr.set_line_width(1.5);
+            cr.move_to(x, y + hh);
+            for i in 0..tiers {
+                let ins = i as f64 * inset;
+                let top = y + hh - (i + 1) as f64 * tier_h;
+                cr.line_to(x + ins, top + tier_h);
+                cr.line_to(x + ins, top);
+            }
+            let ins = tiers as f64 * inset;
+            cr.line_to(x + ins, y);
+            cr.line_to(x + w - ins, y);
+            for i in (0..tiers).rev() {
+                let ins = i as f64 * inset;
+                let top = y + hh - (i + 1) as f64 * tier_h;
+                cr.line_to(x + w - ins, top);
+                cr.line_to(x + w - ins, top + tier_h);
+            }
+            cr.line_to(x + w, y + hh);
+            cr.stroke().ok();
         }
-        HeaderStyle::None => {}
     }
 
-    // Draw header text
-    cr.set_source_rgba(
-        header_color.r,
-        header_color.g,
-        header_color.b,
-        header_color.a,
-    );
-    cr.move_to(text_x, text_y);
-    pango_show_text(
-        cr,
-        &config.header_text,
-        &font_family,
-        cairo::FontSlant::Normal,
-        cairo::FontWeight::Bold,
-        font_size,
-    );
-
+    // Title in polished metal.
+    let g = metal_gradient(&hc, 0.0, ty, 0.0, ty + th);
+    cr.set_source(&g).ok();
+    cr.move_to(tx, ty);
+    show_layout(cr, &layout);
     cr.restore().ok();
-
-    header_height
+    hh
 }
 
-/// Draw a divider between content groups
+// ---------------------------------------------------------------------------
+// Dividers
+// ---------------------------------------------------------------------------
+
+/// Space reserved between two groups; the motif must fit inside it.
+fn divider_extent(config: &ArtDecoFrameConfig) -> f64 {
+    config.divider_width + config.divider_padding * 2.0
+}
+
+/// Draw a divider along the centre line starting at (x, y): horizontal to
+/// the right, or vertical downwards. Vertical dividers are the horizontal
+/// motif rotated, so every motif is written once.
 fn draw_divider(
     cr: &Context,
     config: &ArtDecoFrameConfig,
@@ -1410,413 +834,237 @@ fn draw_divider(
     length: f64,
     horizontal: bool,
 ) {
-    if matches!(config.divider_style, DividerStyle::None) {
+    if matches!(config.divider_style, DividerStyle::None) || length <= 0.0 {
         return;
     }
-
-    let divider_color = config.divider_color.resolve(&config.theme);
-
     cr.save().ok();
-    cr.set_source_rgba(
-        divider_color.r,
-        divider_color.g,
-        divider_color.b,
-        divider_color.a,
-    );
-    cr.set_line_width(config.divider_width);
-
-    match config.divider_style {
-        DividerStyle::Chevron => {
-            let chevron_count = (length / 16.0).floor() as usize;
-            let chevron_width = length / chevron_count as f64;
-
-            if horizontal {
-                for i in 0..chevron_count {
-                    let cx = x + i as f64 * chevron_width + chevron_width / 2.0;
-                    draw_chevron(
-                        cr,
-                        cx - 4.0,
-                        y - 3.0,
-                        8.0,
-                        6.0,
-                        &divider_color,
-                        config.divider_width,
-                    );
-                }
-            } else {
-                // Rotated chevrons for vertical divider
-                for i in 0..chevron_count {
-                    let cy = y + i as f64 * chevron_width + chevron_width / 2.0;
-                    cr.move_to(x - 3.0, cy);
-                    cr.line_to(x + 3.0, cy - 4.0);
-                    cr.line_to(x + 3.0, cy + 4.0);
-                    cr.close_path();
-                    cr.stroke().ok();
-                }
-            }
-        }
-        DividerStyle::DoubleLine => {
-            let gap = 4.0;
-            if horizontal {
-                cr.move_to(x, y - gap / 2.0);
-                cr.line_to(x + length, y - gap / 2.0);
-                cr.move_to(x, y + gap / 2.0);
-                cr.line_to(x + length, y + gap / 2.0);
-                cr.stroke().ok();
-
-                // Center diamond
-                draw_diamond(cr, x + length / 2.0, y, 5.0, &divider_color, true);
-            } else {
-                cr.move_to(x - gap / 2.0, y);
-                cr.line_to(x - gap / 2.0, y + length);
-                cr.move_to(x + gap / 2.0, y);
-                cr.line_to(x + gap / 2.0, y + length);
-                cr.stroke().ok();
-
-                draw_diamond(cr, x, y + length / 2.0, 5.0, &divider_color, true);
-            }
-        }
-        DividerStyle::Line => {
-            if horizontal {
-                cr.move_to(x, y);
-                cr.line_to(x + length, y);
-            } else {
-                cr.move_to(x, y);
-                cr.line_to(x, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::Stepped => {
-            let step_count = 5;
-            let step_size = length / step_count as f64;
-
-            if horizontal {
-                for i in 0..step_count {
-                    let sx = x + i as f64 * step_size;
-                    let offset = if i % 2 == 0 { -2.0 } else { 2.0 };
-                    cr.move_to(sx, y + offset);
-                    cr.line_to(sx + step_size, y + offset);
-                }
-            } else {
-                for i in 0..step_count {
-                    let sy = y + i as f64 * step_size;
-                    let offset = if i % 2 == 0 { -2.0 } else { 2.0 };
-                    cr.move_to(x + offset, sy);
-                    cr.line_to(x + offset, sy + step_size);
-                }
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::DiamondCluster => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let size = 8.0;
-
-            // Draw stacked diamonds (3 overlapping)
-            draw_diamond(cr, cx, cy, size, &divider_color, false);
-            draw_diamond(cr, cx - size * 0.7, cy, size * 0.6, &divider_color, false);
-            draw_diamond(cr, cx + size * 0.7, cy, size * 0.6, &divider_color, false);
-
-            // Extending lines
-            if horizontal {
-                cr.move_to(x, y);
-                cr.line_to(cx - size * 1.5, y);
-                cr.move_to(cx + size * 1.5, y);
-                cr.line_to(x + length, y);
-            } else {
-                cr.move_to(x, y);
-                cr.line_to(x, cy - size * 1.5);
-                cr.move_to(x, cy + size * 1.5);
-                cr.line_to(x, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::Crescent => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let radius = 6.0;
-
-            // Draw crescent moon
-            cr.arc(cx, cy, radius, 0.2, std::f64::consts::PI - 0.2);
-            cr.stroke().ok();
-
-            // Inner arc to create crescent effect
-            cr.arc(cx, cy - 2.0, radius * 0.7, 0.3, std::f64::consts::PI - 0.3);
-            cr.stroke().ok();
-
-            // Dots on sides
-            let dot_dist = radius + 8.0;
-            cr.arc(cx - dot_dist, cy, 2.0, 0.0, std::f64::consts::TAU);
-            cr.fill().ok();
-            cr.arc(cx + dot_dist, cy, 2.0, 0.0, std::f64::consts::TAU);
-            cr.fill().ok();
-
-            // Extending lines
-            if horizontal {
-                cr.move_to(x, y);
-                cr.line_to(cx - dot_dist - 6.0, y);
-                cr.move_to(cx + dot_dist + 6.0, y);
-                cr.line_to(x + length, y);
-            } else {
-                cr.move_to(x, y);
-                cr.line_to(x, cy - dot_dist - 6.0);
-                cr.move_to(x, cy + dot_dist + 6.0);
-                cr.line_to(x, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::ArrowDiamond => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let size = 6.0;
-
-            // Center diamond
-            draw_diamond(cr, cx, cy, size, &divider_color, false);
-
-            if horizontal {
-                // Left arrow
-                cr.move_to(x, y);
-                cr.line_to(cx - size - 10.0, y);
-                cr.line_to(cx - size - 5.0, y - 4.0);
-                cr.move_to(cx - size - 10.0, y);
-                cr.line_to(cx - size - 5.0, y + 4.0);
-
-                // Right arrow
-                cr.move_to(x + length, y);
-                cr.line_to(cx + size + 10.0, y);
-                cr.line_to(cx + size + 5.0, y - 4.0);
-                cr.move_to(cx + size + 10.0, y);
-                cr.line_to(cx + size + 5.0, y + 4.0);
-            } else {
-                // Top arrow
-                cr.move_to(x, y);
-                cr.line_to(x, cy - size - 10.0);
-                cr.line_to(x - 4.0, cy - size - 5.0);
-                cr.move_to(x, cy - size - 10.0);
-                cr.line_to(x + 4.0, cy - size - 5.0);
-
-                // Bottom arrow
-                cr.move_to(x, y + length);
-                cr.line_to(x, cy + size + 10.0);
-                cr.line_to(x - 4.0, cy + size + 5.0);
-                cr.move_to(x, cy + size + 10.0);
-                cr.line_to(x + 4.0, cy + size + 5.0);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::CircleChain => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let radius = 4.0;
-            let spacing = 12.0;
-
-            // Three circles
-            cr.arc(cx - spacing, cy, radius, 0.0, std::f64::consts::TAU);
-            cr.stroke().ok();
-            cr.arc(cx, cy, radius, 0.0, std::f64::consts::TAU);
-            cr.stroke().ok();
-            cr.arc(cx + spacing, cy, radius, 0.0, std::f64::consts::TAU);
-            cr.stroke().ok();
-
-            // Center dots
-            cr.arc(cx - spacing, cy, 1.5, 0.0, std::f64::consts::TAU);
-            cr.fill().ok();
-            cr.arc(cx, cy, 1.5, 0.0, std::f64::consts::TAU);
-            cr.fill().ok();
-            cr.arc(cx + spacing, cy, 1.5, 0.0, std::f64::consts::TAU);
-            cr.fill().ok();
-
-            // Extending lines
-            if horizontal {
-                cr.move_to(x, y);
-                cr.line_to(cx - spacing - radius - 4.0, y);
-                cr.move_to(cx + spacing + radius + 4.0, y);
-                cr.line_to(x + length, y);
-            } else {
-                cr.move_to(x, y);
-                cr.line_to(x, cy - spacing - radius - 4.0);
-                cr.move_to(x, cy + spacing + radius + 4.0);
-                cr.line_to(x, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::CrossedLines => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let cross_len = 20.0;
-            let gap = 3.0;
-
-            if horizontal {
-                // Crossed pattern in center
-                cr.move_to(cx - cross_len, y - gap);
-                cr.line_to(cx + cross_len, y + gap);
-                cr.move_to(cx - cross_len, y + gap);
-                cr.line_to(cx + cross_len, y - gap);
-                cr.stroke().ok();
-
-                // Extending lines (double)
-                cr.move_to(x, y - gap);
-                cr.line_to(cx - cross_len - 4.0, y - gap);
-                cr.move_to(x, y + gap);
-                cr.line_to(cx - cross_len - 4.0, y + gap);
-                cr.move_to(cx + cross_len + 4.0, y - gap);
-                cr.line_to(x + length, y - gap);
-                cr.move_to(cx + cross_len + 4.0, y + gap);
-                cr.line_to(x + length, y + gap);
-            } else {
-                cr.move_to(x - gap, cy - cross_len);
-                cr.line_to(x + gap, cy + cross_len);
-                cr.move_to(x + gap, cy - cross_len);
-                cr.line_to(x - gap, cy + cross_len);
-                cr.stroke().ok();
-
-                cr.move_to(x - gap, y);
-                cr.line_to(x - gap, cy - cross_len - 4.0);
-                cr.move_to(x + gap, y);
-                cr.line_to(x + gap, cy - cross_len - 4.0);
-                cr.move_to(x - gap, cy + cross_len + 4.0);
-                cr.line_to(x - gap, y + length);
-                cr.move_to(x + gap, cy + cross_len + 4.0);
-                cr.line_to(x + gap, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::FleurDeLis => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let size = 8.0;
-
-            // Fleur-de-lis shape (simplified leaf/teardrop)
-            cr.move_to(cx, cy - size);
-            cr.curve_to(
-                cx + size * 0.6,
-                cy - size * 0.3,
-                cx + size * 0.4,
-                cy + size * 0.5,
-                cx,
-                cy + size,
-            );
-            cr.curve_to(
-                cx - size * 0.4,
-                cy + size * 0.5,
-                cx - size * 0.6,
-                cy - size * 0.3,
-                cx,
-                cy - size,
-            );
-            cr.stroke().ok();
-
-            // Small curls on sides
-            cr.arc(cx - size * 0.8, cy, 3.0, -0.5, std::f64::consts::PI + 0.5);
-            cr.stroke().ok();
-            cr.arc(cx + size * 0.8, cy, 3.0, -std::f64::consts::PI - 0.5, 0.5);
-            cr.stroke().ok();
-
-            // Extending lines
-            if horizontal {
-                cr.move_to(x, y);
-                cr.line_to(cx - size - 8.0, y);
-                cr.move_to(cx + size + 8.0, y);
-                cr.line_to(x + length, y);
-            } else {
-                cr.move_to(x, y);
-                cr.line_to(x, cy - size - 8.0);
-                cr.move_to(x, cy + size + 8.0);
-                cr.line_to(x, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::Heartbeat => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let peak = 10.0;
-            let width = 30.0;
-
-            if horizontal {
-                // Zigzag heartbeat pattern
-                cr.move_to(cx - width, y);
-                cr.line_to(cx - width * 0.6, y);
-                cr.line_to(cx - width * 0.3, y - peak);
-                cr.line_to(cx, y + peak * 0.5);
-                cr.line_to(cx + width * 0.3, y - peak);
-                cr.line_to(cx + width * 0.6, y);
-                cr.line_to(cx + width, y);
-                cr.stroke().ok();
-
-                // Small diamonds at ends
-                draw_diamond(cr, cx - width - 6.0, y, 4.0, &divider_color, true);
-                draw_diamond(cr, cx + width + 6.0, y, 4.0, &divider_color, true);
-
-                // Extending lines
-                cr.move_to(x, y);
-                cr.line_to(cx - width - 12.0, y);
-                cr.move_to(cx + width + 12.0, y);
-                cr.line_to(x + length, y);
-            } else {
-                cr.move_to(x, cy - width);
-                cr.line_to(x, cy - width * 0.6);
-                cr.line_to(x - peak, cy - width * 0.3);
-                cr.line_to(x + peak * 0.5, cy);
-                cr.line_to(x - peak, cy + width * 0.3);
-                cr.line_to(x, cy + width * 0.6);
-                cr.line_to(x, cy + width);
-                cr.stroke().ok();
-
-                draw_diamond(cr, x, cy - width - 6.0, 4.0, &divider_color, true);
-                draw_diamond(cr, x, cy + width + 6.0, 4.0, &divider_color, true);
-
-                cr.move_to(x, y);
-                cr.line_to(x, cy - width - 12.0);
-                cr.move_to(x, cy + width + 12.0);
-                cr.line_to(x, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::DiamondGrid => {
-            let cx = if horizontal { x + length / 2.0 } else { x };
-            let cy = if horizontal { y } else { y + length / 2.0 };
-            let size = 10.0;
-
-            // Large central diamond
-            draw_diamond(cr, cx, cy, size, &divider_color, false);
-            // Inner diamond
-            draw_diamond(cr, cx, cy, size * 0.5, &divider_color, false);
-
-            // Corner diamonds
-            draw_diamond(cr, cx - size, cy, size * 0.4, &divider_color, true);
-            draw_diamond(cr, cx + size, cy, size * 0.4, &divider_color, true);
-            draw_diamond(cr, cx, cy - size, size * 0.4, &divider_color, true);
-            draw_diamond(cr, cx, cy + size, size * 0.4, &divider_color, true);
-
-            // Circles at outer positions
-            let circle_dist = size + 8.0;
-            cr.arc(cx - circle_dist, cy, 2.5, 0.0, std::f64::consts::TAU);
-            cr.stroke().ok();
-            cr.arc(cx + circle_dist, cy, 2.5, 0.0, std::f64::consts::TAU);
-            cr.stroke().ok();
-
-            // Extending lines
-            if horizontal {
-                cr.move_to(x, y);
-                cr.line_to(cx - circle_dist - 6.0, y);
-                cr.move_to(cx + circle_dist + 6.0, y);
-                cr.line_to(x + length, y);
-            } else {
-                cr.move_to(x, y);
-                cr.line_to(x, cy - circle_dist - 6.0);
-                cr.move_to(x, cy + circle_dist + 6.0);
-                cr.line_to(x, y + length);
-            }
-            cr.stroke().ok();
-        }
-        DividerStyle::None => {}
+    cr.translate(x, y);
+    if !horizontal {
+        cr.rotate(FRAC_PI_2);
     }
-
+    draw_divider_motif(cr, config, length);
     cr.restore().ok();
 }
 
-/// Render the complete Art Deco frame
-/// Returns the content area bounds (x, y, width, height)
+fn draw_divider_motif(cr: &Context, config: &ArtDecoFrameConfig, len: f64) {
+    let c = config.divider_color.resolve(&config.theme);
+    let lw = config.divider_width.max(1.0);
+    // Band the motif may occupy, centred on y = 0.
+    let hb = (divider_extent(config) - 2.0).max(4.0);
+    let half = hb / 2.0;
+    let mid = len / 2.0;
+    let jr = (half * 0.9).max(3.0);
+
+    let rule = |cr: &Context, x0: f64, x1: f64, yy: f64, alpha: f64| {
+        if x1 <= x0 {
+            return;
+        }
+        let g = fading_gradient(&c, x0, 0.0, x1, 0.0, alpha);
+        cr.set_source(&g).ok();
+        cr.set_line_width(lw);
+        cr.move_to(x0, yy);
+        cr.line_to(x1, yy);
+        cr.stroke().ok();
+    };
+    // A rule that fades at the outer end and is solid at the centre.
+    let rule_to_centre =
+        |cr: &Context, x0: f64, x1: f64, yy: f64, alpha: f64, outer_is_x0: bool| {
+            if x1 <= x0 {
+                return;
+            }
+            let g = if outer_is_x0 {
+                fade_in_gradient(&c, x0, 0.0, x1, 0.0, alpha)
+            } else {
+                fade_in_gradient(&c, x1, 0.0, x0, 0.0, alpha)
+            };
+            cr.set_source(&g).ok();
+            cr.set_line_width(lw);
+            cr.move_to(x0, yy);
+            cr.line_to(x1, yy);
+            cr.stroke().ok();
+        };
+
+    match config.divider_style {
+        DividerStyle::None => {}
+        DividerStyle::Line => rule(cr, 0.0, len, 0.0, 0.9),
+        DividerStyle::DoubleLine => {
+            let off = (half * 0.7).max(lw * 1.5);
+            rule(cr, 0.0, len, -off, 0.85);
+            rule(cr, 0.0, len, off, 0.85);
+            jewel(cr, mid, 0.0, half.max(3.0), &c);
+        }
+        DividerStyle::Chevron => {
+            let amp = (half * 0.8).max(1.5);
+            let period = (hb * 1.6).max(10.0);
+            let gap = jr * 1.6;
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            zigzag_path(cr, 0.0, mid - gap, 0.0, period, amp);
+            zigzag_path(cr, mid + gap, len, 0.0, period, amp);
+            cr.stroke().ok();
+            jewel(cr, mid, 0.0, jr, &c);
+        }
+        DividerStyle::Stepped => {
+            // Steps climbing towards the centre, a jewel on the summit.
+            let n = 3;
+            let gap = jr * 1.4;
+            let seg = ((mid - gap) / n as f64).max(1.0);
+            let rise = (hb * 1.2) / n as f64;
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            cr.new_sub_path();
+            cr.move_to(0.0, half * 0.9);
+            for i in 0..n {
+                let yy = half * 0.9 - i as f64 * rise;
+                cr.line_to((i + 1) as f64 * seg, yy);
+                cr.line_to((i + 1) as f64 * seg, yy - rise);
+            }
+            cr.stroke().ok();
+            cr.new_sub_path();
+            cr.move_to(len, half * 0.9);
+            for i in 0..n {
+                let yy = half * 0.9 - i as f64 * rise;
+                cr.line_to(len - (i + 1) as f64 * seg, yy);
+                cr.line_to(len - (i + 1) as f64 * seg, yy - rise);
+            }
+            cr.stroke().ok();
+            jewel(
+                cr,
+                mid,
+                half * 0.9 - n as f64 * rise + jr * 0.3,
+                jr * 0.9,
+                &c,
+            );
+        }
+        DividerStyle::DiamondCluster => {
+            let sp = jr * 2.6;
+            rule(cr, 0.0, mid - sp - jr, 0.0, 0.8);
+            rule(cr, mid + sp + jr, len, 0.0, 0.8);
+            jewel(cr, mid - sp, 0.0, jr * 0.6, &c);
+            jewel(cr, mid, 0.0, jr, &c);
+            jewel(cr, mid + sp, 0.0, jr * 0.6, &c);
+        }
+        DividerStyle::Crescent => {
+            let r = jr;
+            rule(cr, 0.0, mid - r * 3.0, 0.0, 0.8);
+            rule(cr, mid + r * 3.0, len, 0.0, 0.8);
+            cr.new_sub_path();
+            cr.arc(mid, 0.0, r, 0.0, 2.0 * PI);
+            let g = metal_gradient(&c, mid - r, 0.0, mid + r, 0.0);
+            cr.set_source(&g).ok();
+            cr.fill().ok();
+            // Bite out of the disc makes the crescent.
+            let bgc = config.background_color.resolve(&config.theme);
+            set_color(cr, &bgc);
+            cr.new_sub_path();
+            cr.arc(mid + r * 0.45, -r * 0.1, r * 0.8, 0.0, 2.0 * PI);
+            cr.fill().ok();
+            set_color_alpha(cr, &c, 0.9);
+            for dx in [-2.2, 2.2] {
+                cr.new_sub_path();
+                cr.arc(mid + r * dx, 0.0, lw, 0.0, 2.0 * PI);
+                cr.fill().ok();
+            }
+        }
+        DividerStyle::ArrowDiamond => {
+            let gap = jr * 2.2;
+            rule_to_centre(cr, 0.0, mid - gap, 0.0, 0.9, true);
+            rule_to_centre(cr, mid + gap, len, 0.0, 0.9, false);
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            let a = half * 0.7;
+            cr.move_to(mid - gap - a, -a);
+            cr.line_to(mid - gap, 0.0);
+            cr.line_to(mid - gap - a, a);
+            cr.move_to(mid + gap + a, -a);
+            cr.line_to(mid + gap, 0.0);
+            cr.line_to(mid + gap + a, a);
+            cr.stroke().ok();
+            jewel(cr, mid, 0.0, jr, &c);
+        }
+        DividerStyle::CircleChain => {
+            let r = jr * 0.7;
+            let sp = r * 2.6;
+            rule(cr, 0.0, mid - sp - r, 0.0, 0.8);
+            rule(cr, mid + sp + r, len, 0.0, 0.8);
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            cr.move_to(mid - sp + r, 0.0);
+            cr.line_to(mid - r * 1.3, 0.0);
+            cr.move_to(mid + r * 1.3, 0.0);
+            cr.line_to(mid + sp - r, 0.0);
+            cr.stroke().ok();
+            for (cx, rr) in [(mid - sp, r), (mid, r * 1.3), (mid + sp, r)] {
+                cr.new_sub_path();
+                cr.arc(cx, 0.0, rr, 0.0, 2.0 * PI);
+                cr.stroke().ok();
+                cr.new_sub_path();
+                cr.arc(cx, 0.0, rr * 0.35, 0.0, 2.0 * PI);
+                cr.fill().ok();
+            }
+        }
+        DividerStyle::CrossedLines => {
+            let reach = hb * 2.5;
+            rule(cr, 0.0, mid - reach, 0.0, 0.8);
+            rule(cr, mid + reach, len, 0.0, 0.8);
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            cr.move_to(mid - reach, -half);
+            cr.line_to(mid + reach, half);
+            cr.move_to(mid - reach, half);
+            cr.line_to(mid + reach, -half);
+            cr.stroke().ok();
+            jewel(cr, mid, 0.0, jr * 0.8, &c);
+        }
+        DividerStyle::FleurDeLis => {
+            let r = jr;
+            rule(cr, 0.0, mid - r * 3.0, 0.0, 0.8);
+            rule(cr, mid + r * 3.0, len, 0.0, 0.8);
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            // Central lobe and two curled side lobes.
+            cr.new_sub_path();
+            cr.arc(mid, 0.0, r, PI * 0.75, PI * 2.25);
+            cr.stroke().ok();
+            cr.new_sub_path();
+            cr.arc(mid - r * 1.4, r * 0.1, r * 0.7, PI * 1.25, PI * 2.6);
+            cr.stroke().ok();
+            cr.new_sub_path();
+            cr.arc_negative(mid + r * 1.4, r * 0.1, r * 0.7, -PI * 0.25, -PI * 1.6);
+            cr.stroke().ok();
+            jewel(cr, mid, r * 0.5, r * 0.45, &c);
+        }
+        DividerStyle::Heartbeat => {
+            let reach = hb * 2.2;
+            rule(cr, 0.0, mid - reach - jr, 0.0, 0.8);
+            rule(cr, mid + reach + jr, len, 0.0, 0.8);
+            set_color_alpha(cr, &c, 0.9);
+            cr.set_line_width(lw);
+            zigzag_path(cr, mid - reach, mid + reach, 0.0, reach, half * 0.8);
+            cr.stroke().ok();
+            jewel(cr, mid - reach - jr * 0.5, 0.0, jr * 0.6, &c);
+            jewel(cr, mid + reach + jr * 0.5, 0.0, jr * 0.6, &c);
+        }
+        DividerStyle::DiamondGrid => {
+            let r = jr * 0.65;
+            let n = 5;
+            let span = r * 2.0 * n as f64;
+            rule(cr, 0.0, mid - span / 2.0 - r, 0.0, 0.8);
+            rule(cr, mid + span / 2.0 + r, len, 0.0, 0.8);
+            for i in 0..n {
+                let cx = mid - span / 2.0 + r + i as f64 * r * 2.0;
+                let rr = if i == n / 2 { jr } else { r };
+                jewel(cr, cx, 0.0, rr, &c);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Public entry points
+// ---------------------------------------------------------------------------
+
+/// Render the Art Deco frame and return the content area `(x, y, w, h)`.
 pub fn render_art_deco_frame(
     cr: &Context,
     config: &ArtDecoFrameConfig,
@@ -1828,40 +1076,19 @@ pub fn render_art_deco_frame(
     }
 
     cr.save()?;
-
-    let background_color = config.background_color.resolve(&config.theme);
-
+    let u = unit(width, height);
     let margin = config.border_width + 4.0;
     let frame_x = margin;
     let frame_y = margin;
     let frame_w = (width - margin * 2.0).max(1.0);
     let frame_h = (height - margin * 2.0).max(1.0);
 
-    // Draw background fill
-    cr.set_source_rgba(
-        background_color.r,
-        background_color.g,
-        background_color.b,
-        background_color.a,
-    );
-    cr.rectangle(frame_x, frame_y, frame_w, frame_h);
-    cr.fill()?;
-
-    // Draw background pattern
-    draw_background_pattern(cr, config, frame_x, frame_y, frame_w, frame_h);
-
-    // Draw border
-    draw_border(cr, config, frame_x, frame_y, frame_w, frame_h);
-
-    // Draw corner decorations
-    draw_corner_decorations(cr, config, frame_x, frame_y, frame_w, frame_h);
-
-    // Draw header and get its height
-    let header_height = draw_header(cr, config, frame_x, frame_y, frame_w);
-
+    draw_background(cr, config, frame_x, frame_y, frame_w, frame_h);
+    draw_border(cr, config, frame_x, frame_y, frame_w, frame_h, u);
+    draw_corner_decorations(cr, config, frame_x, frame_y, frame_w, frame_h, u);
+    let header_height = draw_header(cr, config, frame_x, frame_y, frame_w, u);
     cr.restore()?;
 
-    // Calculate content area
     let content_x = frame_x + config.content_padding;
     let content_y = frame_y + header_height + config.content_padding;
     let content_w = frame_w - config.content_padding * 2.0;
@@ -1889,8 +1116,8 @@ pub fn calculate_group_layouts(
 
     let total_weight: f64 = weights.iter().sum();
     let divider_count = group_count.saturating_sub(1);
-    let divider_space =
-        divider_count as f64 * (config.divider_width + config.divider_padding * 2.0);
+    let extent = divider_extent(config);
+    let divider_space = divider_count as f64 * extent;
 
     match config.split_orientation {
         SplitOrientation::Vertical => {
@@ -1903,7 +1130,7 @@ pub fn calculate_group_layouts(
                 current_y += group_h;
 
                 if i < divider_count {
-                    current_y += config.divider_width + config.divider_padding * 2.0;
+                    current_y += extent;
                 }
             }
         }
@@ -1917,7 +1144,7 @@ pub fn calculate_group_layouts(
                 current_x += group_w;
 
                 if i < divider_count {
-                    current_x += config.divider_width + config.divider_padding * 2.0;
+                    current_x += extent;
                 }
             }
         }
@@ -1935,16 +1162,15 @@ pub fn draw_group_dividers(
     if group_layouts.len() < 2 {
         return;
     }
+    let centre = divider_extent(config) / 2.0;
 
     for &(x1, y1, w1, h1) in group_layouts.iter().take(group_layouts.len() - 1) {
         match config.split_orientation {
             SplitOrientation::Vertical => {
-                let divider_y = y1 + h1 + config.divider_padding;
-                draw_divider(cr, config, x1, divider_y, w1, true);
+                draw_divider(cr, config, x1, y1 + h1 + centre, w1, true);
             }
             SplitOrientation::Horizontal => {
-                let divider_x = x1 + w1 + config.divider_padding;
-                draw_divider(cr, config, divider_x, y1, h1, false);
+                draw_divider(cr, config, x1 + w1 + centre, y1, h1, false);
             }
         }
     }

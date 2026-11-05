@@ -70,6 +70,21 @@ fn main() -> Result<()> {
         &format!("{}/current_full.png", out),
     )?;
 
+    // The same panel with the sizes the redesign is tuned for, to show what
+    // a change of four sliders buys.
+    let mut recommended = frame.clone();
+    recommended.border_width = 4.0;
+    recommended.corner_size = 36.0;
+    recommended.divider_padding = 9.0;
+    recommended.content_padding = 16.0;
+    render_png(
+        &recommended,
+        &values,
+        480,
+        1920,
+        &format!("{}/recommended_full.png", out),
+    )?;
+
     // Contact sheets: a two-group version of the same panel, one tile per
     // enum variant, so each option can be judged at a glance.
     let mut small = frame.clone();
