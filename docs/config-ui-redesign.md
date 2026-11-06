@@ -1063,3 +1063,50 @@ Next slices, in the doc's order: static_text (list-of-struct kind), clock
 footer), the four sensor sources (sensor picker kind honouring label
 identity), then bar/arc/graph/text/speedometer, then the themed frames with
 `sections()` as child nodes.
+
+## 14. Phase 3b as shipped (2026-11-06)
+
+Every source except `test` (whose values live in the global Test Source
+dialog) and `combination` is now schema-driven; seven more widgets are gone.
+
+* `crates/types/src/schema.rs` kinds added: `List { item, new_item,
+  min_items, item_label, add_label }` (a `Vec` of structs; the template
+  function supplies the appended item), `IndexChoice { provider }` (the
+  position in a provider list, stored as an integer), `Custom { editor }`
+  (an editor the UI registers by name, allowed to read and write several
+  keys) and `Note` (text, no key; `Prop::note`). `check_props_fit` also
+  validates `Condition::Equals` values, `IndexChoice` defaults and `List`
+  templates (closing the §13 gap).
+* `src/ui/config_tree/schema_editor.rs`: rows for the new kinds. List items
+  are frames with move/remove buttons, rebuilt on every structural edit
+  under the `loading` flag so rebuilt controls never commit. A `Custom`
+  editor gets a `FieldContext`: `set(vec![(key, value), …])` is silent while
+  the editor loads (normalisation) and fires otherwise.
+  `register_field_editor(name, factory)` mirrors `register_choice_provider`;
+  `SchemaSourceEditor::create_with_footer` appends stateful UI.
+* `src/ui/config_tree/field_editors.rs`: `timezone` (button → 
+  `TimezoneDialog`), `fan_sensor` / `temp_sensor` (the `SensorPicker` over
+  `sensor_label` + `sensor_index`; on load the saved pair is resolved with
+  `resolve_fan_index` / `resolve_sensor_index`, a match is written back
+  normalised, no match shows the placeholder row plus warning and leaves the
+  saved pair alone — gotcha 18 unchanged), `cpu_core_selection`
+  (`"Overall"` | `{"Core": n}`). Providers `cpu_sensors`, `gpus`.
+* `src/ui/claude_account.rs`: the sign-in block, now the Claude editor's
+  footer. `session_hours` and `max_limit` gained rows (visible for the
+  token metrics); they were never editable before.
+* Defaults: `FanSpeedConfig`, `SystemTempConfig` and `CpuSourceConfig` now
+  default to fixed limits (0/3000, 0/100, 0/100) with auto-detect off. The
+  old widgets always saved those values; a config without limits makes the
+  displayer normaliser return 0 for any value above 100, so a new fan panel
+  would have drawn an empty bar.
+* `SensorPicker` no longer takes a title or pre-selects a row; the schema
+  row supplies the label and load drives the selection.
+
+Known limits: list items' nested enum options are not validated by
+`check_props_fit` (no list has one yet); the static-text "Add line" template
+numbers lines by count, so a renamed line can collide with a new one, as
+before.
+
+Next: bar/arc/graph/text/speedometer display configs (preview + theme
+coupling, so `DisplayEditor` adapters stay until a colour-or-theme kind
+exists), then the themed frames with `sections()` as child nodes.
