@@ -1370,3 +1370,34 @@ display widget left, and the test source widget the only polled editor.
 Next: a decision on `css_template` (its placeholder mapping needs the slot
 summaries; it may rightly stay a widget), then retire `DisplaySection` /
 `take_pages` in favour of `Section` paths.
+
+## 21. Phase 4d as shipped (2026-11-06)
+
+Structural cleanup, and the css_template decision.
+
+* `NodeKind::DisplaySection(String)` is gone; `Section(Vec<String>)` is the
+  one node kind for every page a display editor exposes through
+  `sections()`: a section is a one-part path, a list item a longer one.
+  `State` keeps them in one `display_pages: Vec<EditorPage>`;
+  `resolve_page_node(path, pages)` returns the longest existing prefix as a
+  `Section`, else Display (tests cover a section, the empty path, an item
+  under Display, an item under its section, and a removed item).
+  `rebuild_tree` files every page under `page_node(parent path)`, so
+  sections land under Display and items under their section, in
+  `sections()` order. `refresh_display_pages` evicts exactly the pages with
+  no `(path, widget)` match in the new list: a section keeps its stack
+  entry, rebuilt item pages leave.
+* `ComboDisplayEditor::take_pages` and `State::theme_page` are gone (no
+  editor has a detached Theme tab; the Theme node always builds the generic
+  editor). `build_section_page` is gone too: sections go through
+  `build_subpage`, so they now sit under a heading with page margins like
+  every other page (visible change).
+* Decision: `css_template` stays a widget. Its editor is file dialogs,
+  placeholder scanning of the HTML, grouped mappings and auto-configuration
+  from the slot summaries; a schema route would move those 1,600 lines
+  behind a field editor, not delete them. It is the only hand-written
+  display widget, and `set_source_summaries` stays on the trait for it.
+
+Remaining: docs consolidation (§8-§21 are a build log; the design sections
+above still describe `DisplaySection`), and the open policy on
+`ThemeLibrary::resolve_missing_named`.
