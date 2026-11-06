@@ -374,9 +374,22 @@ impl Displayer for GraphDisplayer {
                         .map(|l| l.field_id.clone())
                         .collect();
                     data.config = graph_config;
+                    data.dirty = true;
                 }
             }
         }
+        // The panel's resolved theme (Panel::apply_resolved_theme, gotcha 20):
+        // every theme-linked colour resolves against `config.theme`, so
+        // without this the graph drew with the theme stored in its config
+        // while the dialog's swatches showed the panel's. Applied after a
+        // full config so a combined push ends with the resolved theme.
+        let data_clone = self.data.clone();
+        super::apply_global_theme(config, |theme| {
+            if let Ok(mut data) = data_clone.lock() {
+                data.config.theme = theme;
+                data.dirty = true;
+            }
+        });
         Ok(())
     }
 
@@ -390,5 +403,53 @@ impl Displayer for GraphDisplayer {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+    use crate::core::{Displayer, DisplayerConfig};
+    use crate::ui::theme::ComboThemeConfig;
+
+    fn pushed_theme() -> ComboThemeConfig {
+        let mut theme = ComboThemeConfig::default();
+        theme.color1 = rg_sens_types::color::Color::new(0.1, 0.2, 0.3, 1.0);
+        theme
+    }
+
+    fn graph_theme(displayer: &GraphDisplayer) -> ComboThemeConfig {
+        match displayer.get_typed_config() {
+            Some(DisplayerConfig::Graph(cfg)) => cfg.theme,
+            other => panic!("unexpected config {:?}", other.map(|c| c.displayer_type())),
+        }
+    }
+
+    #[test]
+    fn global_theme_push_reaches_the_graph() {
+        let mut displayer = GraphDisplayer::new();
+        let mut map = HashMap::new();
+        map.insert(
+            "global_theme".to_string(),
+            serde_json::to_value(pushed_theme()).unwrap(),
+        );
+        displayer.apply_config(&map).unwrap();
+        assert_eq!(graph_theme(&displayer), pushed_theme());
+    }
+
+    #[test]
+    fn a_combined_push_ends_with_the_resolved_theme() {
+        let mut displayer = GraphDisplayer::new();
+        let mut map = HashMap::new();
+        map.insert(
+            "graph_config".to_string(),
+            serde_json::to_value(GraphDisplayConfig::default()).unwrap(),
+        );
+        map.insert(
+            "global_theme".to_string(),
+            serde_json::to_value(pushed_theme()).unwrap(),
+        );
+        displayer.apply_config(&map).unwrap();
+        assert_eq!(graph_theme(&displayer), pushed_theme());
     }
 }
