@@ -1265,3 +1265,41 @@ widgets are gone except the two clock widgets and css_template.
 Next: the ten themed combo frames (`sections()` from their Frame/Headers/
 Layout/… pages, the Theme page staying as the Theme node's editor), then
 the two clock displayers and css_template.
+
+## 18. Phase 4a as shipped (2026-11-06)
+
+The combo frame editors start moving to schemas; synthwave is the first.
+
+* `src/ui/config_tree/schema_combo.rs`: `SchemaComboEditor` implements both
+  `DisplayEditor` and `ComboDisplayEditor` over the frame's JSON object
+  (`frame_from_wrapper` / `wrapper_from_frame` copy the wrapper's two
+  animation keys, as `to_frame`/`from_frame` do). Sections and list items
+  are tree nodes; `take_pages()` returns nothing and `ensure_display_editor`
+  falls back to `sections()`. Group weights are written silently into the
+  model; `transferable`/`apply_transferable` read and write the shared keys
+  (`split_orientation` or LCARS's `layout_orientation`, tested); `reorder`
+  goes store → `DisplayerConfig::swap_groups/swap_items` → load.
+* `src/ui/config_tree/combo_items.rs`: the per-item page over
+  `content_items[slot]` — display type, height, and the seven per-type
+  schema editors, all reloaded on a type switch.
+* `PropKind::EnumList { options, count_key, default_key, item_label }` for
+  per-group item orientations (one row per group, count from
+  `group_count`, default from the layout orientation);
+  `PropKind::List.count_key` keeps an integer beside a list equal to its
+  length (LCARS segments).
+* Theme node: the generic editor (`GlobalThemeWidget`) serves every panel
+  whose display editor has no Theme page, now including schema combos, with
+  a Preset dropdown: `ComboThemeConfig::palette_presets(displayer)` (the
+  Art Deco / Art Nouveau / Steampunk palettes moved out of their widgets)
+  then the built-ins. `inline_payload` prefers that editor; a widget-based
+  combo editor still holds the Inline payload in its frame theme.
+* Behaviour: picking a synthwave colour scheme no longer rewrites the theme
+  colours (the old Theme tab did; the renderer reads the scheme itself and
+  the Theme node's presets cover palettes); the per-group orientation
+  switches became rows in the Layout section; the widget's preview is gone.
+
+Next: the other nine frames (same recipe; LCARS adds a segments list with
+`count_key`, header and divider objects; `hud_color` and `phosphor_color`
+need field editors like `synthwave_scheme`), then delete
+`combo_config_base.rs` and the theme-row helpers with the last widget, then
+the clocks and css_template.
