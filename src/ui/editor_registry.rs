@@ -100,10 +100,9 @@ pub trait DisplayEditor {
     /// uses them for its placeholder mapping).
     fn set_source_summaries(&self, _summaries: Vec<(String, String, usize, u32)>) {}
     fn cleanup(&self) {}
-    /// Standalone editors may split into pages; the tree shows them as
-    /// child nodes of Display (combos do the same through `take_pages`). A
-    /// one-element path is a section; a longer path (a list item) is filed
-    /// under its nearest ancestor page, or Display.
+    /// An editor may split into pages; the tree shows them as child nodes
+    /// of Display. A one-element path is a section; a longer path (a list
+    /// item) is filed under its nearest ancestor page, or Display.
     fn sections(&self) -> Vec<EditorPage> {
         Vec::new()
     }
@@ -126,10 +125,6 @@ pub trait DisplayEditor {
 
 /// Extra surface of the themed combo displayer editors.
 pub trait ComboDisplayEditor {
-    /// Detach the editor's notebook pages as `(tab label, page)`. Call once;
-    /// the editor's own container is not shown afterwards. The "Content"
-    /// page is returned too; the caller strips its per-slot notebook.
-    fn take_pages(&self) -> Vec<(String, Widget)>;
     /// Write the frame's per-group size weights directly (live drags of the
     /// group node's weight spin); the source stays the owner and the next
     /// apply re-derives them.

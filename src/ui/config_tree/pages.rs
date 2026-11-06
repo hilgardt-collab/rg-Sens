@@ -99,7 +99,6 @@ impl State {
             NodeKind::Theme => self.build_theme_page().upcast(),
             NodeKind::Source => self.build_source_page().upcast(),
             NodeKind::Display => self.build_display_page().upcast(),
-            NodeKind::DisplaySection(name) => self.build_section_page(name),
             NodeKind::Content => self.build_content_page().upcast(),
             NodeKind::ContentGroup(g) => self.build_group_page(*g).upcast(),
             NodeKind::ContentItem(slot) => self.build_item_page(slot).upcast(),
@@ -270,68 +269,61 @@ impl State {
         // The theme editor is always shown: the resolved theme for a shared
         // reference, the private theme for Inline. Editing under a shared
         // reference detaches the panel (`State::detach_theme_if_edited`).
-        let widget_theme_page = self.theme_page.borrow().clone();
-        if let Some(theme_page) = widget_theme_page {
-            // A widget-based combo editor brings its own Theme page.
-            page.append(&theme_page);
-        } else {
-            // Preset dropdown: the displayer's own palettes, then the
-            // built-ins. Applies to the editor below (an edit, so a shared
-            // reference detaches to Inline as any other edit would).
-            let displayer = self.displayer_type();
-            let presets: Vec<(String, ComboThemeConfig)> =
-                ComboThemeConfig::palette_presets(&displayer)
-                    .into_iter()
-                    .map(|(n, t)| (n.to_string(), t))
-                    .chain(
-                        ComboThemeConfig::builtin_presets()
-                            .into_iter()
-                            .map(|(n, t)| (format!("{} (built-in)", n), t)),
-                    )
-                    .collect();
-            let mut preset_names = vec!["Apply a preset…".to_string()];
-            preset_names.extend(presets.iter().map(|(n, _)| n.clone()));
-            let preset_dropdown = dropdown_row(&page, "Preset:", &preset_names, 0);
+        // Preset dropdown: the displayer's own palettes, then the
+        // built-ins. Applies to the editor below (an edit, so a shared
+        // reference detaches to Inline as any other edit would).
+        let displayer = self.displayer_type();
+        let presets: Vec<(String, ComboThemeConfig)> =
+            ComboThemeConfig::palette_presets(&displayer)
+                .into_iter()
+                .map(|(n, t)| (n.to_string(), t))
+                .chain(
+                    ComboThemeConfig::builtin_presets()
+                        .into_iter()
+                        .map(|(n, t)| (format!("{} (built-in)", n), t)),
+                )
+                .collect();
+        let mut preset_names = vec!["Apply a preset…".to_string()];
+        preset_names.extend(presets.iter().map(|(n, _)| n.clone()));
+        let preset_dropdown = dropdown_row(&page, "Preset:", &preset_names, 0);
 
-            let widget = Rc::new(GlobalThemeWidget::new());
-            // Inline: the reference's payload (no editor exists yet to ask);
-            // shared: the resolved theme.
-            widget.set_config(self.resolved_theme());
-            {
-                let weak = Rc::downgrade(self);
-                widget.set_on_change(move || {
-                    if let Some(s) = weak.upgrade() {
-                        s.theme_editor_changed();
-                    }
-                });
-            }
-            {
-                let weak = Rc::downgrade(self);
-                let widget = widget.clone();
-                let presets = Rc::new(presets);
-                preset_dropdown.connect_selected_notify(move |dd| {
-                    let Some(s) = weak.upgrade() else { return };
-                    if s.loading.get() {
-                        return;
-                    }
-                    let sel = dd.selected() as usize;
-                    if sel == 0 {
-                        return;
-                    }
-                    if let Some((_, theme)) = presets.get(sel - 1) {
-                        let was = s.loading.replace(true);
-                        widget.set_config(theme.clone());
-                        dd.set_selected(0);
-                        s.loading.set(was);
-                        s.theme_editor_changed();
-                    }
-                });
-            }
-            page.append(widget.widget());
-            *self.inline_theme_widget.borrow_mut() = Some(widget);
-            *self.theme_baseline.borrow_mut() = self.inline_payload();
+        let widget = Rc::new(GlobalThemeWidget::new());
+        // Inline: the reference's payload (no editor exists yet to ask);
+        // shared: the resolved theme.
+        widget.set_config(self.resolved_theme());
+        {
+            let weak = Rc::downgrade(self);
+            widget.set_on_change(move || {
+                if let Some(s) = weak.upgrade() {
+                    s.theme_editor_changed();
+                }
+            });
         }
-
+        {
+            let weak = Rc::downgrade(self);
+            let widget = widget.clone();
+            let presets = Rc::new(presets);
+            preset_dropdown.connect_selected_notify(move |dd| {
+                let Some(s) = weak.upgrade() else { return };
+                if s.loading.get() {
+                    return;
+                }
+                let sel = dd.selected() as usize;
+                if sel == 0 {
+                    return;
+                }
+                if let Some((_, theme)) = presets.get(sel - 1) {
+                    let was = s.loading.replace(true);
+                    widget.set_config(theme.clone());
+                    dd.set_selected(0);
+                    s.loading.set(was);
+                    s.theme_editor_changed();
+                }
+            });
+        }
+        page.append(widget.widget());
+        *self.inline_theme_widget.borrow_mut() = Some(widget);
+        *self.theme_baseline.borrow_mut() = self.inline_payload();
         {
             let weak = Rc::downgrade(self);
             dropdown.connect_selected_notify(move |dd| {
@@ -552,7 +544,7 @@ impl State {
                 "The sections of this displayer (frame, headers, layout, …) are the \
                  child nodes of Display. Per-item display settings are under Content.",
             ));
-        } else if !self.display_pages.borrow().is_empty() {
+        } else if self.has_sections() {
             page.append(&hint(
                 "The settings of this displayer are grouped under the child nodes of Display.",
             ));
@@ -564,33 +556,21 @@ impl State {
         page
     }
 
-    fn build_section_page(self: &Rc<Self>, name: &str) -> Widget {
-        let page = self
-            .display_pages
-            .borrow()
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, w)| w.clone());
-        match page {
-            Some(w) => w,
-            None => hint("Section not available.").upcast(),
-        }
-    }
-
-    /// A detached list item of a schema display editor.
+    /// A page of the display editor: a section or a detached list item,
+    /// under a heading with the node's live title.
     fn build_subpage(self: &Rc<Self>, path: &[String]) -> GtkBox {
         let page = page_box();
         let (title, _) = self.row_text(&NodeKind::Section(path.to_vec()));
         page.append(&heading(&title));
         let widget = self
-            .display_subpages
+            .display_pages
             .borrow()
             .iter()
             .find(|p| p.path == path)
             .map(|p| p.widget.clone());
         match widget {
             Some(w) => page.append(&w),
-            None => page.append(&hint("Item not available.")),
+            None => page.append(&hint("Page not available.")),
         }
         page
     }

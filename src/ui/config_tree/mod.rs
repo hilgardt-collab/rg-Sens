@@ -160,8 +160,6 @@ pub fn show_tree_properties_dialog(
         display_needs_poll: Cell::new(false),
         source_needs_poll: Cell::new(false),
         display_pages: RefCell::new(Vec::new()),
-        display_subpages: RefCell::new(Vec::new()),
-        theme_page: RefCell::new(None),
         background_editor: RefCell::new(None),
         inline_theme_widget: RefCell::new(None),
         item_editors: RefCell::new(HashMap::new()),

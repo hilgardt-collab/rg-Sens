@@ -252,11 +252,6 @@ impl DisplayEditor for SchemaComboEditor {
 }
 
 impl ComboDisplayEditor for SchemaComboEditor {
-    /// No detached notebook: the tree reads `sections()` instead.
-    fn take_pages(&self) -> Vec<(String, Widget)> {
-        Vec::new()
-    }
-
     fn set_group_weights(&self, weights: &[f64]) {
         // A cache the source owns: written silently.
         if let Ok(v) = serde_json::to_value(weights) {

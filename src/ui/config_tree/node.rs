@@ -2,8 +2,8 @@
 //!
 //! One enum describes every selectable thing. Rows carry a `NodeKind` in a
 //! `glib::BoxedAnyObject`; pages in the editor stack are keyed by
-//! [`NodeKind::id`]. `Section` is reserved for Phase 3, when an editor can
-//! expose its own sub-sections as child nodes.
+//! [`NodeKind::id`]. `Section` is a page the display editor provides,
+//! addressed by path (a section, or a list item beneath one).
 
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -20,8 +20,6 @@ pub enum NodeKind {
     Source,
     /// Displayer type (+ the editor for standalone displayers).
     Display,
-    /// One detached page of a themed combo editor (Frame, Headers, …).
-    DisplaySection(String),
     /// Combo panels: group count, update interval, content-wide settings.
     Content,
     /// One content group (0-based index).
@@ -30,8 +28,8 @@ pub enum NodeKind {
     ContentItem(String),
     Background,
     Appearance,
-    /// Reserved: an editor-provided sub-section (Phase 3).
-    #[allow(dead_code)]
+    /// A page of the display editor by path: `["Face"]` is a section,
+    /// `["Text overlay", "lines", "0"]` a list item beneath one.
     Section(Vec<String>),
 }
 
@@ -44,7 +42,6 @@ impl NodeKind {
             NodeKind::Theme => "theme".into(),
             NodeKind::Source => "source".into(),
             NodeKind::Display => "display".into(),
-            NodeKind::DisplaySection(n) => format!("section/{}", n),
             NodeKind::Content => "content".into(),
             NodeKind::ContentGroup(g) => format!("group/{}", g),
             NodeKind::ContentItem(s) => format!("item/{}", s),

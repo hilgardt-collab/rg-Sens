@@ -126,12 +126,10 @@ pub struct State {
     pub(super) display_editor: RefCell<Option<Rc<Box<dyn DisplayEditor>>>>,
     pub(super) display_needs_poll: Cell<bool>,
     pub(super) source_needs_poll: Cell<bool>,
-    /// Detached themed-editor pages other than Theme and Content.
-    pub(super) display_pages: RefCell<Vec<(String, Widget)>>,
-    /// Deeper pages of a schema display editor (list items), filed under
-    /// their nearest ancestor page or Display; paths have two or more parts.
-    pub(super) display_subpages: RefCell<Vec<EditorPage>>,
-    pub(super) theme_page: RefCell<Option<Widget>>,
+    /// Pages of the display editor (`DisplayEditor::sections`): sections
+    /// (one-part paths) and list items (longer paths), each a `Section` node
+    /// under its nearest ancestor page, else Display.
+    pub(super) display_pages: RefCell<Vec<EditorPage>>,
     pub(super) background_editor: RefCell<Option<Rc<BackgroundConfigWidget>>>,
     pub(super) inline_theme_widget: RefCell<Option<Rc<GlobalThemeWidget>>>,
     pub(super) item_editors: RefCell<HashMap<String, Rc<ItemEditor>>>,
@@ -419,8 +417,6 @@ impl State {
             e.cleanup();
         }
         self.display_pages.borrow_mut().clear();
-        self.display_subpages.borrow_mut().clear();
-        *self.theme_page.borrow_mut() = None;
         *self.background_editor.borrow_mut() = None;
         *self.inline_theme_widget.borrow_mut() = None;
         *self.geometry.borrow_mut() = None;
@@ -473,45 +469,36 @@ impl State {
         }));
         self.display_needs_poll.set(!has_signal);
 
-        let widget_pages = editor.combo().map(|c| c.take_pages()).unwrap_or_default();
-        if !widget_pages.is_empty() {
-            // Widget-based combo editor: its notebook pages, Theme kept apart.
-            let mut sections = Vec::new();
-            for (name, page) in widget_pages {
-                match name.as_str() {
-                    "Theme" => *self.theme_page.borrow_mut() = Some(page),
-                    _ => sections.push((name, page)),
-                }
+        // One child node per section, and one per detached list item
+        // (text lines) beneath its section.
+        self.adopt_editor_pages(&**editor);
+        let weak = Rc::downgrade(self);
+        editor.set_on_sections_changed(Rc::new(move |select| {
+            if let Some(s) = weak.upgrade() {
+                s.refresh_display_pages(select);
             }
-            *self.display_pages.borrow_mut() = sections;
-        } else {
-            // Schema-driven displayers (standalone or combo): one child node
-            // per section, and one per detached list item (text lines).
-            self.adopt_editor_pages(&**editor);
-            let weak = Rc::downgrade(self);
-            editor.set_on_sections_changed(Rc::new(move |select| {
-                if let Some(s) = weak.upgrade() {
-                    s.refresh_display_pages(select);
-                }
-            }));
-        }
+        }));
         *self.display_editor.borrow_mut() = Some(editor);
         *self.theme_baseline.borrow_mut() = self.inline_payload();
     }
 
-    /// Split an editor's pages into top-level sections and deeper pages.
+    /// Take the editor's pages (an empty path addresses nothing).
     fn adopt_editor_pages(&self, editor: &dyn DisplayEditor) {
-        let mut sections = Vec::new();
-        let mut subpages = Vec::new();
-        for page in editor.sections() {
-            match page.path.as_slice() {
-                [name] => sections.push((name.clone(), page.widget)),
-                [_, _, ..] => subpages.push(page),
-                [] => {}
-            }
-        }
-        *self.display_pages.borrow_mut() = sections;
-        *self.display_subpages.borrow_mut() = subpages;
+        let pages: Vec<EditorPage> = editor
+            .sections()
+            .into_iter()
+            .filter(|p| !p.path.is_empty())
+            .collect();
+        *self.display_pages.borrow_mut() = pages;
+    }
+
+    /// Whether the display editor has sections (one-part pages). Without
+    /// them its rows sit on the Display page itself.
+    pub(super) fn has_sections(&self) -> bool {
+        self.display_pages
+            .borrow()
+            .iter()
+            .any(|p| p.path.len() == 1)
     }
 
     /// The editor's list items changed: drop the stale item pages, re-read
@@ -525,32 +512,29 @@ impl State {
         let editor = self.display_editor.borrow().clone();
         let Some(editor) = editor else { return };
         // Same pages, same widgets (an "Edit…" jump): just select.
-        let current_pages: Vec<EditorPage> = self
-            .display_pages
-            .borrow()
-            .iter()
-            .map(|(n, w)| EditorPage {
-                path: vec![n.clone()],
-                widget: w.clone(),
-            })
-            .chain(self.display_subpages.borrow().iter().cloned())
+        let current_pages: Vec<EditorPage> = self.display_pages.borrow().clone();
+        let new_pages: Vec<EditorPage> = editor
+            .sections()
+            .into_iter()
+            .filter(|p| !p.path.is_empty())
             .collect();
-        let new_pages = editor.sections();
+        let same = |a: &EditorPage, b: &EditorPage| a.path == b.path && a.widget == b.widget;
         let unchanged = current_pages.len() == new_pages.len()
             && current_pages
                 .iter()
                 .zip(new_pages.iter())
-                .all(|(a, b)| a.path == b.path && a.widget == b.widget);
+                .all(|(a, b)| same(a, b));
         if unchanged {
             if let Some(path) = select {
                 self.select_node(&self.page_node(&path));
             }
             return;
         }
-        let stale: Vec<String> = self
-            .display_subpages
-            .borrow()
+        // Pages that vanished or were rebuilt leave the stack; a page whose
+        // widget survived (a section) keeps its entry.
+        let stale: Vec<String> = current_pages
             .iter()
+            .filter(|old| !new_pages.iter().any(|new| same(old, new)))
             .map(|p| NodeKind::Section(p.path.clone()).id())
             .collect();
         for id in stale {
@@ -573,31 +557,18 @@ impl State {
 
     /// The node showing `path`, or its nearest existing ancestor, or Display.
     pub(super) fn page_node(&self, path: &[String]) -> NodeKind {
-        let sections: Vec<String> = self
+        let pages: Vec<Vec<String>> = self
             .display_pages
-            .borrow()
-            .iter()
-            .map(|(n, _)| n.clone())
-            .collect();
-        let subpages: Vec<Vec<String>> = self
-            .display_subpages
             .borrow()
             .iter()
             .map(|p| p.path.clone())
             .collect();
-        resolve_page_node(path, &sections, &subpages)
+        resolve_page_node(path, &pages)
     }
 
     fn node_exists(&self, kind: &NodeKind) -> bool {
         match kind {
-            NodeKind::Section(path) => self
-                .display_subpages
-                .borrow()
-                .iter()
-                .any(|p| &p.path == path),
-            NodeKind::DisplaySection(name) => {
-                self.display_pages.borrow().iter().any(|(n, _)| n == name)
-            }
+            NodeKind::Section(path) => self.display_pages.borrow().iter().any(|p| &p.path == path),
             _ => true,
         }
     }
@@ -1078,14 +1049,9 @@ impl State {
         root_children.push(NodeKind::Appearance);
         spec.insert(NodeKind::Root.id(), root_children);
 
-        let sections: Vec<NodeKind> = self
-            .display_pages
-            .borrow()
-            .iter()
-            .map(|(n, _)| NodeKind::DisplaySection(n.clone()))
-            .collect();
-        spec.insert(NodeKind::Display.id(), sections);
-        for page in self.display_subpages.borrow().iter() {
+        // Sections come first in `sections()`, so a list item always finds
+        // its parent page (or Display) already placed.
+        for page in self.display_pages.borrow().iter() {
             let parent = self.page_node(&page.path[..page.path.len() - 1]);
             spec.entry(parent.id())
                 .or_default()
@@ -1176,12 +1142,6 @@ impl State {
                 .borrow()
                 .get(slot)
                 .and_then(|i| i.source_editor.borrow().as_ref().map(|e| e.search_terms()))
-                .unwrap_or_default(),
-            NodeKind::DisplaySection(name) => self
-                .display_editor
-                .borrow()
-                .as_ref()
-                .map(|e| e.page_search_terms(std::slice::from_ref(name)))
                 .unwrap_or_default(),
             NodeKind::Section(path) => self
                 .display_editor
@@ -1284,7 +1244,6 @@ impl State {
                 "Display".into(),
                 displayer_display_name(applied.displayer_config.displayer_type()),
             ),
-            NodeKind::DisplaySection(n) => (n.clone(), String::new()),
             NodeKind::Section(path) => (
                 self.display_editor
                     .borrow()
@@ -1359,22 +1318,13 @@ impl State {
     pub(super) fn breadcrumb_path(&self, kind: &NodeKind) -> Vec<NodeKind> {
         match kind {
             NodeKind::Root => vec![NodeKind::Root],
-            NodeKind::DisplaySection(_) => vec![NodeKind::Root, NodeKind::Display, kind.clone()],
             NodeKind::Section(path) => {
+                // Up through the ancestor pages to Display.
                 let mut chain = vec![kind.clone()];
                 let mut parent = self.page_node(&path[..path.len() - 1]);
-                loop {
-                    match &parent {
-                        NodeKind::Section(p) => {
-                            chain.push(parent.clone());
-                            parent = self.page_node(&p[..p.len() - 1]);
-                        }
-                        NodeKind::DisplaySection(_) => {
-                            chain.push(parent.clone());
-                            break;
-                        }
-                        _ => break,
-                    }
+                while let NodeKind::Section(p) = &parent {
+                    chain.push(parent.clone());
+                    parent = self.page_node(&p[..p.len() - 1]);
                 }
                 chain.push(NodeKind::Display);
                 chain.push(NodeKind::Root);
@@ -1446,22 +1396,13 @@ pub(super) fn start_polling(state: &Rc<State>) {
     });
 }
 
-/// The node for an editor page path: the page itself when it exists (a
-/// one-part path is a section, longer paths are list items), else its
-/// nearest existing ancestor, else Display. Pure, so the three shapes the
-/// tree meets are tested below.
-pub(super) fn resolve_page_node(
-    path: &[String],
-    sections: &[String],
-    subpages: &[Vec<String>],
-) -> NodeKind {
+/// The node for an editor page path: the page itself when it exists,
+/// else its nearest existing ancestor page, else Display. Pure, so the
+/// shapes the tree meets are tested below.
+pub(super) fn resolve_page_node(path: &[String], pages: &[Vec<String>]) -> NodeKind {
     for k in (1..=path.len()).rev() {
         let prefix = &path[..k];
-        if k == 1 {
-            if sections.iter().any(|s| s == &prefix[0]) {
-                return NodeKind::DisplaySection(prefix[0].clone());
-            }
-        } else if subpages.iter().any(|p| p.as_slice() == prefix) {
+        if pages.iter().any(|p| p.as_slice() == prefix) {
             return NodeKind::Section(prefix.to_vec());
         }
     }
@@ -1477,40 +1418,54 @@ mod page_node_tests {
     }
 
     #[test]
-    fn item_under_display_when_the_editor_has_no_sections() {
-        let subpages = vec![v(&["lines", "0"])];
+    fn a_section_is_its_own_node_and_the_empty_path_is_display() {
+        let pages = vec![v(&["Face"]), v(&["Hands"])];
         assert_eq!(
-            resolve_page_node(&v(&["lines", "0"]), &[], &subpages),
+            resolve_page_node(&v(&["Hands"]), &pages),
+            NodeKind::Section(v(&["Hands"]))
+        );
+        assert_eq!(resolve_page_node(&[], &pages), NodeKind::Display);
+        assert_eq!(resolve_page_node(&v(&["Icon"]), &pages), NodeKind::Display);
+    }
+
+    #[test]
+    fn item_under_display_when_the_editor_has_no_sections() {
+        let pages = vec![v(&["lines", "0"])];
+        assert_eq!(
+            resolve_page_node(&v(&["lines", "0"]), &pages),
             NodeKind::Section(v(&["lines", "0"]))
         );
         // Its parent (the list) has no page: Display.
-        assert_eq!(
-            resolve_page_node(&v(&["lines"]), &[], &subpages),
-            NodeKind::Display
-        );
+        assert_eq!(resolve_page_node(&v(&["lines"]), &pages), NodeKind::Display);
     }
 
     #[test]
     fn item_under_its_section() {
-        let sections = v(&["Style", "Text overlay"]);
-        let subpages = vec![v(&["Text overlay", "lines", "0"])];
+        let pages = vec![
+            v(&["Style"]),
+            v(&["Text overlay"]),
+            v(&["Text overlay", "lines", "0"]),
+        ];
         assert_eq!(
-            resolve_page_node(&v(&["Text overlay", "lines"]), &sections, &subpages),
-            NodeKind::DisplaySection("Text overlay".into())
+            resolve_page_node(&v(&["Text overlay", "lines"]), &pages),
+            NodeKind::Section(v(&["Text overlay"]))
         );
         assert_eq!(
-            resolve_page_node(&v(&["Colours"]), &sections, &subpages),
+            resolve_page_node(&v(&["Text overlay", "lines", "0"]), &pages),
+            NodeKind::Section(v(&["Text overlay", "lines", "0"]))
+        );
+        assert_eq!(
+            resolve_page_node(&v(&["Colours"]), &pages),
             NodeKind::Display
         );
     }
 
     #[test]
     fn a_removed_item_falls_back_to_its_parent() {
-        let sections = v(&["Text overlay"]);
-        let subpages = vec![v(&["Text overlay", "lines", "0"])];
+        let pages = vec![v(&["Text overlay"]), v(&["Text overlay", "lines", "0"])];
         assert_eq!(
-            resolve_page_node(&v(&["Text overlay", "lines", "1"]), &sections, &subpages),
-            NodeKind::DisplaySection("Text overlay".into())
+            resolve_page_node(&v(&["Text overlay", "lines", "1"]), &pages),
+            NodeKind::Section(v(&["Text overlay"]))
         );
     }
 }
