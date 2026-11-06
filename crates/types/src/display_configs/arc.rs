@@ -204,3 +204,192 @@ impl Default for ArcDisplayConfig {
         }
     }
 }
+
+impl crate::schema::Schema for ArcDisplayConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "start_angle",
+                "Start angle (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+            .section("Geometry")
+            .help("0 = right, 90 = down, 180 = left, 270 = up"),
+            Prop::new(
+                "end_angle",
+                "End angle (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+            .section("Geometry"),
+            Prop::new(
+                "arc_width",
+                "Arc width (fraction of radius)",
+                PropKind::Float {
+                    min: 0.01,
+                    max: 1.0,
+                    step: 0.01,
+                    digits: 2,
+                },
+            )
+            .section("Geometry"),
+            Prop::new(
+                "radius_percent",
+                "Radius (fraction of space)",
+                PropKind::Float {
+                    min: 0.1,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Geometry"),
+            Prop::new("segmented", "Segmented", PropKind::Bool).section("Style"),
+            Prop::new(
+                "segment_count",
+                "Segments",
+                PropKind::Int {
+                    min: 2,
+                    max: 100,
+                    step: 1,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::IsTrue { key: "segmented" }),
+            Prop::new(
+                "segment_spacing",
+                "Segment spacing (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::IsTrue { key: "segmented" }),
+            Prop::new(
+                "cap_style",
+                "Cap style",
+                PropKind::Enum {
+                    options: vec![("butt", "Butt"), ("round", "Round"), ("pointed", "Pointed")],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "taper_style",
+                "Taper",
+                PropKind::Enum {
+                    options: vec![
+                        ("none", "None"),
+                        ("start", "Start"),
+                        ("end", "End"),
+                        ("both", "Both"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "taper_amount",
+                "Taper amount",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "taper_style",
+                values: vec!["start", "end", "both"],
+            }),
+            Prop::new("color_stops", "Colour stops", PropKind::ColorStops)
+                .section("Colours")
+                .help("Colours along the arc from start to end"),
+            Prop::new(
+                "color_transition",
+                "Transition",
+                PropKind::Enum {
+                    options: vec![("smooth", "Smooth"), ("abrupt", "Abrupt")],
+                },
+            )
+            .section("Colours"),
+            Prop::new(
+                "color_mode",
+                "Colour mode",
+                PropKind::Enum {
+                    options: vec![("progressive", "Progressive"), ("segments", "Per segment")],
+                },
+            )
+            .section("Colours"),
+            Prop::new("show_background_arc", "Show background arc", PropKind::Bool)
+                .section("Colours"),
+            Prop::new("background_color", "Background colour", PropKind::Color)
+                .section("Colours")
+                .visible_when(Condition::IsTrue {
+                    key: "show_background_arc",
+                }),
+            Prop::new(
+                "overlay_background",
+                "Overlay background on the full arc",
+                PropKind::Bool,
+            )
+            .section("Colours")
+            .help("Draw the full arc first, then the unfilled part in the background colour")
+            .visible_when(Condition::IsTrue {
+                key: "show_background_arc",
+            }),
+            Prop::new(
+                "text_overlay",
+                "Text overlay",
+                PropKind::Custom {
+                    editor: "text_overlay",
+                },
+            )
+            .section("Text overlay"),
+            Prop::new("animate", "Animate value changes", PropKind::Bool).section("Animation"),
+            Prop::new(
+                "animation_duration",
+                "Duration (s)",
+                PropKind::Float {
+                    min: 0.05,
+                    max: 5.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue { key: "animate" }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<ArcDisplayConfig>(&ArcDisplayConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let default = ArcDisplayConfig::default();
+        let value = serde_json::to_value(&default).unwrap();
+        let back: ArcDisplayConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(back, default);
+    }
+}

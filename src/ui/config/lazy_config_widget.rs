@@ -26,9 +26,9 @@ use std::rc::Rc;
 /// # Example
 ///
 /// ```ignore
-/// // Instead of implementing LazyBarConfigWidget manually (~200 lines),
+/// // Instead of implementing LazyGraphConfigWidget manually (~200 lines),
 /// // just use the type alias:
-/// pub type LazyBarConfigWidget = LazyConfigWidget<BarConfigWidget>;
+/// pub type LazyGraphConfigWidget = LazyConfigWidget<GraphConfigWidget>;
 /// ```
 pub struct LazyConfigWidget<W: ConfigWidget> {
     /// Container that holds either the placeholder or the actual widget

@@ -61,6 +61,8 @@ pub struct Clipboard {
     pub speedometer_display: Option<SpeedometerConfig>,
     /// Copied generic source configuration as JSON (for combo slots)
     pub source_config: Option<(String, Value)>, // (source_type, config_json)
+    /// Copied displayer configuration as JSON, tagged with its displayer type
+    pub display_config: Option<(String, Value)>,
 }
 
 impl Clipboard {
@@ -225,6 +227,16 @@ impl Clipboard {
         self.source_config.clone()
     }
 
+    /// Copy a displayer configuration (any type) as JSON
+    pub fn copy_display_config(&mut self, displayer_type: String, config: Value) {
+        self.display_config = Some((displayer_type, config));
+    }
+
+    /// Paste a displayer configuration: (displayer_type, config_json)
+    pub fn paste_display_config(&self) -> Option<(String, Value)> {
+        self.display_config.clone()
+    }
+
     /// Clear all clipboard data
     pub fn clear(&mut self) {
         self.text = None;
@@ -243,5 +255,6 @@ impl Clipboard {
         self.arc_display = None;
         self.speedometer_display = None;
         self.source_config = None;
+        self.display_config = None;
     }
 }

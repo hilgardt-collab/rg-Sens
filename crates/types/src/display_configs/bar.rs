@@ -326,3 +326,384 @@ impl Default for BarDisplayConfig {
         }
     }
 }
+
+/// Templates for the fill variants: the old widget seeded a background
+/// gradient with two greys and left a foreground gradient to the editor's
+/// stops; here both start usable (foreground: theme colours 1 → 2).
+fn fg_solid() -> serde_json::Value {
+    serde_json::to_value(BarFillType::Solid {
+        color: ColorSource::Theme { index: 1 },
+    })
+    .expect("fill serializes")
+}
+
+fn fg_gradient() -> serde_json::Value {
+    serde_json::to_value(BarFillType::Gradient {
+        stops: vec![
+            ColorStopSource {
+                position: 0.0,
+                color: ColorSource::Theme { index: 1 },
+            },
+            ColorStopSource {
+                position: 1.0,
+                color: ColorSource::Theme { index: 2 },
+            },
+        ],
+        angle: 90.0,
+    })
+    .expect("fill serializes")
+}
+
+fn bg_solid() -> serde_json::Value {
+    serde_json::to_value(BarBackgroundType::Solid {
+        color: ColorSource::Custom {
+            color: Color::new(0.15, 0.15, 0.15, 0.8),
+        },
+    })
+    .expect("background serializes")
+}
+
+fn bg_gradient() -> serde_json::Value {
+    serde_json::to_value(BarBackgroundType::Gradient {
+        stops: vec![
+            ColorStopSource::custom(0.0, Color::new(0.2, 0.2, 0.2, 1.0)),
+            ColorStopSource::custom(1.0, Color::new(0.1, 0.1, 0.1, 1.0)),
+        ],
+        angle: 90.0,
+    })
+    .expect("background serializes")
+}
+
+fn bg_transparent() -> serde_json::Value {
+    serde_json::to_value(BarBackgroundType::Transparent).expect("background serializes")
+}
+
+impl crate::schema::Schema for BarDisplayConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind, Variant};
+        let shaped = Condition::Equals {
+            key: "style",
+            values: vec!["rectangle", "segmented"],
+        };
+        let tapered = Condition::Equals {
+            key: "taper_style",
+            values: vec!["start", "end", "both"],
+        };
+        let angle = |key: &'static str| {
+            Prop::new(
+                key,
+                "Angle (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+        };
+        vec![
+            Prop::new(
+                "style",
+                "Style",
+                PropKind::Enum {
+                    options: vec![
+                        ("full", "Full panel"),
+                        ("rectangle", "Rectangle"),
+                        ("segmented", "Segmented"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "orientation",
+                "Orientation",
+                PropKind::Enum {
+                    options: vec![("horizontal", "Horizontal"), ("vertical", "Vertical")],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "fill_direction",
+                "Fill direction",
+                PropKind::Enum {
+                    options: vec![
+                        ("left_to_right", "Left to right"),
+                        ("right_to_left", "Right to left"),
+                        ("bottom_to_top", "Bottom to top"),
+                        ("top_to_bottom", "Top to bottom"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "rectangle_width",
+                "Width (fraction)",
+                PropKind::Float {
+                    min: 0.05,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "style",
+                values: vec!["rectangle"],
+            }),
+            Prop::new(
+                "rectangle_height",
+                "Height (fraction)",
+                PropKind::Float {
+                    min: 0.05,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "style",
+                values: vec!["rectangle"],
+            }),
+            Prop::new(
+                "segment_count",
+                "Segments",
+                PropKind::Int {
+                    min: 1,
+                    max: 100,
+                    step: 1,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "style",
+                values: vec!["segmented"],
+            }),
+            Prop::new(
+                "segment_spacing",
+                "Segment spacing (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "style",
+                values: vec!["segmented"],
+            }),
+            Prop::new(
+                "segment_width",
+                "Segment width (fraction)",
+                PropKind::Float {
+                    min: 0.05,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "style",
+                values: vec!["segmented"],
+            }),
+            Prop::new(
+                "segment_height",
+                "Segment height (fraction)",
+                PropKind::Float {
+                    min: 0.05,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "style",
+                values: vec!["segmented"],
+            }),
+            Prop::new(
+                "corner_radius",
+                "Corner radius (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Style")
+            .visible_when(shaped.clone()),
+            Prop::new(
+                "padding",
+                "Padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Style")
+            .visible_when(shaped),
+            Prop::new(
+                "taper_style",
+                "Taper",
+                PropKind::Enum {
+                    options: vec![
+                        ("none", "None"),
+                        ("start", "Start"),
+                        ("end", "End"),
+                        ("both", "Both"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "taper_amount",
+                "Taper amount",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Style")
+            .visible_when(tapered.clone()),
+            Prop::new(
+                "taper_alignment",
+                "Taper anchor",
+                PropKind::Enum {
+                    options: vec![("start", "Start"), ("center", "Center"), ("end", "End")],
+                },
+            )
+            .section("Style")
+            .help("Top/left, centre, or bottom/right of the bar")
+            .visible_when(tapered),
+            Prop::new(
+                "foreground",
+                "Fill",
+                PropKind::Variant {
+                    tag: "type",
+                    variants: vec![
+                        Variant {
+                            value: "solid",
+                            label: "Solid colour",
+                            props: vec![Prop::new("color", "Colour", PropKind::Color)],
+                            template: fg_solid,
+                        },
+                        Variant {
+                            value: "gradient",
+                            label: "Gradient",
+                            props: vec![
+                                Prop::new("stops", "Stops", PropKind::ColorStops),
+                                angle("angle"),
+                            ],
+                            template: fg_gradient,
+                        },
+                    ],
+                },
+            )
+            .section("Foreground"),
+            Prop::new(
+                "background",
+                "Background",
+                PropKind::Variant {
+                    tag: "type",
+                    variants: vec![
+                        Variant {
+                            value: "transparent",
+                            label: "Transparent",
+                            props: vec![],
+                            template: bg_transparent,
+                        },
+                        Variant {
+                            value: "solid",
+                            label: "Solid colour",
+                            props: vec![Prop::new("color", "Colour", PropKind::Color)],
+                            template: bg_solid,
+                        },
+                        Variant {
+                            value: "gradient",
+                            label: "Gradient",
+                            props: vec![
+                                Prop::new("stops", "Stops", PropKind::ColorStops),
+                                angle("angle"),
+                            ],
+                            template: bg_gradient,
+                        },
+                    ],
+                },
+            )
+            .section("Background"),
+            Prop::new(
+                "border",
+                "Border",
+                PropKind::Object {
+                    props: vec![
+                        Prop::new("enabled", "Draw border", PropKind::Bool),
+                        Prop::new("color", "Colour", PropKind::Color)
+                            .visible_when(Condition::IsTrue { key: "enabled" }),
+                        Prop::new(
+                            "width",
+                            "Width (px)",
+                            PropKind::Float {
+                                min: 0.5,
+                                max: 20.0,
+                                step: 0.5,
+                                digits: 1,
+                            },
+                        )
+                        .visible_when(Condition::IsTrue { key: "enabled" }),
+                    ],
+                },
+            )
+            .section("Border"),
+            Prop::new(
+                "text_overlay",
+                "Text overlay",
+                PropKind::Custom {
+                    editor: "text_overlay",
+                },
+            )
+            .section("Text overlay"),
+            Prop::new("smooth_animation", "Smooth animation", PropKind::Bool).section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.01,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "smooth_animation",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<BarDisplayConfig>(&BarDisplayConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let default = BarDisplayConfig::default();
+        let value = serde_json::to_value(&default).unwrap();
+        let back: BarDisplayConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(back, default);
+    }
+}

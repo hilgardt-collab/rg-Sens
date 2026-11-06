@@ -1,21 +1,31 @@
 //! Schema-driven editor (Phase 3): rows rendered from a config type's
-//! [`Prop`]s over the flat JSON form of its config. A source type whose
-//! config implements `Schema` is registered through [`SchemaSourceEditor`]
-//! and needs no hand-written widget; the same editor serves the standalone
-//! Source node and combo item pages, because both come from the registry.
+//! [`Prop`]s over the flat JSON form of its config. A source or displayer
+//! whose config implements `Schema` is registered through
+//! [`SchemaSourceEditor`] / [`SchemaDisplayEditor`] and needs no hand-written
+//! widget; the same editor serves the standalone node and combo item pages,
+//! because both come from the registry.
 //!
 //! The editor edits the whole flat object: keys without a prop are carried
-//! through untouched, so adding a prop later never loses saved data.
+//! through untouched, so adding a prop later never loses saved data (and a
+//! displayer's cached `theme` passes through, gotcha 20).
+//!
+//! Nested kinds (`Object`, `Variant`, `List` items) are rows over a
+//! sub-object with their own model; every change writes the sub-object back
+//! under its key and fires the parent. Anything visual a plain kind cannot
+//! express is a `Custom` editor registered by name (`field_editors.rs`).
 
 use super::util::{flatten_source_config, source_config_from_flat};
-use crate::core::SourceConfig;
-use crate::ui::editor_registry::{ChangeCallback, SourceEditor};
+use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
+use crate::ui::editor_registry::{ChangeCallback, DisplayEditor, SourceEditor};
+use crate::ui::theme::ComboThemeConfig;
+use crate::ui::{GradientEditor, ThemeColorSelector, CLIPBOARD};
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, SpinButton,
     StringList, Widget,
 };
 use rg_sens_types::schema::{Condition, Prop, PropKind};
+use rg_sens_types::theme::{ColorSource, ColorStopSource};
 use serde_json::{Map, Value};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -25,7 +35,8 @@ type Provider = Rc<dyn Fn() -> Vec<(String, String)>>;
 type Model = Rc<RefCell<Map<String, Value>>>;
 /// Sets a control from the flat config (load / rebuild).
 pub type FieldRefresh = Box<dyn Fn(&Map<String, Value>)>;
-type FieldEditorFactory = Rc<dyn Fn(FieldContext) -> (Widget, FieldRefresh)>;
+type ThemeHook = Box<dyn Fn(&ComboThemeConfig)>;
+type FieldEditorFactory = Rc<dyn Fn(FieldContext) -> FieldEditor>;
 
 thread_local! {
     static PROVIDERS: RefCell<HashMap<&'static str, Provider>> = RefCell::new(HashMap::new());
@@ -33,12 +44,15 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
-/// What a `PropKind::Custom` editor is handed: its prop and a way to write
-/// the flat config. Writes while the editor is loading are silent
-/// (normalisation of a saved value); otherwise they fire the change signal.
+/// What a `PropKind::Custom` editor is handed: its prop, the slot's fields,
+/// the current theme, and a way to write the flat config. Writes while the
+/// editor is loading are silent (normalisation of a saved value); otherwise
+/// they fire the change signal.
 #[derive(Clone)]
 pub struct FieldContext {
     pub prop: Prop,
+    pub fields: Rc<Vec<FieldMetadata>>,
+    pub theme: ComboThemeConfig,
     set: Rc<dyn Fn(Vec<(&'static str, Value)>)>,
 }
 
@@ -48,12 +62,40 @@ impl FieldContext {
     }
 }
 
-/// Register the editor a `PropKind::Custom { editor }` names. The factory
-/// returns the control and a refresh closure that reads the whole flat
-/// config (an editor may span several keys).
+/// What a custom editor returns: its control, how to set it from the flat
+/// config, and optional theme and cleanup hooks.
+pub struct FieldEditor {
+    pub widget: Widget,
+    pub refresh: FieldRefresh,
+    pub on_theme: Option<ThemeHook>,
+    pub cleanup: Option<Box<dyn Fn()>>,
+}
+
+impl FieldEditor {
+    pub fn new(widget: impl IsA<Widget>, refresh: FieldRefresh) -> Self {
+        Self {
+            widget: widget.upcast(),
+            refresh,
+            on_theme: None,
+            cleanup: None,
+        }
+    }
+
+    pub fn with_theme(mut self, f: impl Fn(&ComboThemeConfig) + 'static) -> Self {
+        self.on_theme = Some(Box::new(f));
+        self
+    }
+
+    pub fn with_cleanup(mut self, f: impl Fn() + 'static) -> Self {
+        self.cleanup = Some(Box::new(f));
+        self
+    }
+}
+
+/// Register the editor a `PropKind::Custom { editor }` names.
 pub fn register_field_editor(
     name: &'static str,
-    f: impl Fn(FieldContext) -> (Widget, FieldRefresh) + 'static,
+    f: impl Fn(FieldContext) -> FieldEditor + 'static,
 ) {
     FIELD_EDITORS.with(|e| {
         e.borrow_mut().insert(name, Rc::new(f));
@@ -61,7 +103,7 @@ pub fn register_field_editor(
 }
 
 /// Register the `(value, label)` list a `PropKind::DynamicChoice { provider }`
-/// offers.
+/// or `PropKind::IndexChoice { provider }` offers.
 pub fn register_choice_provider(
     name: &'static str,
     f: impl Fn() -> Vec<(String, String)> + 'static,
@@ -83,7 +125,16 @@ fn condition_holds(cond: &Condition, model: &Map<String, Value>) -> bool {
             .map(|s| values.contains(&s))
             .unwrap_or(false),
         Condition::IsFalse { key } => !model.get(*key).and_then(|v| v.as_bool()).unwrap_or(false),
+        Condition::IsTrue { key } => model.get(*key).and_then(|v| v.as_bool()).unwrap_or(false),
     }
+}
+
+/// Per-editor state every row shares.
+#[derive(Clone)]
+struct Ctx {
+    loading: Rc<Cell<bool>>,
+    theme: Rc<RefCell<ComboThemeConfig>>,
+    fields: Rc<Vec<FieldMetadata>>,
 }
 
 struct Row {
@@ -91,28 +142,63 @@ struct Row {
     widget: GtkBox,
     /// Set the control from the model (load).
     refresh: FieldRefresh,
+    on_theme: Option<ThemeHook>,
+    cleanup: Option<Box<dyn Fn()>>,
+}
+
+impl Row {
+    fn plain(prop: &Prop, widget: GtkBox, refresh: FieldRefresh) -> Self {
+        Self {
+            prop: prop.clone(),
+            widget,
+            refresh,
+            on_theme: None,
+            cleanup: None,
+        }
+    }
 }
 
 /// Rows for a list of props over one JSON object.
 pub struct SchemaEditor {
     container: GtkBox,
+    /// `(section, page)` when built sectioned; empty otherwise.
+    pages: Vec<(String, GtkBox)>,
     model: Model,
     rows: Rc<RefCell<Vec<Row>>>,
-    loading: Rc<Cell<bool>>,
+    ctx: Ctx,
     on_change: Rc<RefCell<Option<ChangeCallback>>>,
 }
 
 impl SchemaEditor {
+    /// One page, section headings inline.
     pub fn new(props: Vec<Prop>) -> Self {
+        Self::build(props, Vec::new(), false)
+    }
+
+    /// One page with the slot's fields available to field editors.
+    pub fn with_fields(props: Vec<Prop>, fields: Vec<FieldMetadata>) -> Self {
+        Self::build(props, fields, false)
+    }
+
+    /// One page per section (`pages()`); `widget()` stays empty.
+    pub fn sectioned(props: Vec<Prop>, fields: Vec<FieldMetadata>) -> Self {
+        Self::build(props, fields, true)
+    }
+
+    fn build(props: Vec<Prop>, fields: Vec<FieldMetadata>, sectioned: bool) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 6);
         let model: Model = Rc::new(RefCell::new(Map::new()));
         let rows: Rc<RefCell<Vec<Row>>> = Rc::new(RefCell::new(Vec::new()));
-        let loading = Rc::new(Cell::new(false));
+        let ctx = Ctx {
+            loading: Rc::new(Cell::new(false)),
+            theme: Rc::new(RefCell::new(ComboThemeConfig::default())),
+            fields: Rc::new(fields),
+        };
         let on_change: Rc<RefCell<Option<ChangeCallback>>> = Rc::new(RefCell::new(None));
 
         // One closure every control calls after writing its value.
         let fire: Rc<dyn Fn()> = {
-            let loading = loading.clone();
+            let loading = ctx.loading.clone();
             let on_change = on_change.clone();
             let rows = rows.clone();
             let model = model.clone();
@@ -127,32 +213,46 @@ impl SchemaEditor {
             })
         };
 
+        // Controls are initialised while building; nothing may fire.
+        ctx.loading.set(true);
+        let mut pages: Vec<(String, GtkBox)> = Vec::new();
         let mut current_section: Option<&'static str> = None;
         for prop in props {
-            if prop.section != current_section {
-                if let Some(s) = prop.section {
-                    let heading = Label::new(Some(s));
-                    heading.set_halign(gtk4::Align::Start);
-                    heading.add_css_class("heading");
-                    heading.set_margin_top(8);
-                    container.append(&heading);
+            let target: GtkBox = if sectioned {
+                let name = prop.section.unwrap_or("General");
+                match pages.iter().find(|(n, _)| n == name) {
+                    Some((_, page)) => page.clone(),
+                    None => {
+                        let page = GtkBox::new(Orientation::Vertical, 6);
+                        pages.push((name.to_string(), page.clone()));
+                        page
+                    }
                 }
-                current_section = prop.section;
-            }
-            let (widget, refresh) = build_row(&prop, &model, &loading, &fire);
-            container.append(&widget);
-            rows.borrow_mut().push(Row {
-                prop,
-                widget,
-                refresh,
-            });
+            } else {
+                if prop.section != current_section {
+                    if let Some(s) = prop.section {
+                        let heading = Label::new(Some(s));
+                        heading.set_halign(gtk4::Align::Start);
+                        heading.add_css_class("heading");
+                        heading.set_margin_top(8);
+                        container.append(&heading);
+                    }
+                    current_section = prop.section;
+                }
+                container.clone()
+            };
+            let row = build_row(&prop, &model, &ctx, &fire);
+            target.append(&row.widget);
+            rows.borrow_mut().push(row);
         }
+        ctx.loading.set(false);
 
         Self {
             container,
+            pages,
             model,
             rows,
-            loading,
+            ctx,
             on_change,
         }
     }
@@ -161,9 +261,14 @@ impl SchemaEditor {
         &self.container
     }
 
+    /// The section pages of a `sectioned` editor.
+    pub fn pages(&self) -> Vec<(String, GtkBox)> {
+        self.pages.clone()
+    }
+
     /// Replace the model and refresh every control without firing changes.
     pub fn load(&self, map: Map<String, Value>) {
-        self.loading.set(true);
+        let was_loading = self.ctx.loading.replace(true);
         *self.model.borrow_mut() = map;
         // Refresh from a snapshot: setting a control emits its signal
         // synchronously, and a handler must never find the model borrowed
@@ -176,7 +281,7 @@ impl SchemaEditor {
             }
             update_visibility(&rows, &self.model.borrow());
         }
-        self.loading.set(false);
+        self.ctx.loading.set(was_loading);
     }
 
     pub fn model(&self) -> Map<String, Value> {
@@ -185,6 +290,13 @@ impl SchemaEditor {
 
     pub fn set_on_change(&self, cb: ChangeCallback) {
         *self.on_change.borrow_mut() = Some(cb);
+    }
+
+    /// Push the resolved theme to every theme-aware control. Never fires
+    /// the change signal: a theme push is not an edit.
+    pub fn set_theme(&self, theme: &ComboThemeConfig) {
+        *self.ctx.theme.borrow_mut() = theme.clone();
+        apply_theme(&self.rows.borrow(), theme);
     }
 
     /// Append a widget below the rows (stateful UI that is not a property,
@@ -201,10 +313,24 @@ impl SchemaEditor {
         out
     }
 
+    /// Labels and keys of one section's rows.
+    pub fn section_search_terms(&self, section: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        collect_search_terms(
+            self.rows
+                .borrow()
+                .iter()
+                .map(|r| &r.prop)
+                .filter(|p| p.section.unwrap_or("General") == section),
+            &mut out,
+        );
+        out
+    }
+
     /// Break the control ↔ closure cycles.
     pub fn cleanup(&self) {
         *self.on_change.borrow_mut() = None;
-        self.rows.borrow_mut().clear();
+        cleanup_rows(&mut self.rows.borrow_mut());
     }
 }
 
@@ -212,10 +338,18 @@ fn collect_search_terms<'a>(props: impl Iterator<Item = &'a Prop>, out: &mut Vec
     for prop in props {
         match &prop.kind {
             PropKind::Note => {}
-            PropKind::List { item, .. } => {
+            PropKind::List { item, .. } | PropKind::Object { props: item } => {
                 out.push(prop.label.to_string());
                 out.push(prop.key.replace('_', " "));
                 collect_search_terms(item.iter(), out);
+            }
+            PropKind::Variant { variants, .. } => {
+                out.push(prop.label.to_string());
+                out.push(prop.key.replace('_', " "));
+                for v in variants {
+                    out.push(v.label.to_string());
+                    collect_search_terms(v.props.iter(), out);
+                }
             }
             _ => {
                 out.push(prop.label.to_string());
@@ -237,6 +371,23 @@ fn update_visibility(rows: &[Row], model: &Map<String, Value>) {
     }
 }
 
+fn apply_theme(rows: &[Row], theme: &ComboThemeConfig) {
+    for row in rows {
+        if let Some(hook) = &row.on_theme {
+            hook(theme);
+        }
+    }
+}
+
+fn cleanup_rows(rows: &mut Vec<Row>) {
+    for row in rows.iter() {
+        if let Some(c) = &row.cleanup {
+            c();
+        }
+    }
+    rows.clear();
+}
+
 fn labelled_row(prop: &Prop, control: &impl IsA<Widget>) -> GtkBox {
     let row = GtkBox::new(Orientation::Horizontal, 8);
     let label = Label::new(Some(prop.label));
@@ -252,14 +403,137 @@ fn labelled_row(prop: &Prop, control: &impl IsA<Widget>) -> GtkBox {
     row
 }
 
-#[allow(clippy::type_complexity)]
-fn build_row(
-    prop: &Prop,
-    model: &Model,
-    loading: &Rc<Cell<bool>>,
-    fire: &Rc<dyn Fn()>,
-) -> (GtkBox, FieldRefresh) {
+/// A block row: title (with optional trailing widgets) above its content.
+fn titled_block(prop: &Prop, trailing: &[&Button]) -> (GtkBox, GtkBox) {
+    let outer = GtkBox::new(Orientation::Vertical, 4);
+    let header = GtkBox::new(Orientation::Horizontal, 8);
+    let title = Label::new(Some(prop.label));
+    title.set_xalign(0.0);
+    title.set_hexpand(true);
+    title.add_css_class("heading");
+    if !prop.help.is_empty() {
+        title.set_tooltip_text(Some(prop.help));
+    }
+    header.append(&title);
+    for b in trailing {
+        header.append(*b);
+    }
+    outer.append(&header);
+    let body = GtkBox::new(Orientation::Vertical, 6);
+    body.set_margin_start(12);
+    outer.append(&body);
+    (outer, body)
+}
+
+// ----------------------------------------------------------------------------
+// Nested rows (Object, Variant, List items)
+// ----------------------------------------------------------------------------
+
+/// Rows over a sub-object stored at `parent[key]` (or `parent[key][index]`).
+struct Nested {
+    model: Model,
+    rows: Rc<RefCell<Vec<Row>>>,
+    container: GtkBox,
+}
+
+impl Nested {
+    /// Built with `loading` held: the controls are initialised from
+    /// `initial` and nothing may fire.
+    fn build(
+        props: &[Prop],
+        initial: Map<String, Value>,
+        parent: &Model,
+        key: &'static str,
+        index: Option<usize>,
+        ctx: &Ctx,
+        parent_fire: &Rc<dyn Fn()>,
+    ) -> Self {
+        let was_loading = ctx.loading.replace(true);
+        let model: Model = Rc::new(RefCell::new(initial));
+        let rows: Rc<RefCell<Vec<Row>>> = Rc::new(RefCell::new(Vec::new()));
+        let container = GtkBox::new(Orientation::Vertical, 6);
+        let fire: Rc<dyn Fn()> = {
+            let loading = ctx.loading.clone();
+            let rows = rows.clone();
+            let model = model.clone();
+            let parent = parent.clone();
+            let parent_fire = parent_fire.clone();
+            Rc::new(move || {
+                if loading.get() {
+                    return;
+                }
+                update_visibility(&rows.borrow(), &model.borrow());
+                let object = Value::Object(model.borrow().clone());
+                {
+                    let mut m = parent.borrow_mut();
+                    match index {
+                        None => {
+                            m.insert(key.to_string(), object);
+                        }
+                        Some(i) => {
+                            let array = m
+                                .entry(key.to_string())
+                                .or_insert_with(|| Value::Array(Vec::new()));
+                            if let Some(items) = array.as_array_mut() {
+                                if i < items.len() {
+                                    items[i] = object;
+                                }
+                            }
+                        }
+                    }
+                }
+                parent_fire();
+            })
+        };
+        let snapshot = model.borrow().clone();
+        for p in props {
+            let row = build_row(p, &model, ctx, &fire);
+            container.append(&row.widget);
+            (row.refresh)(&snapshot);
+            rows.borrow_mut().push(row);
+        }
+        update_visibility(&rows.borrow(), &snapshot);
+        ctx.loading.set(was_loading);
+        Self {
+            model,
+            rows,
+            container,
+        }
+    }
+
+    /// Replace the sub-object and refresh its rows (callers hold `loading`).
+    fn refresh(&self, object: Map<String, Value>) {
+        *self.model.borrow_mut() = object.clone();
+        let rows = self.rows.borrow();
+        for row in rows.iter() {
+            (row.refresh)(&object);
+        }
+        update_visibility(&rows, &object);
+    }
+
+    fn apply_theme(&self, theme: &ComboThemeConfig) {
+        apply_theme(&self.rows.borrow(), theme);
+    }
+
+    fn cleanup(&self) {
+        cleanup_rows(&mut self.rows.borrow_mut());
+    }
+}
+
+fn object_at(m: &Map<String, Value>, key: &str) -> Map<String, Value> {
+    m.get(key)
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default()
+}
+
+// ----------------------------------------------------------------------------
+// Rows
+// ----------------------------------------------------------------------------
+
+fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row {
     let key = prop.key;
+    let loading = ctx.loading.clone();
     match &prop.kind {
         PropKind::Bool => {
             let check = CheckButton::new();
@@ -267,7 +541,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 check.connect_toggled(move |c| {
                     if loading.get() {
                         return;
@@ -279,7 +552,8 @@ fn build_row(
                 });
             }
             let c = check.clone();
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| {
                     c.set_active(m.get(key).and_then(|v| v.as_bool()).unwrap_or(false))
@@ -293,7 +567,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 spin.connect_value_changed(move |s| {
                     if loading.get() {
                         return;
@@ -305,7 +578,8 @@ fn build_row(
                 });
             }
             let s = spin.clone();
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| {
                     if let Some(v) = m.get(key).and_then(|v| v.as_f64()) {
@@ -326,7 +600,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 spin.connect_value_changed(move |s| {
                     if loading.get() {
                         return;
@@ -338,7 +611,8 @@ fn build_row(
                 });
             }
             let s = spin.clone();
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| {
                     if let Some(v) = m.get(key).and_then(|v| v.as_f64()) {
@@ -386,7 +660,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 let check = check.clone();
                 spin.connect_value_changed(move |s| {
                     if loading.get() {
@@ -401,7 +674,8 @@ fn build_row(
                 });
             }
             let (c, s) = (check.clone(), spin.clone());
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| match m.get(key).and_then(|v| v.as_f64()) {
                     Some(v) => {
@@ -420,7 +694,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 entry.connect_changed(move |e| {
                     if loading.get() {
                         return;
@@ -436,7 +709,8 @@ fn build_row(
                 });
             }
             let e = entry.clone();
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| {
                     let text = m.get(key).and_then(|v| v.as_str()).unwrap_or("");
@@ -454,7 +728,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 let values = values.clone();
                 dropdown.connect_selected_notify(move |d| {
                     if loading.get() {
@@ -469,7 +742,8 @@ fn build_row(
                 });
             }
             let d = dropdown.clone();
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| {
                     let current = m.get(key).and_then(|v| v.as_str()).unwrap_or("");
@@ -489,7 +763,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 let values = values.clone();
                 dropdown.connect_selected_notify(move |d| {
                     if loading.get() {
@@ -504,7 +777,8 @@ fn build_row(
                 });
             }
             let d = dropdown.clone();
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| {
                     let saved = m
@@ -541,7 +815,6 @@ fn build_row(
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let loading = loading.clone();
                 let values = values.clone();
                 dropdown.connect_selected_notify(move |d| {
                     if loading.get() {
@@ -554,7 +827,8 @@ fn build_row(
                 });
             }
             let d = dropdown.clone();
-            (
+            Row::plain(
+                prop,
                 row,
                 Box::new(move |m| {
                     let saved = m.get(key).and_then(|v| v.as_i64()).unwrap_or(0);
@@ -578,6 +852,231 @@ fn build_row(
                 }),
             )
         }
+        PropKind::Color => {
+            let selector = Rc::new(ThemeColorSelector::new(ColorSource::default()));
+            selector.set_theme_config(ctx.theme.borrow().clone());
+            let row = labelled_row(prop, selector.widget());
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                selector.set_on_change(move |source| {
+                    if loading.get() {
+                        return;
+                    }
+                    if let Ok(v) = serde_json::to_value(&source) {
+                        model.borrow_mut().insert(key.to_string(), v);
+                        fire();
+                    }
+                });
+            }
+            let refresh: FieldRefresh = {
+                let selector = selector.clone();
+                Box::new(move |m| {
+                    if let Some(source) = m
+                        .get(key)
+                        .and_then(|v| serde_json::from_value::<ColorSource>(v.clone()).ok())
+                    {
+                        // `set_source` is silent.
+                        selector.set_source(source);
+                    }
+                })
+            };
+            Row {
+                prop: prop.clone(),
+                widget: row,
+                refresh,
+                on_theme: Some(Box::new(move |t| selector.set_theme_config(t.clone()))),
+                cleanup: None,
+            }
+        }
+        PropKind::ColorStops => {
+            let copy_btn = Button::with_label("Copy gradient");
+            let paste_btn = Button::with_label("Paste gradient");
+            let (outer, body) = titled_block(prop, &[&copy_btn, &paste_btn]);
+            let editor = Rc::new(GradientEditor::new_without_angle());
+            editor.set_theme_config(ctx.theme.borrow().clone());
+            body.append(editor.widget());
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                let editor = editor.clone();
+                let loading = loading.clone();
+                editor.clone().set_on_change(move || {
+                    if loading.get() {
+                        return;
+                    }
+                    if let Ok(v) = serde_json::to_value(editor.get_stops_source()) {
+                        model.borrow_mut().insert(key.to_string(), v);
+                        fire();
+                    }
+                });
+            }
+            {
+                // The clipboard holds resolved stops, so theme links are
+                // dropped on copy (as the old widgets did).
+                let editor = editor.clone();
+                let theme = ctx.theme.clone();
+                copy_btn.connect_clicked(move |_| {
+                    let theme = theme.borrow();
+                    let resolved = editor
+                        .get_stops_source()
+                        .iter()
+                        .map(|s| s.resolve(&theme))
+                        .collect();
+                    if let Ok(mut cb) = CLIPBOARD.lock() {
+                        cb.copy_gradient_stops(resolved);
+                    }
+                });
+            }
+            {
+                let editor = editor.clone();
+                let model = model.clone();
+                let fire = fire.clone();
+                paste_btn.connect_clicked(move |_| {
+                    let stops = CLIPBOARD
+                        .lock()
+                        .ok()
+                        .and_then(|cb| cb.paste_gradient_stops());
+                    let Some(stops) = stops else { return };
+                    let sources: Vec<ColorStopSource> = stops
+                        .iter()
+                        .map(|s| ColorStopSource::custom(s.position, s.color))
+                        .collect();
+                    editor.set_stops_source(sources.clone());
+                    if let Ok(v) = serde_json::to_value(&sources) {
+                        model.borrow_mut().insert(key.to_string(), v);
+                        fire();
+                    }
+                });
+            }
+            let refresh: FieldRefresh = {
+                let editor = editor.clone();
+                Box::new(move |m| {
+                    if let Some(stops) = m.get(key).and_then(|v| {
+                        serde_json::from_value::<Vec<ColorStopSource>>(v.clone()).ok()
+                    }) {
+                        // Guarded: does not fire the editor's on_change.
+                        editor.set_stops_source(stops);
+                    }
+                })
+            };
+            Row {
+                prop: prop.clone(),
+                widget: outer,
+                refresh,
+                on_theme: Some(Box::new(move |t| editor.set_theme_config(t.clone()))),
+                cleanup: None,
+            }
+        }
+        PropKind::Object { props } => {
+            let (outer, body) = titled_block(prop, &[]);
+            let nested = Rc::new(Nested::build(
+                props,
+                Map::new(),
+                model,
+                key,
+                None,
+                ctx,
+                fire,
+            ));
+            body.append(&nested.container);
+            let refresh: FieldRefresh = {
+                let nested = nested.clone();
+                Box::new(move |m| nested.refresh(object_at(m, key)))
+            };
+            let n_theme = nested.clone();
+            Row {
+                prop: prop.clone(),
+                widget: outer,
+                refresh,
+                on_theme: Some(Box::new(move |t| n_theme.apply_theme(t))),
+                cleanup: Some(Box::new(move || nested.cleanup())),
+            }
+        }
+        PropKind::Variant { tag, variants } => {
+            // A dropdown for the tag; the union of the variants' rows
+            // underneath, each gated to its variant. Choosing a variant
+            // replaces the whole object with that variant's template.
+            let tag: &'static str = tag;
+            let labels: Vec<&str> = variants.iter().map(|v| v.label).collect();
+            let values: Vec<&'static str> = variants.iter().map(|v| v.value).collect();
+            let templates: Vec<fn() -> Value> = variants.iter().map(|v| v.template).collect();
+            let sub_props: Vec<Prop> = variants
+                .iter()
+                .flat_map(|v| {
+                    v.props.iter().map(move |p| {
+                        let mut p = p.clone();
+                        if p.visible_when.is_none() {
+                            p.visible_when = Some(Condition::Equals {
+                                key: tag,
+                                values: vec![v.value],
+                            });
+                        }
+                        p
+                    })
+                })
+                .collect();
+            let dropdown = DropDown::new(Some(StringList::new(&labels)), None::<gtk4::Expression>);
+            let outer = GtkBox::new(Orientation::Vertical, 6);
+            outer.append(&labelled_row(prop, &dropdown));
+            let nested = Rc::new(Nested::build(
+                &sub_props,
+                Map::new(),
+                model,
+                key,
+                None,
+                ctx,
+                fire,
+            ));
+            let body = GtkBox::new(Orientation::Vertical, 6);
+            body.set_margin_start(12);
+            body.append(&nested.container);
+            outer.append(&body);
+            let refreshing = Rc::new(Cell::new(false));
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                let nested = nested.clone();
+                let refreshing = refreshing.clone();
+                let loading = loading.clone();
+                dropdown.connect_selected_notify(move |d| {
+                    if loading.get() || refreshing.get() {
+                        return;
+                    }
+                    let Some(template) = templates.get(d.selected() as usize) else {
+                        return;
+                    };
+                    let value = template();
+                    let object = value.as_object().cloned().unwrap_or_default();
+                    model.borrow_mut().insert(key.to_string(), value);
+                    let was = loading.replace(true);
+                    nested.refresh(object);
+                    loading.set(was);
+                    fire();
+                });
+            }
+            let refresh: FieldRefresh = {
+                let nested = nested.clone();
+                let dropdown = dropdown.clone();
+                Box::new(move |m| {
+                    let object = object_at(m, key);
+                    let tagged = object.get(tag).and_then(|v| v.as_str()).unwrap_or("");
+                    let idx = values.iter().position(|v| *v == tagged).unwrap_or(0);
+                    refreshing.set(true);
+                    dropdown.set_selected(idx as u32);
+                    refreshing.set(false);
+                    nested.refresh(object);
+                })
+            };
+            let n_theme = nested.clone();
+            Row {
+                prop: prop.clone(),
+                widget: outer,
+                refresh,
+                on_theme: Some(Box::new(move |t| n_theme.apply_theme(t))),
+                cleanup: Some(Box::new(move || nested.cleanup())),
+            }
+        }
         PropKind::Custom { editor } => {
             let set: Rc<dyn Fn(Vec<(&'static str, Value)>)> = {
                 let model = model.clone();
@@ -594,24 +1093,29 @@ fn build_row(
                     fire();
                 })
             };
-            let ctx = FieldContext {
+            let context = FieldContext {
                 prop: prop.clone(),
+                fields: ctx.fields.clone(),
+                theme: ctx.theme.borrow().clone(),
                 set,
             };
             let factory = FIELD_EDITORS.with(|e| e.borrow().get(editor).cloned());
-            let (control, refresh) = match factory {
-                Some(f) => f(ctx),
+            let field = match factory {
+                Some(f) => f(context),
                 None => {
                     log::error!("no field editor registered as '{}'", editor);
                     let label = Label::new(Some(&format!("(no editor '{}')", editor)));
                     label.set_xalign(0.0);
-                    (
-                        label.upcast(),
-                        Box::new(|_: &Map<String, Value>| {}) as FieldRefresh,
-                    )
+                    FieldEditor::new(label, Box::new(|_: &Map<String, Value>| {}))
                 }
             };
-            (labelled_row(prop, &control), refresh)
+            Row {
+                prop: prop.clone(),
+                widget: labelled_row(prop, &field.widget),
+                refresh: field.refresh,
+                on_theme: field.on_theme,
+                cleanup: field.cleanup,
+            }
         }
         PropKind::Note => {
             let row = GtkBox::new(Orientation::Horizontal, 0);
@@ -621,7 +1125,7 @@ fn build_row(
             label.add_css_class("dim-label");
             label.set_margin_top(4);
             row.append(&label);
-            (row, Box::new(|_| {}))
+            Row::plain(prop, row, Box::new(|_| {}))
         }
         PropKind::List {
             item,
@@ -637,7 +1141,7 @@ fn build_row(
             item_label,
             add_label,
             model,
-            loading,
+            ctx,
             fire,
         ),
     }
@@ -668,47 +1172,39 @@ fn build_list_row(
     item_label: &'static str,
     add_label: &'static str,
     model: &Model,
-    loading: &Rc<Cell<bool>>,
+    ctx: &Ctx,
     fire: &Rc<dyn Fn()>,
-) -> (GtkBox, FieldRefresh) {
+) -> Row {
     let key = prop.key;
-    let outer = GtkBox::new(Orientation::Vertical, 6);
-    let header = GtkBox::new(Orientation::Horizontal, 8);
-    let title = Label::new(Some(prop.label));
-    title.set_xalign(0.0);
-    title.set_hexpand(true);
-    if !prop.help.is_empty() {
-        title.set_tooltip_text(Some(prop.help));
-    }
     let add_btn = Button::with_label(add_label);
-    header.append(&title);
-    header.append(&add_btn);
-    outer.append(&header);
-    let items_box = GtkBox::new(Orientation::Vertical, 6);
-    outer.append(&items_box);
+    let (outer, items_box) = titled_block(prop, &[&add_btn]);
+    items_box.set_margin_start(0);
 
     type Rebuild = Rc<dyn Fn(&[Value])>;
     // The item buttons call back into the rebuild through a weak handle, so
     // the only strong owner is this row's refresh closure (see `cleanup`).
     let rebuild_slot: Rc<RefCell<Option<Rebuild>>> = Rc::new(RefCell::new(None));
     let item_props = Rc::new(item_props);
+    let items: Rc<RefCell<Vec<Rc<Nested>>>> = Rc::new(RefCell::new(Vec::new()));
 
     let rebuild: Rebuild = {
         let items_box = items_box.clone();
         let model = model.clone();
-        let loading = loading.clone();
+        let ctx = ctx.clone();
         let fire = fire.clone();
         let item_props = item_props.clone();
+        let items = items.clone();
         let rebuild_weak = Rc::downgrade(&rebuild_slot);
         Rc::new(move |values: &[Value]| {
-            let was_loading = loading.replace(true);
+            let was_loading = ctx.loading.replace(true);
             while let Some(child) = items_box.first_child() {
                 items_box.remove(&child);
             }
+            for n in items.borrow_mut().drain(..) {
+                n.cleanup();
+            }
             let count = values.len();
             for (i, value) in values.iter().enumerate() {
-                let item_model: Model =
-                    Rc::new(RefCell::new(value.as_object().cloned().unwrap_or_default()));
                 let frame = Frame::new(None);
                 let vbox = GtkBox::new(Orientation::Vertical, 6);
                 vbox.set_margin_start(8);
@@ -737,46 +1233,17 @@ fn build_list_row(
                 head.append(&remove);
                 vbox.append(&head);
 
-                // Item rows write the item object, then the array.
-                let item_rows: Rc<RefCell<Vec<Row>>> = Rc::new(RefCell::new(Vec::new()));
-                let item_fire: Rc<dyn Fn()> = {
-                    let model = model.clone();
-                    let fire = fire.clone();
-                    let loading = loading.clone();
-                    let item_rows = item_rows.clone();
-                    let item_model = item_model.clone();
-                    Rc::new(move || {
-                        if loading.get() {
-                            return;
-                        }
-                        update_visibility(&item_rows.borrow(), &item_model.borrow());
-                        let object = Value::Object(item_model.borrow().clone());
-                        {
-                            let mut m = model.borrow_mut();
-                            let array = m
-                                .entry(key.to_string())
-                                .or_insert_with(|| Value::Array(Vec::new()));
-                            if let Some(items) = array.as_array_mut() {
-                                if i < items.len() {
-                                    items[i] = object;
-                                }
-                            }
-                        }
-                        fire();
-                    })
-                };
-                let snapshot = item_model.borrow().clone();
-                for p in item_props.iter() {
-                    let (widget, refresh) = build_row(p, &item_model, &loading, &item_fire);
-                    vbox.append(&widget);
-                    refresh(&snapshot);
-                    item_rows.borrow_mut().push(Row {
-                        prop: p.clone(),
-                        widget,
-                        refresh,
-                    });
-                }
-                update_visibility(&item_rows.borrow(), &snapshot);
+                let nested = Rc::new(Nested::build(
+                    &item_props,
+                    value.as_object().cloned().unwrap_or_default(),
+                    &model,
+                    key,
+                    Some(i),
+                    &ctx,
+                    &fire,
+                ));
+                vbox.append(&nested.container);
+                items.borrow_mut().push(nested);
 
                 // Structural edits: mutate the array, rebuild, fire.
                 let restructure = |f: Rc<dyn Fn(&mut Vec<Value>)>| {
@@ -816,7 +1283,7 @@ fn build_list_row(
 
                 items_box.append(&frame);
             }
-            loading.set(was_loading);
+            ctx.loading.set(was_loading);
         })
     };
     *rebuild_slot.borrow_mut() = Some(rebuild.clone());
@@ -850,8 +1317,27 @@ fn build_list_row(
             }
         })
     };
-    (outer, refresh)
+    let items_theme = items.clone();
+    Row {
+        prop: prop.clone(),
+        widget: outer,
+        refresh,
+        on_theme: Some(Box::new(move |t| {
+            for n in items_theme.borrow().iter() {
+                n.apply_theme(t);
+            }
+        })),
+        cleanup: Some(Box::new(move || {
+            for n in items.borrow_mut().drain(..) {
+                n.cleanup();
+            }
+        })),
+    }
 }
+
+// ----------------------------------------------------------------------------
+// Registry adapters
+// ----------------------------------------------------------------------------
 
 /// A [`SourceEditor`] over a schema: load/store go through the per-slot
 /// flat form, so it serves standalone panels and combo items alike.
@@ -912,5 +1398,71 @@ impl SourceEditor for SchemaSourceEditor {
 
     fn search_terms(&self) -> Vec<String> {
         self.editor.search_terms()
+    }
+}
+
+/// A [`DisplayEditor`] over a schema, one page per section: the tree shows
+/// the pages as child nodes of Display (`sections()`), as it does for the
+/// themed combo editors. The displayer's cached `theme` key has no prop and
+/// passes through untouched.
+pub struct SchemaDisplayEditor {
+    displayer_id: String,
+    editor: SchemaEditor,
+}
+
+impl SchemaDisplayEditor {
+    pub fn create(
+        displayer_id: &str,
+        props: Vec<Prop>,
+        fields: Vec<FieldMetadata>,
+    ) -> Box<dyn DisplayEditor> {
+        Box::new(Self {
+            displayer_id: displayer_id.to_string(),
+            editor: SchemaEditor::sectioned(props, fields),
+        })
+    }
+}
+
+impl DisplayEditor for SchemaDisplayEditor {
+    fn widget(&self) -> Widget {
+        self.editor.widget().clone().upcast()
+    }
+
+    fn load(&self, config: &DisplayerConfig) {
+        if config.displayer_type() != self.displayer_id {
+            return;
+        }
+        if let Some(Value::Object(map)) = config.to_inner_value() {
+            self.editor.load(map);
+        }
+    }
+
+    fn store(&self) -> Option<DisplayerConfig> {
+        DisplayerConfig::from_value_for_type(&self.displayer_id, Value::Object(self.editor.model()))
+    }
+
+    fn set_on_change(&self, cb: ChangeCallback) -> bool {
+        self.editor.set_on_change(cb);
+        true
+    }
+
+    fn set_theme(&self, theme: &ComboThemeConfig) {
+        self.editor.set_theme(theme);
+    }
+
+    fn cleanup(&self) {
+        self.editor.cleanup();
+    }
+
+    fn sections(&self) -> Vec<(String, Widget)> {
+        self.editor
+            .pages()
+            .into_iter()
+            .map(|(name, page)| (name, page.upcast()))
+            .collect()
+    }
+
+    fn section_search_terms(&self, section: &str) -> Vec<String> {
+        self.editor.section_search_terms(section)
     }
 }

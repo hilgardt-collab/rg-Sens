@@ -26,9 +26,7 @@ pub use rg_sens_render::text_renderer;
 
 // Local UI modules (config widgets, dialogs, etc.)
 mod alarm_timer_dialog;
-mod arc_config_widget;
 mod background_config_widget;
-mod bar_config_widget;
 pub mod claude_account;
 pub mod clipboard;
 mod clock_analog_config_widget;
@@ -82,7 +80,6 @@ pub mod themes_groups_dialog;
 pub mod window_settings_dialog;
 
 pub use alarm_timer_dialog::{AlarmTimerDialog, TimerAction};
-pub use arc_config_widget::{ArcConfigWidget, LazyArcConfigWidget};
 pub use arc_display::{
     render_arc, ArcCapStyle, ArcDisplayConfig, ArcTaperStyle, ColorApplicationMode,
     ColorTransitionStyle,
@@ -110,7 +107,6 @@ pub use background::{
     IndicatorBackgroundShape, LinearGradientConfig, PolygonConfig, RadialGradientConfig,
 };
 pub use background_config_widget::BackgroundConfigWidget;
-pub use bar_config_widget::{BarConfigWidget, LazyBarConfigWidget};
 pub use bar_display::{
     render_bar, BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
     BarStyle, BorderConfig,

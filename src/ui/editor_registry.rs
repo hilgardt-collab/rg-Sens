@@ -14,11 +14,14 @@
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
 use crate::ui::combo_config_base::{self, TransferableComboConfig};
 use crate::ui::config_tree::field_editors::register_field_editors;
-use crate::ui::config_tree::schema_editor::{register_choice_provider, SchemaSourceEditor};
+use crate::ui::config_tree::schema_editor::{
+    register_choice_provider, SchemaDisplayEditor, SchemaSourceEditor,
+};
 use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Notebook, Widget};
 use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use rg_sens_types::display_configs::{ArcDisplayConfig, BarDisplayConfig};
 use rg_sens_types::schema::Schema;
 use rg_sens_types::source_configs::claude::ClaudeSourceConfig;
 use rg_sens_types::source_configs::clock::ClockSourceConfig;
@@ -79,6 +82,15 @@ pub trait DisplayEditor {
     /// uses them for its placeholder mapping).
     fn set_source_summaries(&self, _summaries: Vec<(String, String, usize, u32)>) {}
     fn cleanup(&self) {}
+    /// Standalone editors may split into pages; the tree shows them as the
+    /// child nodes of Display (combos do the same through `take_pages`).
+    fn sections(&self) -> Vec<(String, Widget)> {
+        Vec::new()
+    }
+    /// Words the tree search box may match for one section.
+    fn section_search_terms(&self, _section: &str) -> Vec<String> {
+        Vec::new()
+    }
     /// The combo-specific surface, for the ten themed displayers.
     fn combo(&self) -> Option<&dyn ComboDisplayEditor> {
         None
@@ -223,56 +235,6 @@ impl DisplayEditor for TextEditor {
     }
     fn store(&self) -> Option<DisplayerConfig> {
         Some(DisplayerConfig::Text(self.0.get_config()))
-    }
-    fn set_on_change(&self, cb: ChangeCallback) -> bool {
-        self.0.set_on_change(move || cb());
-        true
-    }
-    fn set_theme(&self, theme: &ComboThemeConfig) {
-        self.0.set_theme(theme.clone());
-    }
-    fn cleanup(&self) {
-        self.0.cleanup();
-    }
-}
-
-pub struct BarEditor(crate::ui::BarConfigWidget);
-impl DisplayEditor for BarEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::Bar(c) = config {
-            self.0.set_config(c.clone());
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::Bar(self.0.get_config()))
-    }
-    fn set_on_change(&self, cb: ChangeCallback) -> bool {
-        self.0.set_on_change(move || cb());
-        true
-    }
-    fn set_theme(&self, theme: &ComboThemeConfig) {
-        self.0.set_theme(theme.clone());
-    }
-    fn cleanup(&self) {
-        self.0.cleanup();
-    }
-}
-
-pub struct ArcEditor(crate::ui::ArcConfigWidget);
-impl DisplayEditor for ArcEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::Arc(c) = config {
-            self.0.set_config(c.clone());
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::Arc(self.0.get_config()))
     }
     fn set_on_change(&self, cb: ChangeCallback) -> bool {
         self.0.set_on_change(move || cb());
@@ -731,11 +693,12 @@ pub fn register_all_editors() {
     register_display_editor("text", |fields| {
         Box::new(TextEditor(crate::ui::TextLineConfigWidget::new(fields)))
     });
+    // Schema-driven displayers: sections become child nodes of Display.
     register_display_editor("bar", |fields| {
-        Box::new(BarEditor(crate::ui::BarConfigWidget::new(fields)))
+        SchemaDisplayEditor::create("bar", BarDisplayConfig::props(), fields)
     });
     register_display_editor("arc", |fields| {
-        Box::new(ArcEditor(crate::ui::ArcConfigWidget::new(fields)))
+        SchemaDisplayEditor::create("arc", ArcDisplayConfig::props(), fields)
     });
     register_display_editor("speedometer", |fields| {
         Box::new(SpeedometerEditor(crate::ui::SpeedometerConfigWidget::new(

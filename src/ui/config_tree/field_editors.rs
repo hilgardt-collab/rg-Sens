@@ -3,16 +3,17 @@
 //! and receives a [`FieldContext`] to write the flat config through (silent
 //! while the editor loads, so normalising a saved value does not commit).
 
-use super::schema_editor::{register_field_editor, FieldContext, FieldRefresh};
+use super::schema_editor::{register_field_editor, FieldContext, FieldEditor, FieldRefresh};
 use crate::sources::{
     describe_sensor_selection, resolve_fan_index, resolve_sensor_index, set_fan_by_index,
     set_sensor_by_index, CpuSource, FanSpeedConfig, FanSpeedSource, SystemTempConfig,
     SystemTempSource,
 };
 use crate::ui::sensor_picker::SensorPicker;
-use crate::ui::TimezoneDialog;
+use crate::ui::{TextOverlayConfigWidget, TimezoneDialog};
 use gtk4::prelude::*;
-use gtk4::{Button, DropDown, StringList, Widget};
+use gtk4::{Button, DropDown, StringList};
+use rg_sens_types::text::TextOverlayConfig;
 use serde_json::{json, Map, Value};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -23,10 +24,11 @@ pub fn register_field_editors() {
     register_field_editor("fan_sensor", fan_sensor_editor);
     register_field_editor("temp_sensor", temp_sensor_editor);
     register_field_editor("cpu_core_selection", cpu_core_editor);
+    register_field_editor("text_overlay", text_overlay_editor);
 }
 
 /// A button showing the zone name; clicking opens the timezone dialog.
-fn timezone_editor(ctx: FieldContext) -> (Widget, FieldRefresh) {
+fn timezone_editor(ctx: FieldContext) -> FieldEditor {
     let key = ctx.prop.key;
     let button = Button::with_label("Local");
     let current = Rc::new(RefCell::new("Local".to_string()));
@@ -60,10 +62,10 @@ fn timezone_editor(ctx: FieldContext) -> (Widget, FieldRefresh) {
             *current.borrow_mut() = tz;
         })
     };
-    (button.upcast(), refresh)
+    FieldEditor::new(button, refresh)
 }
 
-fn fan_sensor_editor(ctx: FieldContext) -> (Widget, FieldRefresh) {
+fn fan_sensor_editor(ctx: FieldContext) -> FieldEditor {
     let labels: Vec<String> = FanSpeedSource::available_sensors()
         .iter()
         .map(|s| format!("[{:?}] {}", s.category, s.label))
@@ -89,7 +91,7 @@ fn fan_sensor_editor(ctx: FieldContext) -> (Widget, FieldRefresh) {
     )
 }
 
-fn temp_sensor_editor(ctx: FieldContext) -> (Widget, FieldRefresh) {
+fn temp_sensor_editor(ctx: FieldContext) -> FieldEditor {
     let labels: Vec<String> = SystemTempSource::available_sensors()
         .iter()
         .map(|s| format!("[{:?}] {}", s.category, s.label))
@@ -129,7 +131,7 @@ fn sensor_editor(
     labels: Vec<String>,
     pick: impl Fn(usize) -> Picked + 'static,
     resolve: impl Fn(Option<String>, usize) -> Resolved + 'static,
-) -> (Widget, FieldRefresh) {
+) -> FieldEditor {
     let write: Rc<dyn Fn(Option<String>, usize)> = Rc::new(move |label, index| {
         ctx.set(vec![
             ("sensor_label", json!(label)),
@@ -162,13 +164,13 @@ fn sensor_editor(
             }
         })
     };
-    (picker.widget().clone().upcast(), refresh)
+    FieldEditor::new(picker.widget().clone(), refresh)
 }
 
 /// `CoreSelection` serialises as `"Overall"` or `{"Core": n}`; a dropdown of
 /// "Overall, Core 0 … Core N-1" over this machine's core count. A saved core
 /// past the count keeps its own row.
-fn cpu_core_editor(ctx: FieldContext) -> (Widget, FieldRefresh) {
+fn cpu_core_editor(ctx: FieldContext) -> FieldEditor {
     let key = ctx.prop.key;
     let count = CpuSource::get_cached_core_count();
     let dropdown = DropDown::new(None::<StringList>, None::<gtk4::Expression>);
@@ -219,5 +221,47 @@ fn cpu_core_editor(ctx: FieldContext) -> (Widget, FieldRefresh) {
             refreshing.set(false);
         })
     };
-    (dropdown.upcast(), refresh)
+    FieldEditor::new(dropdown, refresh)
+}
+
+/// The text overlay (enable + text lines) of bar/arc/graph/speedometer,
+/// kept as an opaque editor over the whole nested object until text lines
+/// are schema-driven. Programmatic `set_config` fires the widget's own
+/// change signal, so writes are suppressed while refreshing.
+fn text_overlay_editor(ctx: FieldContext) -> FieldEditor {
+    let key = ctx.prop.key;
+    let widget = Rc::new(TextOverlayConfigWidget::new(ctx.fields.to_vec()));
+    widget.set_theme(ctx.theme.clone());
+    let refreshing = Rc::new(Cell::new(false));
+    {
+        let ctx = ctx.clone();
+        let w = widget.clone();
+        let refreshing = refreshing.clone();
+        widget.set_on_change(move || {
+            if refreshing.get() {
+                return;
+            }
+            if let Ok(v) = serde_json::to_value(w.get_config()) {
+                ctx.set(vec![(key, v)]);
+            }
+        });
+    }
+    let refresh: FieldRefresh = {
+        let w = widget.clone();
+        Box::new(move |m: &Map<String, Value>| {
+            if let Some(cfg) = m
+                .get(key)
+                .and_then(|v| serde_json::from_value::<TextOverlayConfig>(v.clone()).ok())
+            {
+                refreshing.set(true);
+                w.set_config(cfg);
+                refreshing.set(false);
+            }
+        })
+    };
+    let w_theme = widget.clone();
+    let w_cleanup = widget.clone();
+    FieldEditor::new(widget.widget().clone(), refresh)
+        .with_theme(move |t| w_theme.set_theme(t.clone()))
+        .with_cleanup(move || w_cleanup.cleanup())
 }

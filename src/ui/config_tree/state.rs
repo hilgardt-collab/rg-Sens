@@ -469,6 +469,12 @@ impl State {
                 }
             }
             *self.display_pages.borrow_mut() = sections;
+        } else {
+            // Schema-driven displayers: one child node per section.
+            let sections = editor.sections();
+            if !sections.is_empty() {
+                *self.display_pages.borrow_mut() = sections;
+            }
         }
         *self.display_editor.borrow_mut() = Some(editor);
         *self.theme_baseline.borrow_mut() = self.inline_payload();
@@ -1042,6 +1048,12 @@ impl State {
                 .borrow()
                 .get(slot)
                 .and_then(|i| i.source_editor.borrow().as_ref().map(|e| e.search_terms()))
+                .unwrap_or_default(),
+            NodeKind::DisplaySection(name) => self
+                .display_editor
+                .borrow()
+                .as_ref()
+                .map(|e| e.section_search_terms(name))
                 .unwrap_or_default(),
             _ => Vec::new(),
         };

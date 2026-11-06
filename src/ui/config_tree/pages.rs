@@ -449,6 +449,56 @@ impl State {
         }
         page.append(&default_btn);
 
+        // Whole-config copy/paste, tagged by displayer type (replaces the
+        // per-widget Copy/Paste buttons the bar and arc editors had).
+        let btn_row = GtkBox::new(Orientation::Horizontal, 6);
+        let copy_btn = Button::with_label("Copy Display Config");
+        let paste_btn = Button::with_label("Paste Display Config");
+        btn_row.append(&copy_btn);
+        btn_row.append(&paste_btn);
+        page.append(&btn_row);
+        {
+            let weak = Rc::downgrade(self);
+            copy_btn.connect_clicked(move |_| {
+                let Some(s) = weak.upgrade() else { return };
+                let cfg = s.display_editor.borrow().as_ref().and_then(|e| e.store());
+                let Some(cfg) = cfg else { return };
+                if let (Some(value), Ok(mut cb)) = (cfg.to_inner_value(), CLIPBOARD.lock()) {
+                    cb.copy_display_config(cfg.displayer_type().to_string(), value);
+                }
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            paste_btn.connect_clicked(move |_| {
+                let Some(s) = weak.upgrade() else { return };
+                let pasted = CLIPBOARD
+                    .lock()
+                    .ok()
+                    .and_then(|cb| cb.paste_display_config());
+                let Some((displayer_type, value)) = pasted else {
+                    return;
+                };
+                if displayer_type != s.displayer_type() {
+                    log::info!(
+                        "Display config paste skipped: clipboard has '{}'",
+                        displayer_type
+                    );
+                    return;
+                }
+                let Some(cfg) = DisplayerConfig::from_value_for_type(&displayer_type, value) else {
+                    return;
+                };
+                if let Some(e) = s.display_editor.borrow().as_ref() {
+                    e.load(&cfg);
+                    // The pasted config carries the source panel's cached
+                    // theme; the editor shows this panel's resolved theme.
+                    e.set_theme(&s.resolved_theme());
+                }
+                s.changed();
+            });
+        }
+
         let is_combo_editor = self
             .display_editor
             .borrow()
@@ -459,6 +509,10 @@ impl State {
             page.append(&hint(
                 "The sections of this displayer (frame, headers, layout, …) are the \
                  child nodes of Display. Per-item display settings are under Content.",
+            ));
+        } else if !self.display_pages.borrow().is_empty() {
+            page.append(&hint(
+                "The settings of this displayer are grouped under the child nodes of Display.",
             ));
         } else if let Some(editor) = self.display_editor.borrow().as_ref() {
             page.append(&editor.widget());
