@@ -112,6 +112,12 @@ pub enum PropKind {
     /// was given. A saved id the source does not expose is kept as its own
     /// row.
     Field,
+    /// A plain colour (`Color { r, g, b, a }`), not theme-aware.
+    Rgba,
+    /// A plain font: `key` holds the family, `size_key` (same object) the size.
+    PlainFont {
+        size_key: &'static str,
+    },
 }
 
 /// One alternative of a [`PropKind::Variant`].
@@ -369,6 +375,29 @@ fn check_object(
             PropKind::Field => {
                 if !current.is_string() {
                     return Err(format!("field id {} is not a string", display_path(&here)));
+                }
+            }
+            PropKind::Rgba => {
+                if !["r", "g", "b", "a"]
+                    .iter()
+                    .all(|k| current.get(*k).map(Value::is_number).unwrap_or(false))
+                {
+                    return Err(format!("colour {} is not r/g/b/a", display_path(&here)));
+                }
+            }
+            PropKind::PlainFont { size_key } => {
+                if !current.is_string() {
+                    return Err(format!(
+                        "font family {} is not a string",
+                        display_path(&here)
+                    ));
+                }
+                if !object.get(*size_key).map(Value::is_number).unwrap_or(false) {
+                    return Err(format!(
+                        "font size key '{}' of {} is not a number",
+                        size_key,
+                        display_path(&here)
+                    ));
                 }
             }
             PropKind::Object { props } => {

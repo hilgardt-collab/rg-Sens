@@ -11,9 +11,11 @@ use crate::sources::{
 };
 use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::sensor_picker::SensorPicker;
-use crate::ui::TimezoneDialog;
+use crate::ui::{BackgroundConfigWidget, TimezoneDialog};
 use gtk4::prelude::*;
 use gtk4::{Button, DropDown, StringList};
+use rg_sens_types::background::BackgroundConfig;
+use rg_sens_types::display_configs::IndicatorShape;
 use rg_sens_types::text::TextPosition;
 use serde_json::{json, Map, Value};
 use std::cell::{Cell, RefCell};
@@ -26,6 +28,8 @@ pub fn register_field_editors() {
     register_field_editor("temp_sensor", temp_sensor_editor);
     register_field_editor("cpu_core_selection", cpu_core_editor);
     register_field_editor("text_position", text_position_editor);
+    register_field_editor("background", background_editor);
+    register_field_editor("indicator_shape", indicator_shape_editor);
 }
 
 /// A button showing the zone name; clicking opens the timezone dialog.
@@ -250,4 +254,146 @@ fn text_position_editor(ctx: FieldContext) -> FieldEditor {
     };
     let g = grid.clone();
     FieldEditor::new(grid.widget().clone(), refresh).with_cleanup(move || g.cleanup())
+}
+
+/// The full background editor (solid / gradients / image / polygons /
+/// indicator) over a `BackgroundConfig`, with the slot's fields for the
+/// indicator type. `set_config` drives a type dropdown whose handlers fire
+/// the widget's change signal, so writes are suppressed while refreshing.
+fn background_editor(ctx: FieldContext) -> FieldEditor {
+    let key = ctx.prop.key;
+    let widget = Rc::new(BackgroundConfigWidget::new());
+    widget.set_source_fields(ctx.fields.to_vec());
+    widget.set_theme_config(ctx.theme.clone());
+    let refreshing = Rc::new(Cell::new(false));
+    {
+        let ctx = ctx.clone();
+        let w = widget.clone();
+        let refreshing = refreshing.clone();
+        widget.set_on_change(move || {
+            if refreshing.get() {
+                return;
+            }
+            if let Ok(v) = serde_json::to_value(w.get_config()) {
+                ctx.set(vec![(key, v)]);
+            }
+        });
+    }
+    let refresh: FieldRefresh = {
+        let w = widget.clone();
+        Box::new(move |m: &Map<String, Value>| {
+            if let Some(cfg) = m
+                .get(key)
+                .and_then(|v| serde_json::from_value::<BackgroundConfig>(v.clone()).ok())
+            {
+                refreshing.set(true);
+                w.set_config(cfg);
+                refreshing.set(false);
+            }
+        })
+    };
+    let w_theme = widget.clone();
+    let w_cleanup = widget.clone();
+    FieldEditor::new(widget.widget().clone(), refresh)
+        .as_block()
+        .with_theme(move |t| w_theme.set_theme_config(t.clone()))
+        // The change closure holds the widget (gotcha 11): drop it with the row.
+        .with_cleanup(move || w_cleanup.set_on_change(|| {}))
+}
+
+/// `IndicatorShape` is externally tagged with a payload (`"circle"`,
+/// `{"polygon": 5}`): a dropdown of the common shapes plus a custom
+/// side count.
+fn indicator_shape_editor(ctx: FieldContext) -> FieldEditor {
+    const PRESETS: [(&str, Option<u32>); 8] = [
+        ("Fill", None),
+        ("Circle", None),
+        ("Square", None),
+        ("Triangle", Some(3)),
+        ("Pentagon", Some(5)),
+        ("Hexagon", Some(6)),
+        ("Heptagon", Some(7)),
+        ("Octagon", Some(8)),
+    ];
+    let key = ctx.prop.key;
+    let labels: Vec<&str> = PRESETS
+        .iter()
+        .map(|(l, _)| *l)
+        .chain(std::iter::once("Custom polygon"))
+        .collect();
+    let custom_index = PRESETS.len() as u32;
+    let inner = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    let dropdown = DropDown::new(Some(StringList::new(&labels)), None::<gtk4::Expression>);
+    dropdown.set_hexpand(true);
+    let sides = gtk4::SpinButton::with_range(3.0, 64.0, 1.0);
+    sides.set_tooltip_text(Some("Sides"));
+    sides.set_visible(false);
+    inner.append(&dropdown);
+    inner.append(&sides);
+    let refreshing = Rc::new(Cell::new(false));
+    let shape_value = {
+        let sides = sides.clone();
+        move |index: u32| -> Value {
+            match index {
+                0 => json!("fill"),
+                1 => json!("circle"),
+                2 => json!("square"),
+                i if (i as usize) < PRESETS.len() => {
+                    json!({ "polygon": PRESETS[i as usize].1.unwrap_or(3) })
+                }
+                _ => json!({ "polygon": sides.value() as u32 }),
+            }
+        }
+    };
+    {
+        let ctx = ctx.clone();
+        let sides = sides.clone();
+        let refreshing = refreshing.clone();
+        let shape_value = shape_value.clone();
+        dropdown.connect_selected_notify(move |d| {
+            sides.set_visible(d.selected() == custom_index);
+            if refreshing.get() {
+                return;
+            }
+            ctx.set(vec![(key, shape_value(d.selected()))]);
+        });
+    }
+    {
+        let dropdown = dropdown.clone();
+        let refreshing = refreshing.clone();
+        sides.connect_value_changed(move |sp| {
+            if refreshing.get() || dropdown.selected() != custom_index {
+                return;
+            }
+            ctx.set(vec![(key, json!({ "polygon": sp.value() as u32 }))]);
+        });
+    }
+    let refresh: FieldRefresh = {
+        let dropdown = dropdown.clone();
+        let sides = sides.clone();
+        Box::new(move |m: &Map<String, Value>| {
+            let shape = m
+                .get(key)
+                .and_then(|v| serde_json::from_value::<IndicatorShape>(v.clone()).ok())
+                .unwrap_or_default();
+            let index = match shape {
+                IndicatorShape::Fill => 0,
+                IndicatorShape::Circle => 1,
+                IndicatorShape::Square => 2,
+                IndicatorShape::Polygon(n) => PRESETS
+                    .iter()
+                    .position(|(_, p)| *p == Some(n))
+                    .map(|i| i as u32)
+                    .unwrap_or(custom_index),
+            };
+            refreshing.set(true);
+            if let IndicatorShape::Polygon(n) = shape {
+                sides.set_value(n as f64);
+            }
+            dropdown.set_selected(index);
+            sides.set_visible(index == custom_index);
+            refreshing.set(false);
+        })
+    };
+    FieldEditor::new(inner, refresh)
 }

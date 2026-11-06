@@ -17,14 +17,17 @@
 use super::util::{flatten_source_config, source_config_from_flat};
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
 use crate::ui::editor_registry::{ChangeCallback, DisplayEditor, EditorPage, SourceEditor};
+use crate::ui::shared_font_dialog::show_font_dialog;
 use crate::ui::theme::ComboThemeConfig;
-use crate::ui::{GradientEditor, ThemeColorSelector, ThemeFontSelector, CLIPBOARD};
+use crate::ui::{
+    ColorButtonWidget, GradientEditor, ThemeColorSelector, ThemeFontSelector, CLIPBOARD,
+};
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, Separator,
     SpinButton, StringList, Widget,
 };
-use rg_sens_types::color::ColorStop;
+use rg_sens_types::color::{Color, ColorStop};
 use rg_sens_types::schema::{Condition, Prop, PropKind};
 use rg_sens_types::theme::{ColorSource, ColorStopSource, FontSource};
 use serde_json::{Map, Value};
@@ -1303,6 +1306,119 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 on_theme: Some(Box::new(move |t| n_theme.apply_theme(t))),
                 cleanup: Some(Box::new(move || nested.cleanup())),
             }
+        }
+        PropKind::Rgba => {
+            let button = Rc::new(ColorButtonWidget::new(Color::new(1.0, 1.0, 1.0, 1.0)));
+            let row = labelled_row(prop, button.widget());
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                button.set_on_change(move |color| {
+                    if loading.get() {
+                        return;
+                    }
+                    if let Ok(v) = serde_json::to_value(color) {
+                        model.borrow_mut().insert(key.to_string(), v);
+                        fire();
+                    }
+                });
+            }
+            Row::plain(
+                prop,
+                row,
+                Box::new(move |m| {
+                    if let Some(color) = m
+                        .get(key)
+                        .and_then(|v| serde_json::from_value::<Color>(v.clone()).ok())
+                    {
+                        // `set_color` is silent.
+                        button.set_color(color);
+                    }
+                }),
+            )
+        }
+        PropKind::PlainFont { size_key } => {
+            // Family under `key`, size under `size_key`, both in this object.
+            let size_key: &'static str = size_key;
+            let inner = GtkBox::new(Orientation::Horizontal, 6);
+            let font_btn = Button::with_label("Sans");
+            font_btn.set_hexpand(true);
+            let size_spin = SpinButton::with_range(4.0, 200.0, 1.0);
+            size_spin.set_digits(1);
+            size_spin.set_tooltip_text(Some("Size (pt)"));
+            inner.append(&font_btn);
+            inner.append(&size_spin);
+            let row = labelled_row(prop, &inner);
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                let loading = loading.clone();
+                let size_spin = size_spin.clone();
+                font_btn.connect_clicked(move |btn| {
+                    let window = btn.root().and_then(|r| r.downcast::<gtk4::Window>().ok());
+                    let current = model
+                        .borrow()
+                        .get(key)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Sans")
+                        .to_string();
+                    let desc = gtk4::pango::FontDescription::from_string(&format!(
+                        "{} {}",
+                        current,
+                        size_spin.value()
+                    ));
+                    let model = model.clone();
+                    let fire = fire.clone();
+                    let loading = loading.clone();
+                    let btn = btn.clone();
+                    let size_spin = size_spin.clone();
+                    show_font_dialog(window.as_ref(), Some(&desc), move |picked| {
+                        let family = picked.family().map(|f| f.to_string()).unwrap_or(current);
+                        btn.set_label(&family);
+                        // A family-only pick reports size 0: keep the spin's.
+                        let size = (picked.size() > 0)
+                            .then(|| picked.size() as f64 / gtk4::pango::SCALE as f64);
+                        {
+                            let mut m = model.borrow_mut();
+                            m.insert(key.to_string(), Value::String(family));
+                            if let Some(size) = size {
+                                m.insert(size_key.to_string(), Value::from(size));
+                            }
+                        }
+                        if let Some(size) = size {
+                            let was = loading.replace(true);
+                            size_spin.set_value(size);
+                            loading.set(was);
+                        }
+                        fire();
+                    });
+                });
+            }
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                size_spin.connect_value_changed(move |sp| {
+                    if loading.get() {
+                        return;
+                    }
+                    model
+                        .borrow_mut()
+                        .insert(size_key.to_string(), Value::from(sp.value()));
+                    fire();
+                });
+            }
+            Row::plain(
+                prop,
+                row,
+                Box::new(move |m| {
+                    if let Some(family) = m.get(key).and_then(|v| v.as_str()) {
+                        font_btn.set_label(family);
+                    }
+                    if let Some(size) = m.get(size_key).and_then(|v| v.as_f64()) {
+                        size_spin.set_value(size);
+                    }
+                }),
+            )
         }
         PropKind::Custom { editor } => {
             let set: Rc<dyn Fn(Vec<(&'static str, Value)>)> = {

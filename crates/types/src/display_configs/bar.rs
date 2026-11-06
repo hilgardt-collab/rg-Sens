@@ -378,9 +378,129 @@ fn bg_transparent() -> serde_json::Value {
     serde_json::to_value(BarBackgroundType::Transparent).expect("background serializes")
 }
 
+/// Fill row of the bar-like displayers (bar, core bars): solid colour or a
+/// themed gradient.
+pub fn fill_prop(key: &'static str, label: &'static str) -> crate::schema::Prop {
+    use crate::schema::{Prop, PropKind, Variant};
+    Prop::new(
+        key,
+        label,
+        PropKind::Variant {
+            tag: "type",
+            variants: vec![
+                Variant {
+                    value: "solid",
+                    label: "Solid colour",
+                    props: vec![Prop::new("color", "Colour", PropKind::Color)],
+                    template: fg_solid,
+                },
+                Variant {
+                    value: "gradient",
+                    label: "Gradient",
+                    props: vec![
+                        Prop::new(
+                            "stops",
+                            "Stops",
+                            PropKind::ColorStops {
+                                linear: true,
+                                themed: true,
+                            },
+                        ),
+                        angle_prop("angle"),
+                    ],
+                    template: fg_gradient,
+                },
+            ],
+        },
+    )
+}
+
+/// Background row of the bar-like displayers: transparent, solid or gradient.
+pub fn background_prop(key: &'static str, label: &'static str) -> crate::schema::Prop {
+    use crate::schema::{Prop, PropKind, Variant};
+    Prop::new(
+        key,
+        label,
+        PropKind::Variant {
+            tag: "type",
+            variants: vec![
+                Variant {
+                    value: "transparent",
+                    label: "Transparent",
+                    props: vec![],
+                    template: bg_transparent,
+                },
+                Variant {
+                    value: "solid",
+                    label: "Solid colour",
+                    props: vec![Prop::new("color", "Colour", PropKind::Color)],
+                    template: bg_solid,
+                },
+                Variant {
+                    value: "gradient",
+                    label: "Gradient",
+                    props: vec![
+                        Prop::new(
+                            "stops",
+                            "Stops",
+                            PropKind::ColorStops {
+                                linear: true,
+                                themed: true,
+                            },
+                        ),
+                        angle_prop("angle"),
+                    ],
+                    template: bg_gradient,
+                },
+            ],
+        },
+    )
+}
+
+/// Border object (`BorderConfig`) of the bar-like displayers.
+pub fn border_prop(key: &'static str, label: &'static str) -> crate::schema::Prop {
+    use crate::schema::{Condition, Prop, PropKind};
+    Prop::new(
+        key,
+        label,
+        PropKind::Object {
+            props: vec![
+                Prop::new("enabled", "Draw border", PropKind::Bool),
+                Prop::new("color", "Colour", PropKind::Color)
+                    .visible_when(Condition::IsTrue { key: "enabled" }),
+                Prop::new(
+                    "width",
+                    "Width (px)",
+                    PropKind::Float {
+                        min: 0.5,
+                        max: 20.0,
+                        step: 0.5,
+                        digits: 1,
+                    },
+                )
+                .visible_when(Condition::IsTrue { key: "enabled" }),
+            ],
+        },
+    )
+}
+
+fn angle_prop(key: &'static str) -> crate::schema::Prop {
+    use crate::schema::{Prop, PropKind};
+    Prop::new(
+        key,
+        "Angle (°)",
+        PropKind::Float {
+            min: 0.0,
+            max: 360.0,
+            step: 5.0,
+            digits: 0,
+        },
+    )
+}
+
 impl crate::schema::Schema for BarDisplayConfig {
     fn props() -> Vec<crate::schema::Prop> {
-        use crate::schema::{Condition, Prop, PropKind, Variant};
+        use crate::schema::{Condition, Prop, PropKind};
         let shaped = Condition::Equals {
             key: "style",
             values: vec!["rectangle", "segmented"],
@@ -388,18 +508,6 @@ impl crate::schema::Schema for BarDisplayConfig {
         let tapered = Condition::Equals {
             key: "taper_style",
             values: vec!["start", "end", "both"],
-        };
-        let angle = |key: &'static str| {
-            Prop::new(
-                key,
-                "Angle (°)",
-                PropKind::Float {
-                    min: 0.0,
-                    max: 360.0,
-                    step: 5.0,
-                    digits: 0,
-                },
-            )
         };
         vec![
             Prop::new(
@@ -583,99 +691,9 @@ impl crate::schema::Schema for BarDisplayConfig {
             .section("Style")
             .help("Top/left, centre, or bottom/right of the bar")
             .visible_when(tapered),
-            Prop::new(
-                "foreground",
-                "Fill",
-                PropKind::Variant {
-                    tag: "type",
-                    variants: vec![
-                        Variant {
-                            value: "solid",
-                            label: "Solid colour",
-                            props: vec![Prop::new("color", "Colour", PropKind::Color)],
-                            template: fg_solid,
-                        },
-                        Variant {
-                            value: "gradient",
-                            label: "Gradient",
-                            props: vec![
-                                Prop::new(
-                                    "stops",
-                                    "Stops",
-                                    PropKind::ColorStops {
-                                        linear: true,
-                                        themed: true,
-                                    },
-                                ),
-                                angle("angle"),
-                            ],
-                            template: fg_gradient,
-                        },
-                    ],
-                },
-            )
-            .section("Foreground"),
-            Prop::new(
-                "background",
-                "Background",
-                PropKind::Variant {
-                    tag: "type",
-                    variants: vec![
-                        Variant {
-                            value: "transparent",
-                            label: "Transparent",
-                            props: vec![],
-                            template: bg_transparent,
-                        },
-                        Variant {
-                            value: "solid",
-                            label: "Solid colour",
-                            props: vec![Prop::new("color", "Colour", PropKind::Color)],
-                            template: bg_solid,
-                        },
-                        Variant {
-                            value: "gradient",
-                            label: "Gradient",
-                            props: vec![
-                                Prop::new(
-                                    "stops",
-                                    "Stops",
-                                    PropKind::ColorStops {
-                                        linear: true,
-                                        themed: true,
-                                    },
-                                ),
-                                angle("angle"),
-                            ],
-                            template: bg_gradient,
-                        },
-                    ],
-                },
-            )
-            .section("Background"),
-            Prop::new(
-                "border",
-                "Border",
-                PropKind::Object {
-                    props: vec![
-                        Prop::new("enabled", "Draw border", PropKind::Bool),
-                        Prop::new("color", "Colour", PropKind::Color)
-                            .visible_when(Condition::IsTrue { key: "enabled" }),
-                        Prop::new(
-                            "width",
-                            "Width (px)",
-                            PropKind::Float {
-                                min: 0.5,
-                                max: 20.0,
-                                step: 0.5,
-                                digits: 1,
-                            },
-                        )
-                        .visible_when(Condition::IsTrue { key: "enabled" }),
-                    ],
-                },
-            )
-            .section("Border"),
+            fill_prop("foreground", "Fill").section("Foreground"),
+            background_prop("background", "Background").section("Background"),
+            border_prop("border", "Border").section("Border"),
             Prop::new(
                 "text_overlay",
                 "Text overlay",
