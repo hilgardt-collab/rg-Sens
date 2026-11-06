@@ -63,6 +63,8 @@ pub struct Clipboard {
     pub source_config: Option<(String, Value)>, // (source_type, config_json)
     /// Copied displayer configuration as JSON, tagged with its displayer type
     pub display_config: Option<(String, Value)>,
+    /// Copied schema list item as JSON, tagged with its list key
+    pub list_item: Option<(String, Value)>,
 }
 
 impl Clipboard {
@@ -237,6 +239,16 @@ impl Clipboard {
         self.display_config.clone()
     }
 
+    /// Copy one item of a schema list (a text line, …), tagged with the list key
+    pub fn copy_list_item(&mut self, list_key: String, item: Value) {
+        self.list_item = Some((list_key, item));
+    }
+
+    /// Paste a schema list item: (list_key, item_json)
+    pub fn paste_list_item(&self) -> Option<(String, Value)> {
+        self.list_item.clone()
+    }
+
     /// Clear all clipboard data
     pub fn clear(&mut self) {
         self.text = None;
@@ -256,5 +268,6 @@ impl Clipboard {
         self.speedometer_display = None;
         self.source_config = None;
         self.display_config = None;
+        self.list_item = None;
     }
 }

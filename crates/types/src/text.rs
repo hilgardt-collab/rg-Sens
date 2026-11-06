@@ -96,7 +96,7 @@ pub enum CombineAlignment {
     Start, // Left for horizontal, Top for vertical
     #[default]
     Center, // Center alignment
-    End, // Right for horizontal, Bottom for vertical
+    End,   // Right for horizontal, Bottom for vertical
 }
 
 impl CombineAlignment {
@@ -629,5 +629,327 @@ impl Default for TextOverlayConfig {
             enabled: true,
             text_config: TextDisplayerConfig::default(),
         }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Schemas (Phase 3d)
+// ----------------------------------------------------------------------------
+
+fn text_fill_solid() -> serde_json::Value {
+    serde_json::to_value(TextFillType::default()).expect("fill serializes")
+}
+
+fn text_fill_gradient() -> serde_json::Value {
+    serde_json::to_value(TextFillType::LinearGradient {
+        stops: vec![
+            ColorStop {
+                position: 0.0,
+                color: Color::new(1.0, 1.0, 1.0, 1.0),
+            },
+            ColorStop {
+                position: 1.0,
+                color: Color::new(0.7, 0.7, 0.7, 1.0),
+            },
+        ],
+        angle: 0.0,
+    })
+    .expect("fill serializes")
+}
+
+fn text_bg_none() -> serde_json::Value {
+    serde_json::to_value(TextBackgroundType::None).expect("background serializes")
+}
+
+fn text_bg_solid() -> serde_json::Value {
+    serde_json::to_value(TextBackgroundType::Solid {
+        color: ColorSource::Custom {
+            color: Color::new(0.0, 0.0, 0.0, 0.5),
+        },
+    })
+    .expect("background serializes")
+}
+
+fn text_bg_gradient() -> serde_json::Value {
+    serde_json::to_value(TextBackgroundType::LinearGradient {
+        stops: vec![
+            ColorStopSource::custom(0.0, Color::new(0.0, 0.0, 0.0, 0.6)),
+            ColorStopSource::custom(1.0, Color::new(0.0, 0.0, 0.0, 0.2)),
+        ],
+        angle: 90.0,
+    })
+    .expect("background serializes")
+}
+
+/// A new line appended as the `n`th item (0-based): the default line
+/// (field "value"), ungrouped.
+fn new_text_line(_n: usize) -> serde_json::Value {
+    let line = TextLineConfig {
+        is_combined: false,
+        group_id: None,
+        ..TextLineConfig::default()
+    };
+    serde_json::to_value(line).expect("line serializes")
+}
+
+impl crate::schema::Schema for TextLineConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind, Variant};
+        let combined = Condition::IsTrue { key: "is_combined" };
+        let angle = |key: &'static str| {
+            Prop::new(
+                key,
+                "Angle (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+        };
+        vec![
+            Prop::new("field_id", "Field", PropKind::Field)
+                .help("Which value of the source this line shows"),
+            Prop::new(
+                "font_source",
+                "Font",
+                PropKind::Font {
+                    legacy: Some(("font_family", "font_size")),
+                },
+            ),
+            Prop::new("bold", "Bold", PropKind::Bool),
+            Prop::new("italic", "Italic", PropKind::Bool),
+            Prop::new(
+                "fill",
+                "Fill",
+                PropKind::Variant {
+                    tag: "type",
+                    variants: vec![
+                        Variant {
+                            value: "solid",
+                            label: "Solid colour",
+                            props: vec![Prop::new("color", "Colour", PropKind::Color)],
+                            template: text_fill_solid,
+                        },
+                        Variant {
+                            value: "linear_gradient",
+                            label: "Gradient",
+                            props: vec![
+                                Prop::new(
+                                    "stops",
+                                    "Stops",
+                                    PropKind::ColorStops {
+                                        linear: true,
+                                        themed: false,
+                                    },
+                                ),
+                                angle("angle"),
+                            ],
+                            template: text_fill_gradient,
+                        },
+                    ],
+                },
+            ),
+            Prop::new(
+                "text_background",
+                "Background",
+                PropKind::Object {
+                    props: vec![
+                        Prop::new(
+                            "background",
+                            "Type",
+                            PropKind::Variant {
+                                tag: "type",
+                                variants: vec![
+                                    Variant {
+                                        value: "none",
+                                        label: "None",
+                                        props: vec![],
+                                        template: text_bg_none,
+                                    },
+                                    Variant {
+                                        value: "solid",
+                                        label: "Solid colour",
+                                        props: vec![Prop::new("color", "Colour", PropKind::Color)],
+                                        template: text_bg_solid,
+                                    },
+                                    Variant {
+                                        value: "linear_gradient",
+                                        label: "Gradient",
+                                        props: vec![
+                                            Prop::new(
+                                                "stops",
+                                                "Stops",
+                                                PropKind::ColorStops {
+                                                    linear: true,
+                                                    themed: true,
+                                                },
+                                            ),
+                                            angle("angle"),
+                                        ],
+                                        template: text_bg_gradient,
+                                    },
+                                ],
+                            },
+                        ),
+                        Prop::new(
+                            "padding",
+                            "Padding (px)",
+                            PropKind::Float {
+                                min: 0.0,
+                                max: 50.0,
+                                step: 1.0,
+                                digits: 0,
+                            },
+                        ),
+                        Prop::new(
+                            "corner_radius",
+                            "Corner radius (px)",
+                            PropKind::Float {
+                                min: 0.0,
+                                max: 50.0,
+                                step: 1.0,
+                                digits: 0,
+                            },
+                        ),
+                    ],
+                },
+            ),
+            Prop::new(
+                "position",
+                "Position",
+                PropKind::Custom {
+                    editor: "text_position",
+                },
+            ),
+            Prop::new(
+                "rotation_angle",
+                "Rotation (°)",
+                PropKind::Float {
+                    min: -360.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            ),
+            Prop::new(
+                "offset_x",
+                "Offset X (px)",
+                PropKind::Float {
+                    min: -1000.0,
+                    max: 1000.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            ),
+            Prop::new(
+                "offset_y",
+                "Offset Y (px)",
+                PropKind::Float {
+                    min: -1000.0,
+                    max: 1000.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            ),
+            Prop::new("is_combined", "Combine with a group", PropKind::Bool)
+                .help("Lines sharing a group name at the same position are laid out together"),
+            Prop::new(
+                "group_id",
+                "Group",
+                PropKind::OptionalText {
+                    placeholder: "Group 1",
+                },
+            )
+            .visible_when(combined.clone()),
+            Prop::new(
+                "combine_direction",
+                "Direction",
+                PropKind::Enum {
+                    options: vec![("Horizontal", "Horizontal"), ("Vertical", "Vertical")],
+                },
+            )
+            .help("Read from the first line of the group")
+            .visible_when(combined.clone()),
+            Prop::new(
+                "combine_alignment",
+                "Alignment",
+                PropKind::Custom {
+                    editor: "text_position",
+                },
+            )
+            .help("Read from the first line of the group")
+            .visible_when(combined),
+        ]
+    }
+}
+
+impl crate::schema::Schema for TextDisplayerConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Prop, PropKind};
+        vec![Prop::new(
+            "lines",
+            "Text lines",
+            PropKind::List {
+                item: <TextLineConfig as crate::schema::Schema>::props(),
+                new_item: new_text_line,
+                min_items: 0,
+                item_label: "Line",
+                add_label: "Add line",
+            },
+        )]
+    }
+}
+
+impl crate::schema::Schema for TextOverlayConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Prop, PropKind};
+        vec![
+            Prop::new("enabled", "Show text", PropKind::Bool),
+            Prop::new(
+                "text_config",
+                "Lines",
+                PropKind::Object {
+                    props: <TextDisplayerConfig as crate::schema::Schema>::props(),
+                },
+            ),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn line_props_fit_the_type() {
+        check_props_fit::<TextLineConfig>(&TextLineConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn displayer_props_fit_the_type() {
+        check_props_fit::<TextDisplayerConfig>(&TextDisplayerConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn overlay_props_fit_the_type() {
+        check_props_fit::<TextOverlayConfig>(&TextOverlayConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let default = TextDisplayerConfig::default();
+        let value = serde_json::to_value(&default).unwrap();
+        let back: TextDisplayerConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(back, default);
+    }
+
+    #[test]
+    fn new_line_is_a_full_line() {
+        let line: TextLineConfig = serde_json::from_value(new_text_line(0)).unwrap();
+        assert!(!line.is_combined);
+        assert!(line.font_source.is_some());
     }
 }

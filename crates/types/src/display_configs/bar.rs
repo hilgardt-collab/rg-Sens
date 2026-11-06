@@ -599,7 +599,14 @@ impl crate::schema::Schema for BarDisplayConfig {
                             value: "gradient",
                             label: "Gradient",
                             props: vec![
-                                Prop::new("stops", "Stops", PropKind::ColorStops { linear: true }),
+                                Prop::new(
+                                    "stops",
+                                    "Stops",
+                                    PropKind::ColorStops {
+                                        linear: true,
+                                        themed: true,
+                                    },
+                                ),
                                 angle("angle"),
                             ],
                             template: fg_gradient,
@@ -630,7 +637,14 @@ impl crate::schema::Schema for BarDisplayConfig {
                             value: "gradient",
                             label: "Gradient",
                             props: vec![
-                                Prop::new("stops", "Stops", PropKind::ColorStops { linear: true }),
+                                Prop::new(
+                                    "stops",
+                                    "Stops",
+                                    PropKind::ColorStops {
+                                        linear: true,
+                                        themed: true,
+                                    },
+                                ),
                                 angle("angle"),
                             ],
                             template: bg_gradient,
@@ -665,8 +679,8 @@ impl crate::schema::Schema for BarDisplayConfig {
             Prop::new(
                 "text_overlay",
                 "Text overlay",
-                PropKind::Custom {
-                    editor: "text_overlay",
+                PropKind::Object {
+                    props: <crate::text::TextOverlayConfig as crate::schema::Schema>::props(),
                 },
             )
             .section("Text overlay"),

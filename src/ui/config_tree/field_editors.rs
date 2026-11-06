@@ -9,11 +9,12 @@ use crate::sources::{
     set_sensor_by_index, CpuSource, FanSpeedConfig, FanSpeedSource, SystemTempConfig,
     SystemTempSource,
 };
+use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::sensor_picker::SensorPicker;
-use crate::ui::{TextOverlayConfigWidget, TimezoneDialog};
+use crate::ui::TimezoneDialog;
 use gtk4::prelude::*;
 use gtk4::{Button, DropDown, StringList};
-use rg_sens_types::text::TextOverlayConfig;
+use rg_sens_types::text::TextPosition;
 use serde_json::{json, Map, Value};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -24,7 +25,7 @@ pub fn register_field_editors() {
     register_field_editor("fan_sensor", fan_sensor_editor);
     register_field_editor("temp_sensor", temp_sensor_editor);
     register_field_editor("cpu_core_selection", cpu_core_editor);
-    register_field_editor("text_overlay", text_overlay_editor);
+    register_field_editor("text_position", text_position_editor);
 }
 
 /// A button showing the zone name; clicking opens the timezone dialog.
@@ -224,45 +225,29 @@ fn cpu_core_editor(ctx: FieldContext) -> FieldEditor {
     FieldEditor::new(dropdown, refresh)
 }
 
-/// The text overlay (enable + text lines) of bar/arc/graph/speedometer,
-/// kept as an opaque editor over the whole nested object until text lines
-/// are schema-driven. Programmatic `set_config` fires the widget's own
-/// change signal, so writes are suppressed while refreshing.
-fn text_overlay_editor(ctx: FieldContext) -> FieldEditor {
+/// A 3×3 position grid over a `TextPosition` (`set_position` is guarded).
+fn text_position_editor(ctx: FieldContext) -> FieldEditor {
     let key = ctx.prop.key;
-    let widget = Rc::new(TextOverlayConfigWidget::new(ctx.fields.to_vec()));
-    widget.set_theme(ctx.theme.clone());
-    let refreshing = Rc::new(Cell::new(false));
+    let grid = Rc::new(PositionGridWidget::new(TextPosition::Center));
     {
         let ctx = ctx.clone();
-        let w = widget.clone();
-        let refreshing = refreshing.clone();
-        widget.set_on_change(move || {
-            if refreshing.get() {
-                return;
-            }
-            if let Ok(v) = serde_json::to_value(w.get_config()) {
+        grid.set_on_change(move |pos| {
+            if let Ok(v) = serde_json::to_value(pos) {
                 ctx.set(vec![(key, v)]);
             }
         });
     }
     let refresh: FieldRefresh = {
-        let w = widget.clone();
+        let grid = grid.clone();
         Box::new(move |m: &Map<String, Value>| {
-            if let Some(cfg) = m
+            if let Some(pos) = m
                 .get(key)
-                .and_then(|v| serde_json::from_value::<TextOverlayConfig>(v.clone()).ok())
+                .and_then(|v| serde_json::from_value::<TextPosition>(v.clone()).ok())
             {
-                refreshing.set(true);
-                w.set_config(cfg);
-                refreshing.set(false);
+                grid.set_position(pos);
             }
         })
     };
-    let w_theme = widget.clone();
-    let w_cleanup = widget.clone();
-    FieldEditor::new(widget.widget().clone(), refresh)
-        .as_block()
-        .with_theme(move |t| w_theme.set_theme(t.clone()))
-        .with_cleanup(move || w_cleanup.cleanup())
+    let g = grid.clone();
+    FieldEditor::new(grid.widget().clone(), refresh).with_cleanup(move || g.cleanup())
 }

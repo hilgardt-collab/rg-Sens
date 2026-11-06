@@ -92,12 +92,23 @@ pub enum PropKind {
     },
     /// A theme-or-custom colour (`ColorSource`).
     Color,
-    /// Theme-aware gradient stops (`Vec<ColorStopSource>`), without an angle.
-    /// `linear` picks the preview: a linear ramp (bar fills) or the arc-style
-    /// sweep (arc colour stops).
+    /// Gradient stops without an angle: `Vec<ColorStopSource>` when `themed`,
+    /// plain `Vec<ColorStop>` otherwise. `linear` picks the preview: a linear
+    /// ramp (bar fills) or the arc-style sweep (arc colour stops).
     ColorStops {
         linear: bool,
+        themed: bool,
     },
+    /// A theme-or-custom font (`FontSource`, possibly `Option`). When the
+    /// value is `null`, `legacy` names the `(family, size)` keys of the same
+    /// object that older configs carry instead.
+    Font {
+        legacy: Option<(&'static str, &'static str)>,
+    },
+    /// A field id of the panel's source, chosen from the fields the editor
+    /// was given. A saved id the source does not expose is kept as its own
+    /// row.
+    Field,
 }
 
 /// One alternative of a [`PropKind::Variant`].
@@ -334,6 +345,27 @@ fn check_object(
                         "colour stops {} are not an array",
                         display_path(&here)
                     ));
+                }
+            }
+            PropKind::Font { legacy } => {
+                if !current.is_null() && current.get("type").is_none() {
+                    return Err(format!("font {} has no 'type'", display_path(&here)));
+                }
+                if let Some((family, size)) = legacy {
+                    for k in [family, size] {
+                        if !object.contains_key(*k) {
+                            return Err(format!(
+                                "legacy font key '{}' of {} is not a field",
+                                k,
+                                display_path(&here)
+                            ));
+                        }
+                    }
+                }
+            }
+            PropKind::Field => {
+                if !current.is_string() {
+                    return Err(format!("field id {} is not a string", display_path(&here)));
                 }
             }
             PropKind::Object { props } => {

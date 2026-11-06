@@ -23,6 +23,7 @@ use crate::ui::widget_builder::{
 };
 use rg_sens_types::display_configs::{ArcDisplayConfig, BarDisplayConfig};
 use rg_sens_types::schema::{Prop, Schema};
+use rg_sens_types::text::TextOverlayConfig;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 
@@ -31,7 +32,7 @@ use crate::ui::shared_font_dialog::show_font_dialog;
 pub use crate::ui::widget_builder::{notify_change, queue_redraw, OnChangeCallback};
 use crate::ui::{
     ColorButtonWidget, GradientEditor, LazyCoreBarsConfigWidget, LazyGraphConfigWidget,
-    LazySpeedometerConfigWidget, LazyStaticConfigWidget, LazyTextOverlayConfigWidget,
+    LazySpeedometerConfigWidget, LazyStaticConfigWidget,
 };
 
 // Re-export combo traits and types from the types crate
@@ -1313,78 +1314,24 @@ where
     let text_config_frame = gtk4::Frame::new(Some("Text Overlay"));
     text_config_frame.set_margin_top(12);
 
-    // Use LazyTextOverlayConfigWidget to defer expensive widget creation until user clicks
-    let text_widget = LazyTextOverlayConfigWidget::new(slot_fields.clone(), "Text Overlay");
-    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
-    {
-        let cfg = config.borrow();
-        text_widget.set_theme(get_theme(&cfg));
-    }
-    let current_text_overlay = {
-        let cfg = config.borrow();
-        get_content_items(&cfg)
-            .get(slot_name)
-            .map(|item| item.bar_config.text_overlay.clone())
-            .unwrap_or_default()
-    };
-    text_widget.set_config(current_text_overlay);
-
-    // Connect text widget on_change
-    let text_widget_rc = Rc::new(text_widget);
-    {
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let slot_name_clone = slot_name.to_string();
-        let get_content_items_clone = get_content_items.clone();
-        // Only save when Text display mode is active to avoid overwriting BarConfigWidget's changes
-        let set_content_item_clone = set_content_item.clone();
-        let text_widget_for_cb = text_widget_rc.clone();
-        text_widget_rc.set_on_change(move || {
-            let mut cfg = config_clone.borrow_mut();
-            let mut item = get_content_items_clone(&cfg)
-                .get(&slot_name_clone)
-                .cloned()
-                .unwrap_or_default();
-            // Only update if Text mode is active (not Bar mode which has its own text widget)
-            let is_text_mode = matches!(
-                item.display_as,
-                ContentDisplayType::Text | ContentDisplayType::Static
-            );
-            if is_text_mode {
-                item.bar_config.text_overlay = text_widget_for_cb.get_config();
-            }
-            set_content_item_clone(&mut cfg, &slot_name_clone, item);
-            drop(cfg);
-            queue_redraw(&preview_clone, &on_change_clone);
-        });
-    }
-
-    // Register theme refresh callback for text widget
-    {
-        let text_widget_for_theme = text_widget_rc.clone();
-        let config_for_text_theme = config.clone();
-        let get_theme_for_text = get_theme.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = get_theme_for_text(&config_for_text_theme.borrow());
-            text_widget_for_theme.set_theme(theme);
-        });
-        theme_ref_refreshers
-            .borrow_mut()
-            .push(theme_refresh_callback);
-    }
-
-    // Register cleanup callback to break text widget reference cycles
-    {
-        let text_widget_for_cleanup = text_widget_rc.clone();
-        content_cleanup_callbacks
-            .borrow_mut()
-            .push(Box::new(move || {
-                text_widget_for_cleanup.cleanup();
-            }));
-    }
-
-    text_config_frame.set_child(Some(text_widget_rc.widget()));
+    // Text items render bar_config.text_overlay; same schema as the bar's
+    // overlay section.
+    let text_editor = item_schema_editor(
+        TextOverlayConfig::props(),
+        slot_fields.clone(),
+        config,
+        on_change,
+        preview,
+        slot_name,
+        get_content_items.clone(),
+        set_content_item.clone(),
+        theme_ref_refreshers,
+        get_theme.clone(),
+        content_cleanup_callbacks,
+        |item| &item.bar_config.text_overlay,
+        |item, cfg| item.bar_config.text_overlay = cfg,
+    );
+    text_config_frame.set_child(Some(text_editor.widget()));
     inner_box.append(&text_config_frame);
 
     // === Core Bars Configuration Section ===
@@ -1645,6 +1592,9 @@ where
     let arc_config_frame_clone = arc_config_frame.clone();
     let speedometer_config_frame_clone = speedometer_config_frame.clone();
     let static_config_frame_clone = static_config_frame.clone();
+    let bar_editor_clone = bar_editor.clone();
+    let arc_editor_clone = arc_editor.clone();
+    let text_editor_clone = text_editor.clone();
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
     let preview_clone = preview.clone();
@@ -1678,7 +1628,28 @@ where
                 .unwrap_or_default();
             let mut new_item = current_item;
             new_item.display_as = display_type;
-            set_content_item_clone(&mut cfg, &slot_name_for_dropdown, new_item);
+            set_content_item_clone(&mut cfg, &slot_name_for_dropdown, new_item.clone());
+            drop(cfg);
+            // The bar and text editors both edit bar_config; the one that
+            // was hidden holds a stale copy, so reload all from the item.
+            for (editor, value) in [
+                (
+                    &bar_editor_clone,
+                    serde_json::to_value(&new_item.bar_config),
+                ),
+                (
+                    &arc_editor_clone,
+                    serde_json::to_value(&new_item.arc_config),
+                ),
+                (
+                    &text_editor_clone,
+                    serde_json::to_value(&new_item.bar_config.text_overlay),
+                ),
+            ] {
+                if let Ok(Value::Object(map)) = value {
+                    editor.load(map);
+                }
+            }
         }
 
         // Update frame visibility

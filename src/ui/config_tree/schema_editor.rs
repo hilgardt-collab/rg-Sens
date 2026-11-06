@@ -18,14 +18,15 @@ use super::util::{flatten_source_config, source_config_from_flat};
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
 use crate::ui::editor_registry::{ChangeCallback, DisplayEditor, SourceEditor};
 use crate::ui::theme::ComboThemeConfig;
-use crate::ui::{GradientEditor, ThemeColorSelector, CLIPBOARD};
+use crate::ui::{GradientEditor, ThemeColorSelector, ThemeFontSelector, CLIPBOARD};
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, SpinButton,
     StringList, Widget,
 };
+use rg_sens_types::color::ColorStop;
 use rg_sens_types::schema::{Condition, Prop, PropKind};
-use rg_sens_types::theme::{ColorSource, ColorStopSource};
+use rg_sens_types::theme::{ColorSource, ColorStopSource, FontSource};
 use serde_json::{Map, Value};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -898,7 +899,8 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 cleanup: None,
             }
         }
-        PropKind::ColorStops { linear } => {
+        PropKind::ColorStops { linear, themed } => {
+            let themed = *themed;
             let copy_btn = Button::with_label("Copy gradient");
             let paste_btn = Button::with_label("Paste gradient");
             let (outer, body) = titled_block(prop, &[&copy_btn, &paste_btn]);
@@ -909,16 +911,41 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
             });
             editor.set_theme_config(ctx.theme.borrow().clone());
             body.append(editor.widget());
+            // Themed stops keep theme references; plain stops are resolved
+            // colours (`TextFillType` gradients).
+            let current_value = {
+                let editor = editor.clone();
+                move || {
+                    if themed {
+                        serde_json::to_value(editor.get_stops_source())
+                    } else {
+                        serde_json::to_value(editor.get_stops())
+                    }
+                }
+            };
+            let set_value = {
+                let editor = editor.clone();
+                move |v: &Value| {
+                    if themed {
+                        if let Ok(stops) = serde_json::from_value::<Vec<ColorStopSource>>(v.clone())
+                        {
+                            editor.set_stops_source(stops);
+                        }
+                    } else if let Ok(stops) = serde_json::from_value::<Vec<ColorStop>>(v.clone()) {
+                        editor.set_stops(stops);
+                    }
+                }
+            };
             {
                 let model = model.clone();
                 let fire = fire.clone();
-                let editor = editor.clone();
                 let loading = loading.clone();
-                editor.clone().set_on_change(move || {
+                let current_value = current_value.clone();
+                editor.set_on_change(move || {
                     if loading.get() {
                         return;
                     }
-                    if let Ok(v) = serde_json::to_value(editor.get_stops_source()) {
+                    if let Ok(v) = current_value() {
                         model.borrow_mut().insert(key.to_string(), v);
                         fire();
                     }
@@ -928,16 +955,9 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 // The clipboard holds resolved stops, so theme links are
                 // dropped on copy (as the old widgets did).
                 let editor = editor.clone();
-                let theme = ctx.theme.clone();
                 copy_btn.connect_clicked(move |_| {
-                    let theme = theme.borrow();
-                    let resolved = editor
-                        .get_stops_source()
-                        .iter()
-                        .map(|s| s.resolve(&theme))
-                        .collect();
                     if let Ok(mut cb) = CLIPBOARD.lock() {
-                        cb.copy_gradient_stops(resolved);
+                        cb.copy_gradient_stops(editor.get_stops());
                     }
                 });
             }
@@ -945,34 +965,26 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 let editor = editor.clone();
                 let model = model.clone();
                 let fire = fire.clone();
+                let current_value = current_value.clone();
                 paste_btn.connect_clicked(move |_| {
                     let stops = CLIPBOARD
                         .lock()
                         .ok()
                         .and_then(|cb| cb.paste_gradient_stops());
                     let Some(stops) = stops else { return };
-                    let sources: Vec<ColorStopSource> = stops
-                        .iter()
-                        .map(|s| ColorStopSource::custom(s.position, s.color))
-                        .collect();
-                    editor.set_stops_source(sources.clone());
-                    if let Ok(v) = serde_json::to_value(&sources) {
+                    editor.set_stops(stops);
+                    if let Ok(v) = current_value() {
                         model.borrow_mut().insert(key.to_string(), v);
                         fire();
                     }
                 });
             }
-            let refresh: FieldRefresh = {
-                let editor = editor.clone();
-                Box::new(move |m| {
-                    if let Some(stops) = m.get(key).and_then(|v| {
-                        serde_json::from_value::<Vec<ColorStopSource>>(v.clone()).ok()
-                    }) {
-                        // Guarded: does not fire the editor's on_change.
-                        editor.set_stops_source(stops);
-                    }
-                })
-            };
+            let refresh: FieldRefresh = Box::new(move |m| {
+                if let Some(v) = m.get(key) {
+                    // Guarded setters: they do not fire the editor's on_change.
+                    set_value(v);
+                }
+            });
             let editor_theme = editor.clone();
             Row {
                 prop: prop.clone(),
@@ -983,6 +995,115 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 // (gotcha 11): drop it when the row goes.
                 cleanup: Some(Box::new(move || editor.set_on_change(|| {}))),
             }
+        }
+        PropKind::Font { legacy } => {
+            let legacy = *legacy;
+            let selector = Rc::new(ThemeFontSelector::new(FontSource::default()));
+            selector.set_theme_config(ctx.theme.borrow().clone());
+            let row = labelled_row(prop, selector.widget());
+            let refreshing = Rc::new(Cell::new(false));
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                let refreshing = refreshing.clone();
+                selector.set_on_change(move |source| {
+                    if loading.get() || refreshing.get() {
+                        return;
+                    }
+                    if let Ok(v) = serde_json::to_value(&source) {
+                        model.borrow_mut().insert(key.to_string(), v);
+                        fire();
+                    }
+                });
+            }
+            let refresh: FieldRefresh = {
+                let selector = selector.clone();
+                Box::new(move |m| {
+                    let saved = m
+                        .get(key)
+                        .and_then(|v| serde_json::from_value::<FontSource>(v.clone()).ok());
+                    let source = saved.or_else(|| {
+                        // Older configs carry family/size beside a null source.
+                        let (family_key, size_key) = legacy?;
+                        let family = m.get(family_key)?.as_str()?.to_string();
+                        let size = m.get(size_key)?.as_f64()?;
+                        Some(FontSource::Custom { family, size })
+                    });
+                    if let Some(source) = source {
+                        // `set_source` toggles buttons, which fire on_change.
+                        refreshing.set(true);
+                        selector.set_source(source);
+                        refreshing.set(false);
+                    }
+                })
+            };
+            Row {
+                prop: prop.clone(),
+                widget: row,
+                refresh,
+                on_theme: Some(Box::new(move |t| selector.set_theme_config(t.clone()))),
+                cleanup: None,
+            }
+        }
+        PropKind::Field => {
+            // Fields of the panel's source; a saved id the source does not
+            // expose is kept as its own row.
+            let dropdown = DropDown::new(None::<StringList>, None::<gtk4::Expression>);
+            let ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+            let row = labelled_row(prop, &dropdown);
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                let ids = ids.clone();
+                dropdown.connect_selected_notify(move |d| {
+                    if loading.get() {
+                        return;
+                    }
+                    if let Some(id) = ids.borrow().get(d.selected() as usize) {
+                        model
+                            .borrow_mut()
+                            .insert(key.to_string(), Value::String(id.clone()));
+                        fire();
+                    }
+                });
+            }
+            let d = dropdown.clone();
+            let fields = ctx.fields.clone();
+            Row::plain(
+                prop,
+                row,
+                Box::new(move |m| {
+                    let saved = m
+                        .get(key)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let mut names: Vec<String> = fields.iter().map(|f| f.id.clone()).collect();
+                    let mut labels: Vec<String> = fields
+                        .iter()
+                        .map(|f| {
+                            if f.name.is_empty() || f.name == f.id {
+                                f.id.clone()
+                            } else {
+                                format!("{} ({})", f.name, f.id)
+                            }
+                        })
+                        .collect();
+                    if !saved.is_empty() && !names.contains(&saved) {
+                        labels.push(format!("{} (not present)", saved));
+                        names.push(saved.clone());
+                    }
+                    if names.is_empty() {
+                        labels.push("(no fields)".to_string());
+                        names.push(saved.clone());
+                    }
+                    let idx = names.iter().position(|n| *n == saved).unwrap_or(0);
+                    let refs: Vec<&str> = labels.iter().map(|s| s.as_str()).collect();
+                    *ids.borrow_mut() = names;
+                    d.set_model(Some(&StringList::new(&refs)));
+                    d.set_selected(idx as u32);
+                }),
+            )
         }
         PropKind::Object { props } => {
             let (outer, body) = titled_block(prop, &[]);
@@ -1201,7 +1322,9 @@ fn build_list_row(
 ) -> Row {
     let key = prop.key;
     let add_btn = Button::with_label(add_label);
-    let (outer, items_box) = titled_block(prop, &[&add_btn]);
+    let paste_btn = Button::with_label("Paste");
+    paste_btn.set_tooltip_text(Some("Append the copied item"));
+    let (outer, items_box) = titled_block(prop, &[&add_btn, &paste_btn]);
     items_box.set_margin_start(0);
 
     type Rebuild = Rc<dyn Fn(&[Value])>;
@@ -1244,9 +1367,15 @@ fn build_list_row(
                 name.add_css_class("heading");
                 let up = Button::from_icon_name("go-up-symbolic");
                 let down = Button::from_icon_name("go-down-symbolic");
+                let duplicate = Button::from_icon_name("edit-copy-symbolic");
+                let copy = Button::with_label("Copy");
                 let remove = Button::with_label("Remove");
                 up.set_tooltip_text(Some("Move up"));
                 down.set_tooltip_text(Some("Move down"));
+                duplicate.set_tooltip_text(Some("Duplicate below"));
+                copy.set_tooltip_text(Some(
+                    "Copy this item; paste it into a list of the same kind",
+                ));
                 up.set_sensitive(i > 0);
                 down.set_sensitive(i + 1 < count);
                 remove.set_sensitive(count > min_items);
@@ -1254,6 +1383,8 @@ fn build_list_row(
                 head.append(&name);
                 head.append(&up);
                 head.append(&down);
+                head.append(&duplicate);
+                head.append(&copy);
                 head.append(&remove);
                 vbox.append(&head);
 
@@ -1304,6 +1435,22 @@ fn build_list_row(
                         items.swap(i, i + 1);
                     }
                 })));
+                duplicate.connect_clicked(restructure(Rc::new(move |items| {
+                    if i < items.len() {
+                        let copy = items[i].clone();
+                        items.insert(i + 1, copy);
+                    }
+                })));
+                {
+                    let model = model.clone();
+                    copy.connect_clicked(move |_| {
+                        if let Some(item) = list_items(&model, key).get(i) {
+                            if let Ok(mut cb) = CLIPBOARD.lock() {
+                                cb.copy_list_item(key.to_string(), item.clone());
+                            }
+                        }
+                    });
+                }
 
                 items_box.append(&frame);
             }
@@ -1319,6 +1466,28 @@ fn build_list_row(
         add_btn.connect_clicked(move |_| {
             let mut items = list_items(&model, key);
             items.push(new_item(items.len()));
+            model
+                .borrow_mut()
+                .insert(key.to_string(), Value::Array(items.clone()));
+            rebuild(&items);
+            fire();
+        });
+    }
+
+    {
+        let model = model.clone();
+        let fire = fire.clone();
+        let rebuild = rebuild.clone();
+        paste_btn.connect_clicked(move |_| {
+            // Items are only interchangeable within lists of the same key.
+            let pasted = CLIPBOARD
+                .lock()
+                .ok()
+                .and_then(|cb| cb.paste_list_item())
+                .filter(|(k, _)| k == key);
+            let Some((_, item)) = pasted else { return };
+            let mut items = list_items(&model, key);
+            items.push(item);
             model
                 .borrow_mut()
                 .insert(key.to_string(), Value::Array(items.clone()));
@@ -1440,9 +1609,19 @@ impl SchemaDisplayEditor {
         props: Vec<Prop>,
         fields: Vec<FieldMetadata>,
     ) -> Box<dyn DisplayEditor> {
+        // A single section (or none) needs no child nodes: show the rows on
+        // the Display page itself.
+        let mut sections: Vec<Option<&str>> = props.iter().map(|p| p.section).collect();
+        sections.sort_unstable();
+        sections.dedup();
+        let editor = if sections.len() > 1 {
+            SchemaEditor::sectioned(props, fields)
+        } else {
+            SchemaEditor::with_fields(props, fields)
+        };
         Box::new(Self {
             displayer_id: displayer_id.to_string(),
-            editor: SchemaEditor::sectioned(props, fields),
+            editor,
         })
     }
 }

@@ -31,6 +31,7 @@ use rg_sens_types::source_configs::gpu::GpuSourceConfig;
 use rg_sens_types::source_configs::static_text::StaticTextSourceConfig;
 use rg_sens_types::source_configs::system_temp::SystemTempConfig;
 use rg_sens_types::source_configs::{DiskSourceConfig, MemorySourceConfig, NetworkSourceConfig};
+use rg_sens_types::text::TextDisplayerConfig;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -222,31 +223,6 @@ source_editor!(TestEditor, TestSourceConfigWidget, Test, by_ref, |_w| {});
 // ============================================================================
 // Standalone display editor adapters
 // ============================================================================
-
-pub struct TextEditor(crate::ui::TextLineConfigWidget);
-impl DisplayEditor for TextEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::Text(c) = config {
-            self.0.set_config(c.clone());
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::Text(self.0.get_config()))
-    }
-    fn set_on_change(&self, cb: ChangeCallback) -> bool {
-        self.0.set_on_change(move || cb());
-        true
-    }
-    fn set_theme(&self, theme: &ComboThemeConfig) {
-        self.0.set_theme(theme.clone());
-    }
-    fn cleanup(&self) {
-        self.0.cleanup();
-    }
-}
 
 pub struct SpeedometerEditor(crate::ui::SpeedometerConfigWidget);
 impl DisplayEditor for SpeedometerEditor {
@@ -691,7 +667,7 @@ pub fn register_all_editors() {
     register_source_editor("test", TestEditor::create);
 
     register_display_editor("text", |fields| {
-        Box::new(TextEditor(crate::ui::TextLineConfigWidget::new(fields)))
+        SchemaDisplayEditor::create("text", TextDisplayerConfig::props(), fields)
     });
     // Schema-driven displayers: sections become child nodes of Display.
     register_display_editor("bar", |fields| {

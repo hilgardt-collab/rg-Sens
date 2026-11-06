@@ -317,7 +317,10 @@ impl crate::schema::Schema for ArcDisplayConfig {
             Prop::new(
                 "color_stops",
                 "Colour stops",
-                PropKind::ColorStops { linear: false },
+                PropKind::ColorStops {
+                    linear: false,
+                    themed: true,
+                },
             )
             .section("Colours")
             .help("Colours along the arc from start to end"),
@@ -357,8 +360,8 @@ impl crate::schema::Schema for ArcDisplayConfig {
             Prop::new(
                 "text_overlay",
                 "Text overlay",
-                PropKind::Custom {
-                    editor: "text_overlay",
+                PropKind::Object {
+                    props: <crate::text::TextOverlayConfig as crate::schema::Schema>::props(),
                 },
             )
             .section("Text overlay"),
