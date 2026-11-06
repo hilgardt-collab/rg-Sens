@@ -1303,3 +1303,35 @@ Next: the other nine frames (same recipe; LCARS adds a segments list with
 need field editors like `synthwave_scheme`), then delete
 `combo_config_base.rs` and the theme-row helpers with the last widget, then
 the clocks and css_template.
+
+## 19. Phase 4b as shipped (2026-11-06)
+
+All ten themed combo frames are schema-driven; the hand-written display
+widgets left are the two clocks and css_template.
+
+* Nine more `Schema` impls (`crates/types/src/display_configs/*.rs`), each
+  with a fit test and a JSON round trip. Common shape: Frame / Background /
+  Header / Layout / Animation sections, `group_item_orientations` as an
+  `EnumList` over `group_count` defaulting to the layout orientation, header
+  fonts as `Font` (`PlainFont` for Industrial, whose header font is a plain
+  family + size). LCARS: `segments` is a `List` with `count_key:
+  "segment_count"`, `top_header`/`bottom_header` and `divider_config` are
+  nested objects, `layout_orientation` is its orientation key.
+* Field editors: `hud_color` and `phosphor_color` share
+  `tagged_color_editor` (unit presets plus `{"custom": Color}`).
+* Deleted: the nine widgets, `src/ui/combo_config_base.rs` (the typed item
+  page, layout/theme/animation page helpers), and `ConfigWidgetBuilder` with
+  its two extension traits in `widget_builder.rs` (only the themed widgets
+  used them). `editor_registry.rs` lost the `combo_editor!` macro and
+  `detach_notebook_pages`; `take_pages` is now always empty and the tree
+  reads `sections()` for every displayer.
+* Not reproduced: LCARS's "sync segments to groups" checkbox sensitivity
+  (it was enabled only when the counts matched; the renderer still applies
+  the rule itself), Material's unexposed `group_accent_colors` /
+  `group_headers` (the widget never edited them either), the per-widget
+  preview canvases.
+
+Next: `clock_analog` and `clock_digital` (polled today; `AnalogClockConfig`
+has 24 `ColorSource`s) and `css_template` (its placeholder mapping needs the
+slot summaries; probably stays a widget), then the `Section` node for
+displayer sub-sections can retire `DisplaySection`.
