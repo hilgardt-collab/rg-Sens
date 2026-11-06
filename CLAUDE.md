@@ -313,7 +313,7 @@ impl DataSource for MySource {
 ```
 
 2. Register in `src/sources/mod.rs`
-3. Add config widget in `src/ui/` if needed (e.g., `src/ui/my_source_config_widget.rs`)
+3. Implement `rg_sens_types::schema::Schema` for the config and register `SchemaSourceEditor::create("my_id", MyConfig::props())` in `src/ui/editor_registry.rs` (see gotcha 15); a hand-written widget is only needed for what no schema kind or field editor can express
 
 ### Widget Callbacks with State
 
