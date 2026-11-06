@@ -442,3 +442,302 @@ impl ComboFrameConfig for ArtDecoFrameConfig {
         &mut self.group_item_counts
     }
 }
+
+impl crate::schema::Schema for ArtDecoFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        #[allow(unused_imports)]
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "border_style",
+                "Border style",
+                PropKind::Enum {
+                    options: vec![
+                        ("sunburst", "Sunburst"),
+                        ("chevron", "Chevron"),
+                        ("stepped", "Stepped"),
+                        ("geometric", "Geometric"),
+                        ("ornate", "Ornate"),
+                    ],
+                },
+            )
+            .section("Border"),
+            Prop::new(
+                "border_width",
+                "Border width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Border"),
+            Prop::new("border_color", "Border colour", PropKind::Color).section("Border"),
+            Prop::new("accent_color", "Accent colour", PropKind::Color).section("Border"),
+            Prop::new(
+                "accent_width",
+                "Accent width (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Border"),
+            Prop::new(
+                "corner_style",
+                "Corner style",
+                PropKind::Enum {
+                    options: vec![
+                        ("fan", "Fan"),
+                        ("ziggurat", "Ziggurat"),
+                        ("diamond", "Diamond"),
+                        ("bracket", "Bracket"),
+                        ("hexagon", "Hexagon"),
+                        ("octagon", "Octagon"),
+                        ("circle", "Circle"),
+                        ("double_bracket", "Double bracket"),
+                        ("geometric_stack", "Geometric stack"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Corners"),
+            Prop::new(
+                "corner_size",
+                "Corner size (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Corners"),
+            Prop::new("background_color", "Background colour", PropKind::Color)
+                .section("Background"),
+            Prop::new(
+                "background_pattern",
+                "Pattern",
+                PropKind::Enum {
+                    options: vec![
+                        ("solid", "Solid"),
+                        ("vertical_lines", "Vertical lines"),
+                        ("diamond_grid", "Diamond grid"),
+                        ("sunburst", "Sunburst"),
+                        ("chevrons", "Chevrons"),
+                        ("lattice", "Lattice"),
+                    ],
+                },
+            )
+            .section("Background"),
+            Prop::new("pattern_color", "Pattern colour", PropKind::Color)
+                .section("Background")
+                .visible_when(Condition::Equals {
+                    key: "background_pattern",
+                    values: vec![
+                        "vertical_lines",
+                        "diamond_grid",
+                        "sunburst",
+                        "chevrons",
+                        "lattice",
+                    ],
+                }),
+            Prop::new(
+                "pattern_spacing",
+                "Pattern spacing (px)",
+                PropKind::Float {
+                    min: 2.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Background")
+            .visible_when(Condition::Equals {
+                key: "background_pattern",
+                values: vec![
+                    "vertical_lines",
+                    "diamond_grid",
+                    "sunburst",
+                    "chevrons",
+                    "lattice",
+                ],
+            }),
+            Prop::new(
+                "sunburst_rays",
+                "Sunburst rays",
+                PropKind::Int {
+                    min: 4,
+                    max: 64,
+                    step: 1,
+                },
+            )
+            .section("Background")
+            .visible_when(Condition::Equals {
+                key: "background_pattern",
+                values: vec!["sunburst"],
+            }),
+            Prop::new("show_header", "Show header", PropKind::Bool).section("Header"),
+            Prop::new(
+                "header_text",
+                "Header text",
+                PropKind::Text {
+                    placeholder: "Panel title",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_style",
+                "Header style",
+                PropKind::Enum {
+                    options: vec![
+                        ("centered", "Centered"),
+                        ("banner", "Banner"),
+                        ("stepped", "Stepped"),
+                        ("sunburst", "Sunburst"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_font",
+                "Header font",
+                PropKind::Font { legacy: None },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new("header_color", "Header colour", PropKind::Color)
+                .section("Header")
+                .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "split_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("split_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "content_padding",
+                "Content padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_frame",
+                "Group frames",
+                PropKind::Enum {
+                    options: vec![("none", "None"), ("panel", "Panel"), ("stepped", "Stepped")],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_style",
+                "Divider",
+                PropKind::Enum {
+                    options: vec![
+                        ("chevron", "Chevron"),
+                        ("double_line", "Double line"),
+                        ("line", "Line"),
+                        ("stepped", "Stepped"),
+                        ("diamond_cluster", "Diamond cluster"),
+                        ("crescent", "Crescent"),
+                        ("arrow_diamond", "Arrow diamond"),
+                        ("circle_chain", "Circle chain"),
+                        ("crossed_lines", "Crossed lines"),
+                        ("fleur_de_lis", "Fleur-de-lis"),
+                        ("heartbeat", "Heartbeat"),
+                        ("diamond_grid", "Diamond grid"),
+                        ("zigzag", "Zigzag"),
+                        ("fan", "Fan"),
+                        ("pyramid", "Pyramid"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new("divider_color", "Divider colour", PropKind::Color).section("Layout"),
+            Prop::new(
+                "divider_width",
+                "Divider width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_padding",
+                "Divider padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<ArtDecoFrameConfig>(&ArtDecoFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(ArtDecoFrameConfig::default()).unwrap();
+        let back: ArtDecoFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+}

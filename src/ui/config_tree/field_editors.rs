@@ -33,6 +33,28 @@ pub fn register_field_editors() {
     register_field_editor("background", background_editor);
     register_field_editor("indicator_shape", indicator_shape_editor);
     register_field_editor("synthwave_scheme", synthwave_scheme_editor);
+    register_field_editor("hud_color", |ctx| {
+        tagged_color_editor(
+            ctx,
+            &[
+                ("military_green", "Military green"),
+                ("amber", "Amber"),
+                ("cyan", "Cyan"),
+                ("white", "White"),
+            ],
+        )
+    });
+    register_field_editor("phosphor_color", |ctx| {
+        tagged_color_editor(
+            ctx,
+            &[
+                ("green", "Green"),
+                ("amber", "Amber"),
+                ("white", "White"),
+                ("blue", "Blue"),
+            ],
+        )
+    });
 }
 
 /// A button showing the zone name; clicking opens the timezone dialog.
@@ -505,4 +527,85 @@ fn synthwave_scheme_editor(ctx: FieldContext) -> FieldEditor {
         })
     };
     FieldEditor::new(outer, refresh)
+}
+
+/// An externally tagged enum of unit presets plus `Custom(Color)`
+/// (`"amber"` or `{"custom": {r, g, b, a}}`): a dropdown and one colour
+/// button shown for Custom. `HudColorPreset` and `PhosphorColor`.
+fn tagged_color_editor(
+    ctx: FieldContext,
+    presets: &'static [(&'static str, &'static str)],
+) -> FieldEditor {
+    let key = ctx.prop.key;
+    let custom_index = presets.len() as u32;
+    let labels: Vec<&str> = presets
+        .iter()
+        .map(|(_, l)| *l)
+        .chain(std::iter::once("Custom"))
+        .collect();
+    let inner = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    let dropdown = DropDown::new(Some(StringList::new(&labels)), None::<gtk4::Expression>);
+    dropdown.set_hexpand(true);
+    let button = Rc::new(ColorButtonWidget::new(Color::new(1.0, 1.0, 1.0, 1.0)));
+    button.widget().set_visible(false);
+    inner.append(&dropdown);
+    inner.append(button.widget());
+    let refreshing = Rc::new(Cell::new(false));
+    {
+        let ctx = ctx.clone();
+        let button = button.clone();
+        let refreshing = refreshing.clone();
+        dropdown.connect_selected_notify(move |d| {
+            let sel = d.selected();
+            button.widget().set_visible(sel == custom_index);
+            if refreshing.get() {
+                return;
+            }
+            let value = match presets.get(sel as usize) {
+                Some((tag, _)) => json!(tag),
+                None => json!({ "custom": button.color() }),
+            };
+            ctx.set(vec![(key, value)]);
+        });
+    }
+    {
+        let dropdown = dropdown.clone();
+        let refreshing = refreshing.clone();
+        button.set_on_change(move |c| {
+            if refreshing.get() || dropdown.selected() != custom_index {
+                return;
+            }
+            ctx.set(vec![(key, json!({ "custom": c }))]);
+        });
+    }
+    let refresh: FieldRefresh = {
+        let dropdown = dropdown.clone();
+        Box::new(move |m: &Map<String, Value>| {
+            let value = m.get(key).cloned().unwrap_or(Value::Null);
+            let (index, custom) = match &value {
+                Value::String(tag) => (
+                    presets
+                        .iter()
+                        .position(|(t, _)| t == tag)
+                        .map(|i| i as u32)
+                        .unwrap_or(0),
+                    None,
+                ),
+                other => (
+                    custom_index,
+                    other
+                        .get("custom")
+                        .and_then(|c| serde_json::from_value::<Color>(c.clone()).ok()),
+                ),
+            };
+            refreshing.set(true);
+            if let Some(c) = custom {
+                button.set_color(c);
+            }
+            dropdown.set_selected(index);
+            button.widget().set_visible(index == custom_index);
+            refreshing.set(false);
+        })
+    };
+    FieldEditor::new(inner, refresh)
 }

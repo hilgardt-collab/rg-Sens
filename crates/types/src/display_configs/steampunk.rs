@@ -15,7 +15,10 @@ use serde::{Deserialize, Serialize};
 use crate::color::Color;
 use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::ContentItemConfig;
-use crate::theme::{deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig, FontSource};
+use crate::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // Re-export types from lcars that this module uses
 pub use crate::display_configs::lcars::SplitOrientation;
@@ -404,5 +407,270 @@ impl ComboFrameConfig for SteampunkFrameConfig {
 
     fn group_item_counts_mut(&mut self) -> &mut Vec<usize> {
         &mut self.group_item_counts
+    }
+}
+
+impl crate::schema::Schema for SteampunkFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        #[allow(unused_imports)]
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "border_style",
+                "Border style",
+                PropKind::Enum {
+                    options: vec![
+                        ("victorian", "Victorian"),
+                        ("pipe_frame", "Pipe frame"),
+                        ("riveted", "Riveted"),
+                        ("brass", "Brass"),
+                        ("gear_border", "Gear border"),
+                    ],
+                },
+            )
+            .section("Border"),
+            Prop::new(
+                "border_width",
+                "Border width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Border"),
+            Prop::new("border_color", "Border colour", PropKind::Color).section("Border"),
+            Prop::new("accent_color", "Accent colour", PropKind::Color).section("Border"),
+            Prop::new(
+                "gear_teeth",
+                "Gear teeth",
+                PropKind::Int {
+                    min: 4,
+                    max: 64,
+                    step: 1,
+                },
+            )
+            .section("Border"),
+            Prop::new(
+                "corner_style",
+                "Corner style",
+                PropKind::Enum {
+                    options: vec![
+                        ("gear", "Gear"),
+                        ("flourish", "Flourish"),
+                        ("rivet", "Rivet"),
+                        ("pipe_joint", "Pipe joint"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Corners"),
+            Prop::new(
+                "corner_size",
+                "Corner size (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Corners"),
+            Prop::new("background_color", "Background colour", PropKind::Color)
+                .section("Background"),
+            Prop::new(
+                "background_texture",
+                "Texture",
+                PropKind::Enum {
+                    options: vec![
+                        ("brushed_brass", "Brushed brass"),
+                        ("patina", "Patina"),
+                        ("leather", "Leather"),
+                        ("metal_plate", "Metal plate"),
+                        ("solid", "Solid"),
+                    ],
+                },
+            )
+            .section("Background"),
+            Prop::new("patina_color", "Patina colour", PropKind::Color).section("Background"),
+            Prop::new(
+                "patina_intensity",
+                "Patina intensity",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Background"),
+            Prop::new("show_rivets", "Rivets", PropKind::Bool).section("Rivets"),
+            Prop::new(
+                "rivet_size",
+                "Rivet size (px)",
+                PropKind::Float {
+                    min: 1.0,
+                    max: 40.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Rivets")
+            .visible_when(Condition::IsTrue { key: "show_rivets" }),
+            Prop::new(
+                "rivet_spacing",
+                "Rivet spacing (px)",
+                PropKind::Float {
+                    min: 5.0,
+                    max: 300.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Rivets")
+            .visible_when(Condition::IsTrue { key: "show_rivets" }),
+            Prop::new("rivet_color", "Rivet colour", PropKind::Color)
+                .section("Rivets")
+                .visible_when(Condition::IsTrue { key: "show_rivets" }),
+            Prop::new("show_header", "Show header", PropKind::Bool).section("Header"),
+            Prop::new(
+                "header_text",
+                "Header text",
+                PropKind::Text {
+                    placeholder: "Panel title",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_style",
+                "Header style",
+                PropKind::Enum {
+                    options: vec![
+                        ("nameplate", "Nameplate"),
+                        ("banner", "Banner"),
+                        ("industrial", "Industrial"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_font",
+                "Header font",
+                PropKind::Font { legacy: None },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new("header_color", "Header colour", PropKind::Color)
+                .section("Header")
+                .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "split_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("split_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "content_padding",
+                "Content padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_style",
+                "Divider",
+                PropKind::Enum {
+                    options: vec![
+                        ("pipe", "Pipe"),
+                        ("gear_chain", "Gear chain"),
+                        ("riveted_bar", "Riveted bar"),
+                        ("ornament", "Ornament"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new("divider_color", "Divider colour", PropKind::Color).section("Layout"),
+            Prop::new(
+                "divider_width",
+                "Divider width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_padding",
+                "Divider padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<SteampunkFrameConfig>(&SteampunkFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(SteampunkFrameConfig::default()).unwrap();
+        let back: SteampunkFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
     }
 }

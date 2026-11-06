@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::ContentItemConfig;
-use crate::theme::{deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig, FontSource};
+use crate::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // Re-export types from lcars that this module uses
 pub use crate::display_configs::lcars::SplitOrientation;
@@ -383,5 +386,267 @@ impl ComboFrameConfig for ArtNouveauFrameConfig {
 
     fn group_item_counts_mut(&mut self) -> &mut Vec<usize> {
         &mut self.group_item_counts
+    }
+}
+
+impl crate::schema::Schema for ArtNouveauFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        #[allow(unused_imports)]
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "border_style",
+                "Border style",
+                PropKind::Enum {
+                    options: vec![
+                        ("vine", "Vine"),
+                        ("whiplash", "Whiplash"),
+                        ("floral", "Floral"),
+                        ("organic", "Organic"),
+                        ("peacock", "Peacock"),
+                    ],
+                },
+            )
+            .section("Border"),
+            Prop::new(
+                "border_width",
+                "Border width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Border"),
+            Prop::new("border_color", "Border colour", PropKind::Color).section("Border"),
+            Prop::new("accent_color", "Accent colour", PropKind::Color).section("Border"),
+            Prop::new(
+                "accent_width",
+                "Accent width (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Border"),
+            Prop::new(
+                "corner_style",
+                "Corner style",
+                PropKind::Enum {
+                    options: vec![
+                        ("flourish", "Flourish"),
+                        ("leaf", "Leaf"),
+                        ("spiral", "Spiral"),
+                        ("bracket", "Bracket"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Corners"),
+            Prop::new(
+                "corner_size",
+                "Corner size (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Corners"),
+            Prop::new("background_color", "Background colour", PropKind::Color)
+                .section("Background"),
+            Prop::new(
+                "background_pattern",
+                "Pattern",
+                PropKind::Enum {
+                    options: vec![
+                        ("solid", "Solid"),
+                        ("vines", "Vines"),
+                        ("leaves", "Leaves"),
+                        ("waves", "Waves"),
+                        ("peacock", "Peacock"),
+                    ],
+                },
+            )
+            .section("Background"),
+            Prop::new("pattern_color", "Pattern colour", PropKind::Color)
+                .section("Background")
+                .visible_when(Condition::Equals {
+                    key: "background_pattern",
+                    values: vec!["vines", "leaves", "waves", "peacock"],
+                }),
+            Prop::new(
+                "pattern_spacing",
+                "Pattern spacing (px)",
+                PropKind::Float {
+                    min: 2.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Background")
+            .visible_when(Condition::Equals {
+                key: "background_pattern",
+                values: vec!["vines", "leaves", "waves", "peacock"],
+            }),
+            Prop::new(
+                "wave_frequency",
+                "Wave frequency",
+                PropKind::Float {
+                    min: 0.1,
+                    max: 10.0,
+                    step: 0.1,
+                    digits: 1,
+                },
+            )
+            .section("Background")
+            .visible_when(Condition::Equals {
+                key: "background_pattern",
+                values: vec!["waves"],
+            }),
+            Prop::new("show_header", "Show header", PropKind::Bool).section("Header"),
+            Prop::new(
+                "header_text",
+                "Header text",
+                PropKind::Text {
+                    placeholder: "Panel title",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_style",
+                "Header style",
+                PropKind::Enum {
+                    options: vec![
+                        ("banner", "Banner"),
+                        ("arch", "Arch"),
+                        ("flourish", "Flourish"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_font",
+                "Header font",
+                PropKind::Font { legacy: None },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new("header_color", "Header colour", PropKind::Color)
+                .section("Header")
+                .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "split_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("split_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "content_padding",
+                "Content padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_style",
+                "Divider",
+                PropKind::Enum {
+                    options: vec![
+                        ("vine", "Vine"),
+                        ("wave", "Wave"),
+                        ("tendril", "Tendril"),
+                        ("line", "Line"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new("divider_color", "Divider colour", PropKind::Color).section("Layout"),
+            Prop::new(
+                "divider_width",
+                "Divider width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_padding",
+                "Divider padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<ArtNouveauFrameConfig>(&ArtNouveauFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(ArtNouveauFrameConfig::default()).unwrap();
+        let back: ArtNouveauFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
     }
 }

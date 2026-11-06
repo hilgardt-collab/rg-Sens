@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use crate::color::Color;
 use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::{ContentItemConfig, SplitOrientation};
-use crate::theme::{ComboThemeConfig, FontSource, deserialize_font_or_source};
+use crate::theme::{deserialize_font_or_source, ComboThemeConfig, FontSource};
 
 /// Phosphor color presets (classic CRT colors)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -409,5 +409,277 @@ impl ComboFrameConfig for RetroTerminalFrameConfig {
 
     fn group_item_counts_mut(&mut self) -> &mut Vec<usize> {
         &mut self.group_item_counts
+    }
+}
+
+impl crate::schema::Schema for RetroTerminalFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        #[allow(unused_imports)]
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "phosphor_color",
+                "Phosphor",
+                PropKind::Custom {
+                    editor: "phosphor_color",
+                },
+            )
+            .section("Screen"),
+            Prop::new("background_color", "Background colour", PropKind::Rgba).section("Screen"),
+            Prop::new(
+                "text_brightness",
+                "Text brightness",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 2.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Screen"),
+            Prop::new(
+                "scanline_intensity",
+                "Scanline intensity",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Effects"),
+            Prop::new(
+                "scanline_spacing",
+                "Scanline spacing (px)",
+                PropKind::Float {
+                    min: 1.0,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Effects"),
+            Prop::new(
+                "curvature_amount",
+                "Screen curvature",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Effects"),
+            Prop::new(
+                "vignette_intensity",
+                "Vignette",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Effects"),
+            Prop::new(
+                "screen_glow",
+                "Screen glow",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Effects"),
+            Prop::new("flicker_enabled", "Flicker", PropKind::Bool).section("Effects"),
+            Prop::new("cursor_blink", "Blinking cursor", PropKind::Bool).section("Effects"),
+            Prop::new("typewriter_effect", "Typewriter effect", PropKind::Bool).section("Effects"),
+            Prop::new(
+                "bezel_style",
+                "Bezel style",
+                PropKind::Enum {
+                    options: vec![
+                        ("classic", "Classic"),
+                        ("slim", "Slim"),
+                        ("industrial", "Industrial"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Bezel"),
+            Prop::new("bezel_color", "Bezel colour", PropKind::Rgba).section("Bezel"),
+            Prop::new(
+                "bezel_width",
+                "Bezel width (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Bezel"),
+            Prop::new("show_power_led", "Power LED", PropKind::Bool).section("Bezel"),
+            Prop::new("power_led_color", "LED colour", PropKind::Rgba)
+                .section("Bezel")
+                .visible_when(Condition::IsTrue {
+                    key: "show_power_led",
+                }),
+            Prop::new("show_header", "Show header", PropKind::Bool).section("Header"),
+            Prop::new(
+                "header_text",
+                "Header text",
+                PropKind::Text {
+                    placeholder: "Panel title",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_style",
+                "Header style",
+                PropKind::Enum {
+                    options: vec![
+                        ("title_bar", "Title bar"),
+                        ("status_line", "Status line"),
+                        ("prompt", "Prompt"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_font",
+                "Header font",
+                PropKind::Font { legacy: None },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_height",
+                "Header height (px)",
+                PropKind::Float {
+                    min: 10.0,
+                    max: 120.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "split_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("split_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "content_padding",
+                "Content padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_style",
+                "Divider",
+                PropKind::Enum {
+                    options: vec![
+                        ("dashed", "Dashed"),
+                        ("solid", "Solid"),
+                        ("box_drawing", "Box drawing"),
+                        ("pipe", "Pipe"),
+                        ("ascii", "ASCII"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_padding",
+                "Divider padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<RetroTerminalFrameConfig>(&RetroTerminalFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(RetroTerminalFrameConfig::default()).unwrap();
+        let back: RetroTerminalFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+}
+
+#[cfg(test)]
+mod phosphor_editor_tests {
+    use super::*;
+
+    #[test]
+    fn every_value_the_editor_writes_deserializes() {
+        for v in [
+            serde_json::json!("green"),
+            serde_json::json!("amber"),
+            serde_json::json!("white"),
+            serde_json::json!("blue"),
+            serde_json::json!({ "custom": { "r": 0.5, "g": 0.5, "b": 0.5, "a": 1.0 } }),
+        ] {
+            serde_json::from_value::<PhosphorColor>(v).unwrap();
+        }
     }
 }

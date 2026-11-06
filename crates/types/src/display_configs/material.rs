@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use crate::color::Color;
 use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::{ContentItemConfig, SplitOrientation};
-use crate::theme::{deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig, FontSource};
+use crate::theme::{
+    deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
+    FontSource,
+};
 
 // ============================================================================
 // Enums
@@ -486,5 +489,248 @@ impl MaterialFrameConfig {
             .get(group_idx)
             .map(|s| s.as_str())
             .unwrap_or("")
+    }
+}
+
+impl crate::schema::Schema for MaterialFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        #[allow(unused_imports)]
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "theme_variant",
+                "Variant",
+                PropKind::Enum {
+                    options: vec![
+                        ("light", "Light"),
+                        ("dark", "Dark"),
+                        ("teal", "Teal"),
+                        ("purple", "Purple"),
+                    ],
+                },
+            )
+            .section("Card"),
+            Prop::new(
+                "elevation",
+                "Elevation",
+                PropKind::Enum {
+                    options: vec![
+                        ("flat", "Flat"),
+                        ("low", "Low"),
+                        ("medium", "Medium"),
+                        ("high", "High"),
+                    ],
+                },
+            )
+            .section("Card"),
+            Prop::new(
+                "corner_radius",
+                "Corner radius (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Card"),
+            Prop::new(
+                "card_padding",
+                "Card padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Card"),
+            Prop::new(
+                "shadow_blur",
+                "Shadow blur (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Card"),
+            Prop::new(
+                "shadow_offset_y",
+                "Shadow offset Y (px)",
+                PropKind::Float {
+                    min: -50.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Card"),
+            Prop::new("shadow_color", "Shadow colour", PropKind::Rgba).section("Card"),
+            Prop::new("accent_color", "Accent colour", PropKind::Color).section("Colours"),
+            Prop::new("surface_color_light", "Surface (light)", PropKind::Rgba).section("Colours"),
+            Prop::new("surface_color_dark", "Surface (dark)", PropKind::Rgba).section("Colours"),
+            Prop::new(
+                "background_color_light",
+                "Background (light)",
+                PropKind::Rgba,
+            )
+            .section("Colours"),
+            Prop::new("background_color_dark", "Background (dark)", PropKind::Rgba)
+                .section("Colours"),
+            Prop::new("text_color_light", "Text (light)", PropKind::Rgba).section("Colours"),
+            Prop::new("text_color_dark", "Text (dark)", PropKind::Rgba).section("Colours"),
+            Prop::new("show_header", "Show header", PropKind::Bool).section("Header"),
+            Prop::new(
+                "header_text",
+                "Header text",
+                PropKind::Text {
+                    placeholder: "Panel title",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_style",
+                "Header style",
+                PropKind::Enum {
+                    options: vec![
+                        ("color_bar", "Colour bar"),
+                        ("filled", "Filled"),
+                        ("text_only", "Text only"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_font",
+                "Header font",
+                PropKind::Font { legacy: None },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_height",
+                "Header height (px)",
+                PropKind::Float {
+                    min: 10.0,
+                    max: 120.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_alignment",
+                "Header alignment",
+                PropKind::Enum {
+                    options: vec![("left", "Left"), ("center", "Center"), ("right", "Right")],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "split_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("split_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "content_padding",
+                "Content padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "item_spacing",
+                "Item spacing (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_style",
+                "Divider",
+                PropKind::Enum {
+                    options: vec![("space", "Space"), ("line", "Line"), ("fade", "Fade")],
+                },
+            )
+            .section("Layout"),
+            Prop::new("divider_color", "Divider colour", PropKind::Color).section("Layout"),
+            Prop::new(
+                "divider_spacing",
+                "Divider spacing (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<MaterialFrameConfig>(&MaterialFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(MaterialFrameConfig::default()).unwrap();
+        let back: MaterialFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
     }
 }

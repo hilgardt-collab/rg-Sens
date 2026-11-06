@@ -1020,3 +1020,424 @@ mod static_schema_tests {
         check_props_fit::<StaticDisplayConfig>(&StaticDisplayConfig::props()).unwrap();
     }
 }
+
+fn lcars_header_props() -> Vec<crate::schema::Prop> {
+    use crate::schema::{Condition, Prop, PropKind};
+    let shown = Condition::Equals {
+        key: "position",
+        values: vec!["top", "bottom"],
+    };
+    vec![
+        Prop::new(
+            "position",
+            "Position",
+            PropKind::Enum {
+                options: vec![("top", "Top"), ("bottom", "Bottom"), ("none", "None")],
+            },
+        ),
+        Prop::new(
+            "text",
+            "Text",
+            PropKind::Text {
+                placeholder: "Header text",
+            },
+        )
+        .visible_when(shown.clone()),
+        Prop::new("font", "Font", PropKind::Font { legacy: None }).visible_when(shown.clone()),
+        Prop::new("font_bold", "Bold", PropKind::Bool).visible_when(shown.clone()),
+        Prop::new("text_color", "Text colour", PropKind::Color).visible_when(shown.clone()),
+        Prop::new("bg_color", "Background colour", PropKind::Color).visible_when(shown.clone()),
+        Prop::new(
+            "shape",
+            "Shape",
+            PropKind::Enum {
+                options: vec![("pill", "Pill"), ("square", "Square")],
+            },
+        )
+        .visible_when(shown.clone()),
+        Prop::new(
+            "align",
+            "Alignment",
+            PropKind::Enum {
+                options: vec![("left", "Left"), ("center", "Center"), ("right", "Right")],
+            },
+        )
+        .visible_when(shown.clone()),
+        Prop::new(
+            "width_mode",
+            "Width",
+            PropKind::Enum {
+                options: vec![("full", "Full"), ("fit", "Fit text")],
+            },
+        )
+        .visible_when(shown.clone()),
+        Prop::new(
+            "padding",
+            "Padding (px)",
+            PropKind::Float {
+                min: 0.0,
+                max: 100.0,
+                step: 1.0,
+                digits: 0,
+            },
+        )
+        .visible_when(shown.clone()),
+        Prop::new(
+            "height_percent",
+            "Height (fraction of bar)",
+            PropKind::Float {
+                min: 0.1,
+                max: 1.0,
+                step: 0.05,
+                digits: 2,
+            },
+        )
+        .visible_when(shown.clone()),
+        Prop::new(
+            "width_percent",
+            "Width (fraction of bar)",
+            PropKind::Float {
+                min: 0.1,
+                max: 1.0,
+                step: 0.05,
+                digits: 2,
+            },
+        )
+        .visible_when(shown),
+    ]
+}
+
+fn new_segment(_n: usize) -> serde_json::Value {
+    serde_json::to_value(SegmentConfig::default()).expect("segment serializes")
+}
+
+impl crate::schema::Schema for LcarsFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        #[allow(unused_imports)]
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "sidebar_width",
+                "Sidebar width (px)",
+                PropKind::Float {
+                    min: 20.0,
+                    max: 400.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Sidebar"),
+            Prop::new(
+                "sidebar_position",
+                "Sidebar side",
+                PropKind::Enum {
+                    options: vec![("left", "Left"), ("right", "Right")],
+                },
+            )
+            .section("Sidebar"),
+            Prop::new(
+                "extension_mode",
+                "Bar extensions",
+                PropKind::Enum {
+                    options: vec![
+                        ("top", "Top"),
+                        ("bottom", "Bottom"),
+                        ("both", "Both"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Sidebar"),
+            Prop::new(
+                "top_bar_height",
+                "Top bar height (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Sidebar")
+            .visible_when(Condition::Equals {
+                key: "extension_mode",
+                values: vec!["top", "both"],
+            }),
+            Prop::new(
+                "bottom_bar_height",
+                "Bottom bar height (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Sidebar")
+            .visible_when(Condition::Equals {
+                key: "extension_mode",
+                values: vec!["bottom", "both"],
+            }),
+            Prop::new(
+                "extension_corner_style",
+                "Extension corners",
+                PropKind::Enum {
+                    options: vec![("square", "Square"), ("round", "Round")],
+                },
+            )
+            .section("Sidebar"),
+            Prop::new(
+                "corner_radius",
+                "Corner radius (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Frame"),
+            Prop::new("frame_color", "Frame colour", PropKind::Rgba).section("Frame"),
+            Prop::new("content_bg_color", "Content background", PropKind::Rgba).section("Frame"),
+            Prop::new(
+                "content_padding",
+                "Content padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Frame"),
+            Prop::new(
+                "content_padding_top",
+                "Extra padding top (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Frame"),
+            Prop::new(
+                "content_padding_bottom",
+                "Extra padding bottom (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Frame"),
+            Prop::new(
+                "content_padding_left",
+                "Extra padding left (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Frame"),
+            Prop::new(
+                "content_padding_right",
+                "Extra padding right (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Frame"),
+            Prop::new(
+                "sync_segments_to_groups",
+                "Size segments like the groups",
+                PropKind::Bool,
+            )
+            .section("Segments")
+            .help("Uses the group weights when the segment count equals the group count"),
+            Prop::new(
+                "segments",
+                "Sidebar segments",
+                PropKind::List {
+                    item: vec![
+                        Prop::new(
+                            "height_weight",
+                            "Height weight",
+                            PropKind::Float {
+                                min: 0.1,
+                                max: 10.0,
+                                step: 0.1,
+                                digits: 1,
+                            },
+                        ),
+                        Prop::new("color", "Colour", PropKind::Color),
+                        Prop::new(
+                            "label",
+                            "Label",
+                            PropKind::Text {
+                                placeholder: "Segment label",
+                            },
+                        ),
+                        Prop::new("font", "Label font", PropKind::Font { legacy: None }),
+                        Prop::new("label_color", "Label colour", PropKind::Color),
+                    ],
+                    new_item: new_segment,
+                    min_items: 0,
+                    item_label: "Segment",
+                    add_label: "Add segment",
+                    item_summary: Some(|v| {
+                        v.get("label")
+                            .and_then(|l| l.as_str())
+                            .unwrap_or("")
+                            .to_string()
+                    }),
+                    count_key: Some("segment_count"),
+                },
+            )
+            .section("Segments"),
+            Prop::new(
+                "top_header",
+                "Top header",
+                PropKind::Object {
+                    props: lcars_header_props(),
+                },
+            )
+            .section("Headers"),
+            Prop::new(
+                "bottom_header",
+                "Bottom header",
+                PropKind::Object {
+                    props: lcars_header_props(),
+                },
+            )
+            .section("Headers"),
+            Prop::new(
+                "divider_config",
+                "Dividers",
+                PropKind::Object {
+                    props: vec![
+                        Prop::new(
+                            "width",
+                            "Width (px)",
+                            PropKind::Float {
+                                min: 0.0,
+                                max: 50.0,
+                                step: 1.0,
+                                digits: 0,
+                            },
+                        ),
+                        Prop::new("color", "Colour", PropKind::Color),
+                        Prop::new(
+                            "cap_start",
+                            "Start cap",
+                            PropKind::Enum {
+                                options: vec![("square", "Square"), ("round", "Round")],
+                            },
+                        ),
+                        Prop::new(
+                            "cap_end",
+                            "End cap",
+                            PropKind::Enum {
+                                options: vec![("square", "Square"), ("round", "Round")],
+                            },
+                        ),
+                        Prop::new(
+                            "spacing_before",
+                            "Spacing before (px)",
+                            PropKind::Float {
+                                min: 0.0,
+                                max: 50.0,
+                                step: 1.0,
+                                digits: 0,
+                            },
+                        ),
+                        Prop::new(
+                            "spacing_after",
+                            "Spacing after (px)",
+                            PropKind::Float {
+                                min: 0.0,
+                                max: 50.0,
+                                step: 1.0,
+                                digits: 0,
+                            },
+                        ),
+                    ],
+                },
+            )
+            .section("Dividers"),
+            Prop::new(
+                "layout_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("layout_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "item_spacing",
+                "Item spacing (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod frame_schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<LcarsFrameConfig>(&LcarsFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(LcarsFrameConfig::default()).unwrap();
+        let back: LcarsFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+}

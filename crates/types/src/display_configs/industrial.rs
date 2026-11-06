@@ -366,3 +366,316 @@ impl IndustrialFrameConfig {
         }
     }
 }
+
+impl crate::schema::Schema for IndustrialFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        #[allow(unused_imports)]
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "surface_texture",
+                "Surface texture",
+                PropKind::Enum {
+                    options: vec![
+                        ("brushed_metal", "Brushed metal"),
+                        ("carbon_fiber", "Carbon fibre"),
+                        ("diamond_plate", "Diamond plate"),
+                        ("solid", "Solid"),
+                    ],
+                },
+            )
+            .section("Surface"),
+            Prop::new("surface_color", "Surface colour", PropKind::Rgba).section("Surface"),
+            Prop::new("surface_color_dark", "Surface shade", PropKind::Rgba).section("Surface"),
+            Prop::new("highlight_color", "Highlight colour", PropKind::Rgba).section("Surface"),
+            Prop::new("show_border", "Show border", PropKind::Bool).section("Border"),
+            Prop::new(
+                "border_width",
+                "Border width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Border")
+            .visible_when(Condition::IsTrue { key: "show_border" }),
+            Prop::new("border_color", "Border colour", PropKind::Rgba)
+                .section("Border")
+                .visible_when(Condition::IsTrue { key: "show_border" }),
+            Prop::new(
+                "corner_radius",
+                "Corner radius (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Border"),
+            Prop::new("show_beveled_edge", "Bevelled edge", PropKind::Bool).section("Border"),
+            Prop::new(
+                "bevel_width",
+                "Bevel width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Border")
+            .visible_when(Condition::IsTrue {
+                key: "show_beveled_edge",
+            }),
+            Prop::new(
+                "rivet_style",
+                "Rivet style",
+                PropKind::Enum {
+                    options: vec![
+                        ("hex", "Hex"),
+                        ("phillips", "Phillips"),
+                        ("flat", "Flat"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Rivets"),
+            Prop::new(
+                "rivet_size",
+                "Rivet size (px)",
+                PropKind::Float {
+                    min: 1.0,
+                    max: 40.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Rivets"),
+            Prop::new("rivet_color", "Rivet colour", PropKind::Rgba).section("Rivets"),
+            Prop::new(
+                "rivet_spacing",
+                "Rivet spacing (px)",
+                PropKind::Float {
+                    min: 5.0,
+                    max: 300.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Rivets"),
+            Prop::new("show_corner_rivets", "Corner rivets", PropKind::Bool).section("Rivets"),
+            Prop::new("show_edge_rivets", "Edge rivets", PropKind::Bool).section("Rivets"),
+            Prop::new(
+                "warning_stripe_position",
+                "Warning stripes",
+                PropKind::Enum {
+                    options: vec![
+                        ("none", "None"),
+                        ("top", "Top"),
+                        ("bottom", "Bottom"),
+                        ("left", "Left"),
+                        ("right", "Right"),
+                        ("all", "All sides"),
+                    ],
+                },
+            )
+            .section("Warning stripes"),
+            Prop::new(
+                "warning_stripe_width",
+                "Stripe width (px)",
+                PropKind::Float {
+                    min: 1.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Warning stripes")
+            .visible_when(Condition::Equals {
+                key: "warning_stripe_position",
+                values: vec!["top", "bottom", "left", "right", "all"],
+            }),
+            Prop::new("warning_color_1", "Stripe colour 1", PropKind::Rgba)
+                .section("Warning stripes")
+                .visible_when(Condition::Equals {
+                    key: "warning_stripe_position",
+                    values: vec!["top", "bottom", "left", "right", "all"],
+                }),
+            Prop::new("warning_color_2", "Stripe colour 2", PropKind::Rgba)
+                .section("Warning stripes")
+                .visible_when(Condition::Equals {
+                    key: "warning_stripe_position",
+                    values: vec!["top", "bottom", "left", "right", "all"],
+                }),
+            Prop::new(
+                "warning_stripe_angle",
+                "Stripe angle (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 180.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+            .section("Warning stripes")
+            .visible_when(Condition::Equals {
+                key: "warning_stripe_position",
+                values: vec!["top", "bottom", "left", "right", "all"],
+            }),
+            Prop::new("show_header", "Show header", PropKind::Bool).section("Header"),
+            Prop::new(
+                "header_text",
+                "Header text",
+                PropKind::Text {
+                    placeholder: "Panel title",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_style",
+                "Header style",
+                PropKind::Enum {
+                    options: vec![
+                        ("plate", "Plate"),
+                        ("stencil", "Stencil"),
+                        ("label", "Label"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_height",
+                "Header height (px)",
+                PropKind::Float {
+                    min: 10.0,
+                    max: 120.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_font",
+                "Header font",
+                PropKind::PlainFont {
+                    size_key: "header_font_size",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new("header_color", "Header colour", PropKind::Rgba)
+                .section("Header")
+                .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "split_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("split_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "content_padding",
+                "Content padding (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "item_spacing",
+                "Item spacing (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_style",
+                "Divider",
+                PropKind::Enum {
+                    options: vec![
+                        ("groove", "Groove"),
+                        ("raised", "Raised"),
+                        ("warning", "Warning"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "divider_width",
+                "Divider width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Layout"),
+            Prop::new("divider_color", "Divider colour", PropKind::Rgba).section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<IndustrialFrameConfig>(&IndustrialFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(IndustrialFrameConfig::default()).unwrap();
+        let back: IndustrialFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+}

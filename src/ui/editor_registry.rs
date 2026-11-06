@@ -12,7 +12,6 @@
 //! `DisplayerConfig` enums.
 
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
-use crate::ui::combo_config_base::{self, TransferableComboConfig};
 use crate::ui::config_tree::field_editors::register_field_editors;
 use crate::ui::config_tree::schema_combo::SchemaComboEditor;
 use crate::ui::config_tree::schema_editor::{
@@ -20,12 +19,17 @@ use crate::ui::config_tree::schema_editor::{
 };
 use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
-use gtk4::{Box as GtkBox, Notebook, Widget};
-use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use gtk4::Widget;
+use rg_sens_types::combo::TransferableComboConfig;
 use rg_sens_types::display_configs::synthwave::SynthwaveFrameConfig;
 use rg_sens_types::display_configs::{
     ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig, GraphDisplayConfig, IndicatorConfig,
     SpeedometerConfig,
+};
+use rg_sens_types::display_configs::{
+    ArtDecoFrameConfig, ArtNouveauFrameConfig, CyberpunkFrameConfig, FighterHudFrameConfig,
+    IndustrialFrameConfig, LcarsFrameConfig, MaterialFrameConfig, RetroTerminalFrameConfig,
+    SteampunkFrameConfig,
 };
 use rg_sens_types::schema::Schema;
 use rg_sens_types::source_configs::claude::ClaudeSourceConfig;
@@ -309,201 +313,6 @@ impl DisplayEditor for CssTemplateEditor {
 // Themed combo display editor adapters
 // ============================================================================
 
-/// Detach every page of the first `Notebook` found among `container`'s
-/// children, returning `(tab label, page)` in tab order.
-fn detach_notebook_pages(container: &GtkBox) -> Vec<(String, Widget)> {
-    let mut pages = Vec::new();
-    let mut child = container.first_child();
-    while let Some(c) = child {
-        child = c.next_sibling();
-        let Ok(notebook) = c.downcast::<Notebook>() else {
-            continue;
-        };
-        let n = notebook.n_pages();
-        for i in 0..n {
-            if let Some(page) = notebook.nth_page(Some(i)) {
-                let label = notebook
-                    .tab_label_text(&page)
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| format!("Page {}", i + 1));
-                pages.push((label, page));
-            }
-        }
-        for (_, page) in &pages {
-            if let Some(idx) = notebook.page_num(page) {
-                notebook.remove_page(Some(idx));
-            }
-        }
-        break;
-    }
-    pages
-}
-
-macro_rules! combo_editor {
-    ($name:ident, $widget:ident, $variant:ident, $cfg:ty, set_by_ref) => {
-        combo_editor!(@impl $name, $widget, $variant, $cfg, |w: &crate::ui::$widget, c: &$cfg| w.set_config(c));
-    };
-    ($name:ident, $widget:ident, $variant:ident, $cfg:ty, set_by_value) => {
-        combo_editor!(@impl $name, $widget, $variant, $cfg, |w: &crate::ui::$widget, c: &$cfg| w.set_config(c.clone()));
-    };
-    (@impl $name:ident, $widget:ident, $variant:ident, $cfg:ty, $set:expr) => {
-        pub struct $name(crate::ui::$widget);
-        impl DisplayEditor for $name {
-            fn widget(&self) -> Widget {
-                self.0.widget().clone().upcast()
-            }
-            fn load(&self, config: &DisplayerConfig) {
-                if let DisplayerConfig::$variant(c) = config {
-                    let set: fn(&crate::ui::$widget, &$cfg) = $set;
-                    set(&self.0, c);
-                }
-            }
-            fn store(&self) -> Option<DisplayerConfig> {
-                Some(DisplayerConfig::$variant(self.0.get_config()))
-            }
-            fn set_on_change(&self, cb: ChangeCallback) -> bool {
-                self.0.set_on_change(move || cb());
-                true
-            }
-            fn set_theme(&self, theme: &ComboThemeConfig) {
-                self.0.set_theme(theme.clone());
-            }
-            fn cleanup(&self) {
-                self.0.cleanup();
-            }
-            fn combo(&self) -> Option<&dyn ComboDisplayEditor> {
-                Some(self)
-            }
-        }
-        impl ComboDisplayEditor for $name {
-            fn take_pages(&self) -> Vec<(String, Widget)> {
-                detach_notebook_pages(self.0.widget())
-            }
-            fn set_group_weights(&self, weights: &[f64]) {
-                let rc = self.0.get_config_rc();
-                *rc.borrow_mut().frame.group_size_weights_mut() = weights.to_vec();
-            }
-            fn transferable(&self) -> TransferableComboConfig {
-                self.0.get_transferable_config()
-            }
-            fn apply_transferable(&self, transfer: &TransferableComboConfig) {
-                self.0.apply_transferable_config(transfer);
-            }
-            fn reorder(&self, op: ComboReorder) {
-                let rc = self.0.get_config_rc();
-                let mut cfg = rc.borrow_mut();
-                match op {
-                    ComboReorder::Group { a, b } => cfg.frame.swap_groups(a, b),
-                    ComboReorder::Item { group, i, j } => cfg.frame.swap_items(group, i, j),
-                }
-            }
-            fn item_editor(
-                &self,
-                slot: &str,
-                fields: &[FieldMetadata],
-                on_change: ChangeCallback,
-                theme_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-                cleanup: &Rc<RefCell<Vec<Box<dyn Fn()>>>>,
-            ) -> Widget {
-                let rc = self.0.get_config_rc();
-                let on_change_cell: Rc<RefCell<Option<Box<dyn Fn()>>>> =
-                    Rc::new(RefCell::new(Some(Box::new(move || on_change()))));
-                // The item editors queue a redraw on a preview; the live panel
-                // is the preview here, so give them an unparented one.
-                let preview = gtk4::DrawingArea::new();
-                combo_config_base::create_content_item_config(
-                    &rc,
-                    &on_change_cell,
-                    &preview,
-                    slot,
-                    fields.to_vec(),
-                    |c: &$cfg| c.frame.content_items(),
-                    |c: &mut $cfg, s: &str, item| {
-                        c.frame.content_items_mut().insert(s.to_string(), item);
-                    },
-                    theme_refreshers,
-                    |c: &$cfg| c.frame.theme().clone(),
-                    cleanup,
-                )
-                .upcast()
-            }
-            fn refresh_theme_refs(&self) {
-                // set_theme on the widget already runs its refreshers.
-            }
-        }
-    };
-}
-
-use rg_sens_types::display_configs::themed_configs::{
-    ArtDecoDisplayConfig, ArtNouveauDisplayConfig, CyberpunkDisplayConfig, FighterHudDisplayConfig,
-    IndustrialDisplayConfig, LcarsDisplayConfig, MaterialDisplayConfig, RetroTerminalDisplayConfig,
-    SteampunkDisplayConfig,
-};
-
-combo_editor!(
-    LcarsEditor,
-    LcarsConfigWidget,
-    Lcars,
-    LcarsDisplayConfig,
-    set_by_value
-);
-combo_editor!(
-    CyberpunkEditor,
-    CyberpunkConfigWidget,
-    Cyberpunk,
-    CyberpunkDisplayConfig,
-    set_by_ref
-);
-combo_editor!(
-    MaterialEditor,
-    MaterialConfigWidget,
-    Material,
-    MaterialDisplayConfig,
-    set_by_ref
-);
-combo_editor!(
-    IndustrialEditor,
-    IndustrialConfigWidget,
-    Industrial,
-    IndustrialDisplayConfig,
-    set_by_ref
-);
-combo_editor!(
-    RetroTerminalEditor,
-    RetroTerminalConfigWidget,
-    RetroTerminal,
-    RetroTerminalDisplayConfig,
-    set_by_ref
-);
-combo_editor!(
-    FighterHudEditor,
-    FighterHudConfigWidget,
-    FighterHud,
-    FighterHudDisplayConfig,
-    set_by_value
-);
-combo_editor!(
-    ArtDecoEditor,
-    ArtDecoConfigWidget,
-    ArtDeco,
-    ArtDecoDisplayConfig,
-    set_by_ref
-);
-combo_editor!(
-    ArtNouveauEditor,
-    ArtNouveauConfigWidget,
-    ArtNouveau,
-    ArtNouveauDisplayConfig,
-    set_by_ref
-);
-combo_editor!(
-    SteampunkEditor,
-    SteampunkConfigWidget,
-    Steampunk,
-    SteampunkDisplayConfig,
-    set_by_ref
-);
-
 // ============================================================================
 // Registration
 // ============================================================================
@@ -624,37 +433,35 @@ pub fn register_all_editors() {
         Box::new(CssTemplateEditor(w))
     });
 
-    register_display_editor("lcars", |_| {
-        Box::new(LcarsEditor(crate::ui::LcarsConfigWidget::new()))
+    // Schema-driven combo frames: sections and item pages from the schema.
+    register_display_editor("lcars", |fields| {
+        SchemaComboEditor::create("lcars", LcarsFrameConfig::props(), fields)
     });
-    register_display_editor("cyberpunk", |_| {
-        Box::new(CyberpunkEditor(crate::ui::CyberpunkConfigWidget::new()))
+    register_display_editor("cyberpunk", |fields| {
+        SchemaComboEditor::create("cyberpunk", CyberpunkFrameConfig::props(), fields)
     });
-    register_display_editor("material", |_| {
-        Box::new(MaterialEditor(crate::ui::MaterialConfigWidget::new()))
+    register_display_editor("material", |fields| {
+        SchemaComboEditor::create("material", MaterialFrameConfig::props(), fields)
     });
-    register_display_editor("industrial", |_| {
-        Box::new(IndustrialEditor(crate::ui::IndustrialConfigWidget::new()))
+    register_display_editor("industrial", |fields| {
+        SchemaComboEditor::create("industrial", IndustrialFrameConfig::props(), fields)
     });
-    register_display_editor("retro_terminal", |_| {
-        Box::new(RetroTerminalEditor(
-            crate::ui::RetroTerminalConfigWidget::new(),
-        ))
+    register_display_editor("retro_terminal", |fields| {
+        SchemaComboEditor::create("retro_terminal", RetroTerminalFrameConfig::props(), fields)
     });
-    register_display_editor("fighter_hud", |_| {
-        Box::new(FighterHudEditor(crate::ui::FighterHudConfigWidget::new()))
+    register_display_editor("fighter_hud", |fields| {
+        SchemaComboEditor::create("fighter_hud", FighterHudFrameConfig::props(), fields)
     });
-    // Schema-driven combo frame: sections and item pages from the schema.
     register_display_editor("synthwave", |fields| {
         SchemaComboEditor::create("synthwave", SynthwaveFrameConfig::props(), fields)
     });
-    register_display_editor("art_deco", |_| {
-        Box::new(ArtDecoEditor(crate::ui::ArtDecoConfigWidget::new()))
+    register_display_editor("steampunk", |fields| {
+        SchemaComboEditor::create("steampunk", SteampunkFrameConfig::props(), fields)
     });
-    register_display_editor("art_nouveau", |_| {
-        Box::new(ArtNouveauEditor(crate::ui::ArtNouveauConfigWidget::new()))
+    register_display_editor("art_nouveau", |fields| {
+        SchemaComboEditor::create("art_nouveau", ArtNouveauFrameConfig::props(), fields)
     });
-    register_display_editor("steampunk", |_| {
-        Box::new(SteampunkEditor(crate::ui::SteampunkConfigWidget::new()))
+    register_display_editor("art_deco", |fields| {
+        SchemaComboEditor::create("art_deco", ArtDecoFrameConfig::props(), fields)
     });
 }

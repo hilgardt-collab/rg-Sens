@@ -41,27 +41,17 @@ mod shared_font_dialog;
 mod timezone_dialog;
 pub mod widget_builder;
 pub use shared_font_dialog::{init_shared_font_dialog, warm_font_cache};
-mod art_deco_config_widget;
-mod art_nouveau_config_widget;
 pub mod auto_scroll;
 mod color_button_widget;
-pub mod combo_config_base;
 pub mod config_helpers;
 pub mod config_tree;
 pub mod context_menu;
 #[cfg(feature = "webkit")]
 mod css_template_config_widget; // Config widget only when webkit is available
 pub mod css_template_display; // Config types always available for serialization
-mod cyberpunk_config_widget;
 pub mod editor_registry;
-mod fighter_hud_config_widget;
 mod global_theme_widget;
-mod industrial_config_widget;
-mod lcars_config_widget;
-mod material_config_widget;
 pub mod new_panel_dialog;
-mod retro_terminal_config_widget;
-mod steampunk_config_widget;
 mod test_source_config_widget;
 mod test_source_dialog;
 pub mod theme;
@@ -75,7 +65,6 @@ pub use arc_display::{
     render_arc, ArcCapStyle, ArcDisplayConfig, ArcTaperStyle, ColorApplicationMode,
     ColorTransitionStyle,
 };
-pub use art_deco_config_widget::ArtDecoConfigWidget;
 pub use art_deco_display::{
     calculate_group_layouts as art_deco_calculate_group_layouts,
     draw_group_dividers as art_deco_draw_group_dividers, render_art_deco_frame, ArtDecoFrameConfig,
@@ -83,7 +72,6 @@ pub use art_deco_display::{
     BorderStyle as ArtDecoBorderStyle, CornerStyle as ArtDecoCornerStyle,
     DividerStyle as ArtDecoDividerStyle, HeaderStyle as ArtDecoHeaderStyle,
 };
-pub use art_nouveau_config_widget::ArtNouveauConfigWidget;
 pub use art_nouveau_display::{
     calculate_group_layouts as art_nouveau_calculate_group_layouts,
     draw_group_dividers as art_nouveau_draw_group_dividers, render_art_nouveau_frame,
@@ -118,14 +106,12 @@ pub use rg_sens_types::source_configs::cpu::{
 #[cfg(feature = "webkit")]
 pub use css_template_config_widget::CssTemplateConfigWidget;
 pub use css_template_display::{CssTemplateDisplayConfig, PlaceholderMapping};
-pub use cyberpunk_config_widget::CyberpunkConfigWidget;
 pub use cyberpunk_display::{
     calculate_group_layouts, draw_group_dividers, render_cyberpunk_frame,
     CornerStyle as CyberpunkCornerStyle, CyberpunkFrameConfig, CyberpunkRenderer,
     DividerStyle as CyberpunkDividerStyle, HeaderStyle as CyberpunkHeaderStyle,
 };
 pub use editor_registry::ComboReorder;
-pub use fighter_hud_config_widget::FighterHudConfigWidget;
 pub use fighter_hud_display::{
     calculate_group_layouts as fighter_hud_calculate_group_layouts,
     draw_group_dividers as fighter_hud_draw_group_dividers, render_fighter_hud_frame,
@@ -141,7 +127,6 @@ pub use graph_display::{
     render_graph, AxisConfig, DataPoint, FillMode, GraphDisplayConfig, GraphType, LineStyle, Margin,
 };
 pub use grid_layout::{BorderlessDragCallback, GridConfig, GridLayout};
-pub use industrial_config_widget::IndustrialConfigWidget;
 pub use industrial_display::{
     calculate_group_layouts as industrial_calculate_group_layouts,
     draw_group_dividers as industrial_draw_group_dividers,
@@ -149,7 +134,6 @@ pub use industrial_display::{
     DividerStyle as IndustrialDividerStyle, HeaderStyle as IndustrialHeaderStyle,
     IndustrialFrameConfig, IndustrialRenderer, RivetStyle, SurfaceTexture, WarningStripePosition,
 };
-pub use lcars_config_widget::LcarsConfigWidget;
 pub use lcars_display::{
     calculate_item_layouts, calculate_item_layouts_with_orientation, get_content_bounds,
     render_content_background, render_content_bar, render_content_core_bars, render_content_text,
@@ -158,14 +142,12 @@ pub use lcars_display::{
     HeaderPosition, HeaderShape, HeaderWidthMode, LcarsFrameConfig, LcarsRenderer, SegmentConfig,
     SidebarPosition, SplitOrientation,
 };
-pub use material_config_widget::MaterialConfigWidget;
 pub use material_display::{
     calculate_group_layouts as material_calculate_group_layouts,
     draw_group_dividers as material_draw_group_dividers, render_material_frame, CardElevation,
     DividerStyle as MaterialDividerStyle, HeaderStyle as MaterialHeaderStyle, MaterialFrameConfig,
     MaterialRenderer, ThemeVariant,
 };
-pub use retro_terminal_config_widget::RetroTerminalConfigWidget;
 pub use retro_terminal_display::{
     calculate_group_layouts as retro_calculate_group_layouts,
     draw_group_dividers as retro_draw_group_dividers, render_retro_terminal_frame,
@@ -181,7 +163,6 @@ pub use speedometer_display::{
     render_speedometer, BezelStyle, NeedleStyle, NeedleTailStyle, SpeedometerConfig,
     TickLabelConfig, TickStyle, ValueZone,
 };
-pub use steampunk_config_widget::SteampunkConfigWidget;
 pub use steampunk_display::{
     calculate_group_layouts as steampunk_calculate_group_layouts,
     draw_group_dividers as steampunk_draw_group_dividers, render_steampunk_frame,

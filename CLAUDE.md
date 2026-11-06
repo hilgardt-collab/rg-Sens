@@ -454,4 +454,4 @@ RUST_LOG=debug cargo test
 cargo run --example art_deco_preview -- /tmp/deco [panel.json]
 ```
 
-It renders a saved panel (default `examples/Art Deco.json`) and one contact sheet per style enum through `GenericComboDisplayerShared::render_to_context`; look at the PNGs before and after touching the drawing code. New enum variants are appended, and the three match sites per enum in `src/ui/art_deco_config_widget.rs` (index from style, style from index, `refresh_all_widgets`) must be extended together.
+It renders a saved panel (default `examples/Art Deco.json`) and one contact sheet per style enum through `GenericComboDisplayerShared::render_to_context`; look at the PNGs before and after touching the drawing code. New enum variants are appended and listed in `ArtDecoFrameConfig::props()` (the schema is the only editor; `check_props_fit` verifies every listed option, so a variant left out of the list is simply not offered).
