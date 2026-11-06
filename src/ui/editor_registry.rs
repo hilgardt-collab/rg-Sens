@@ -51,6 +51,14 @@ pub enum ComboReorder {
 /// Change notification handed to an editor.
 pub type ChangeCallback = Rc<dyn Fn()>;
 
+/// One page of a display editor, addressed by path (see
+/// [`DisplayEditor::sections`]).
+#[derive(Clone)]
+pub struct EditorPage {
+    pub path: Vec<String>,
+    pub widget: Widget,
+}
+
 /// Editor for one source type's configuration.
 pub trait SourceEditor {
     fn widget(&self) -> Widget;
@@ -83,15 +91,24 @@ pub trait DisplayEditor {
     /// uses them for its placeholder mapping).
     fn set_source_summaries(&self, _summaries: Vec<(String, String, usize, u32)>) {}
     fn cleanup(&self) {}
-    /// Standalone editors may split into pages; the tree shows them as the
-    /// child nodes of Display (combos do the same through `take_pages`).
-    fn sections(&self) -> Vec<(String, Widget)> {
+    /// Standalone editors may split into pages; the tree shows them as
+    /// child nodes of Display (combos do the same through `take_pages`). A
+    /// one-element path is a section; a longer path (a list item) is filed
+    /// under its nearest ancestor page, or Display.
+    fn sections(&self) -> Vec<EditorPage> {
         Vec::new()
     }
-    /// Words the tree search box may match for one section.
-    fn section_search_terms(&self, _section: &str) -> Vec<String> {
+    /// Live title of a page (list item titles follow their content).
+    fn page_title(&self, path: &[String]) -> String {
+        path.last().cloned().unwrap_or_default()
+    }
+    /// Words the tree search box may match for one page.
+    fn page_search_terms(&self, _path: &[String]) -> Vec<String> {
         Vec::new()
     }
+    /// Called with the path to select (or `None` to keep the selection)
+    /// whenever `sections()` would now return a different set of pages.
+    fn set_on_sections_changed(&self, _cb: Rc<dyn Fn(Option<Vec<String>>)>) {}
     /// The combo-specific surface, for the ten themed displayers.
     fn combo(&self) -> Option<&dyn ComboDisplayEditor> {
         None

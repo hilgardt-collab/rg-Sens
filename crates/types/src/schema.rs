@@ -70,6 +70,9 @@ pub enum PropKind {
         /// Heading of each item, numbered from 1 ("Line" → "Line 1").
         item_label: &'static str,
         add_label: &'static str,
+        /// Optional short description of an item for its heading or tree
+        /// node ("Line 1 · value").
+        item_summary: Option<fn(&Value) -> String>,
     },
     /// An editor the UI registers under this name (timezone picker, sensor
     /// picker, …). It may read and write any keys of the flat config, not
@@ -588,6 +591,7 @@ mod tests {
                     min_items: 1,
                     item_label: "Item",
                     add_label: "Add",
+                    item_summary: None,
                 },
             ),
             Prop::note("a note"),

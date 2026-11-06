@@ -897,6 +897,12 @@ impl crate::schema::Schema for TextDisplayerConfig {
                 min_items: 0,
                 item_label: "Line",
                 add_label: "Add line",
+                item_summary: Some(|v| {
+                    v.get("field_id")
+                        .and_then(|f| f.as_str())
+                        .unwrap_or("")
+                        .to_string()
+                }),
             },
         )]
     }

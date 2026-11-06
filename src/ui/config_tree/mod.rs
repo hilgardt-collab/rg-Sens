@@ -11,9 +11,9 @@
 //! `editor_registry`; the grid applies the assembled `PanelData` through
 //! `GridLayout::apply_panel_data`.
 
+pub mod field_editors;
 mod node;
 mod pages;
-pub mod field_editors;
 pub mod schema_editor;
 mod state;
 mod util;
@@ -158,6 +158,7 @@ pub fn show_tree_properties_dialog(
         display_needs_poll: Cell::new(false),
         source_needs_poll: Cell::new(false),
         display_pages: RefCell::new(Vec::new()),
+        display_subpages: RefCell::new(Vec::new()),
         theme_page: RefCell::new(None),
         background_editor: RefCell::new(None),
         inline_theme_widget: RefCell::new(None),

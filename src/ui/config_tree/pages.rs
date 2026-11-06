@@ -105,7 +105,7 @@ impl State {
             NodeKind::ContentItem(slot) => self.build_item_page(slot).upcast(),
             NodeKind::Background => self.build_background_page().upcast(),
             NodeKind::Appearance => self.build_appearance_page().upcast(),
-            NodeKind::Section(_) => hint("Not available yet.").upcast(),
+            NodeKind::Section(path) => self.build_subpage(path).upcast(),
         };
         self.loading.set(false);
         let scroll = ScrolledWindow::new();
@@ -533,6 +533,24 @@ impl State {
             Some(w) => w,
             None => hint("Section not available.").upcast(),
         }
+    }
+
+    /// A detached list item of a schema display editor.
+    fn build_subpage(self: &Rc<Self>, path: &[String]) -> GtkBox {
+        let page = page_box();
+        let (title, _) = self.row_text(&NodeKind::Section(path.to_vec()));
+        page.append(&heading(&title));
+        let widget = self
+            .display_subpages
+            .borrow()
+            .iter()
+            .find(|p| p.path == path)
+            .map(|p| p.widget.clone());
+        match widget {
+            Some(w) => page.append(&w),
+            None => page.append(&hint("Item not available.")),
+        }
+        page
     }
 
     // ---- Content (combo) -----------------------------------------------------

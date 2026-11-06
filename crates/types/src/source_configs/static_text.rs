@@ -97,6 +97,12 @@ impl crate::schema::Schema for StaticTextSourceConfig {
                     min_items: 1,
                     item_label: "Line",
                     add_label: "Add line",
+                    item_summary: Some(|v| {
+                        v.get("label")
+                            .and_then(|l| l.as_str())
+                            .unwrap_or("")
+                            .to_string()
+                    }),
                 },
             )
             .help("The first line is the source's primary value"),

@@ -16,13 +16,13 @@
 
 use super::util::{flatten_source_config, source_config_from_flat};
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
-use crate::ui::editor_registry::{ChangeCallback, DisplayEditor, SourceEditor};
+use crate::ui::editor_registry::{ChangeCallback, DisplayEditor, EditorPage, SourceEditor};
 use crate::ui::theme::ComboThemeConfig;
 use crate::ui::{GradientEditor, ThemeColorSelector, ThemeFontSelector, CLIPBOARD};
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, SpinButton,
-    StringList, Widget,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, Separator,
+    SpinButton, StringList, Widget,
 };
 use rg_sens_types::color::ColorStop;
 use rg_sens_types::schema::{Condition, Prop, PropKind};
@@ -139,12 +139,41 @@ fn condition_holds(cond: &Condition, model: &Map<String, Value>) -> bool {
     }
 }
 
+/// One detached list item: its page, where it sits, and how it is titled.
+struct PageEntry {
+    path: Vec<String>,
+    widget: GtkBox,
+    title: Rc<dyn Fn() -> String>,
+    search_terms: Vec<String>,
+}
+
+/// Pages a display editor hands to the tree beyond its sections: list
+/// items, one node each. Lists detach their items when the registry exists.
+#[derive(Default)]
+struct PageRegistry {
+    entries: RefCell<Vec<PageEntry>>,
+    changed: RefCell<Option<Rc<dyn Fn(Option<Vec<String>>)>>>,
+}
+
+impl PageRegistry {
+    fn notify(&self, select: Option<Vec<String>>) {
+        let cb = self.changed.borrow().clone();
+        if let Some(cb) = cb {
+            cb(select);
+        }
+    }
+}
+
 /// Per-editor state every row shares.
 #[derive(Clone)]
 struct Ctx {
     loading: Rc<Cell<bool>>,
     theme: Rc<RefCell<ComboThemeConfig>>,
     fields: Rc<Vec<FieldMetadata>>,
+    /// The section this row lives in (`[]` on a single-page editor); list
+    /// item pages are filed beneath it.
+    path: Vec<String>,
+    pages: Option<Rc<PageRegistry>>,
 }
 
 struct Row {
@@ -182,27 +211,36 @@ pub struct SchemaEditor {
 impl SchemaEditor {
     /// One page, section headings inline.
     pub fn new(props: Vec<Prop>) -> Self {
-        Self::build(props, Vec::new(), false)
+        Self::build(props, Vec::new(), false, false)
     }
 
     /// One page with the slot's fields available to field editors.
     pub fn with_fields(props: Vec<Prop>, fields: Vec<FieldMetadata>) -> Self {
-        Self::build(props, fields, false)
+        Self::build(props, fields, false, false)
     }
 
-    /// One page per section (`pages()`); `widget()` stays empty.
-    pub fn sectioned(props: Vec<Prop>, fields: Vec<FieldMetadata>) -> Self {
-        Self::build(props, fields, true)
+    /// For the tree: one page per section when `sectioned` (`pages()`;
+    /// `widget()` stays empty), and list items detached into pages of their
+    /// own (`item_pages()`).
+    pub fn for_tree(props: Vec<Prop>, fields: Vec<FieldMetadata>, sectioned: bool) -> Self {
+        Self::build(props, fields, sectioned, true)
     }
 
-    fn build(props: Vec<Prop>, fields: Vec<FieldMetadata>, sectioned: bool) -> Self {
+    fn build(
+        props: Vec<Prop>,
+        fields: Vec<FieldMetadata>,
+        sectioned: bool,
+        detach_lists: bool,
+    ) -> Self {
         let container = GtkBox::new(Orientation::Vertical, 6);
         let model: Model = Rc::new(RefCell::new(Map::new()));
         let rows: Rc<RefCell<Vec<Row>>> = Rc::new(RefCell::new(Vec::new()));
-        let ctx = Ctx {
+        let mut ctx = Ctx {
             loading: Rc::new(Cell::new(false)),
             theme: Rc::new(RefCell::new(ComboThemeConfig::default())),
             fields: Rc::new(fields),
+            path: Vec::new(),
+            pages: detach_lists.then(|| Rc::new(PageRegistry::default())),
         };
         let on_change: Rc<RefCell<Option<ChangeCallback>>> = Rc::new(RefCell::new(None));
 
@@ -230,6 +268,7 @@ impl SchemaEditor {
         for prop in props {
             let target: GtkBox = if sectioned {
                 let name = prop.section.unwrap_or("General");
+                ctx.path = vec![name.to_string()];
                 match pages.iter().find(|(n, _)| n == name) {
                     Some((_, page)) => page.clone(),
                     None => {
@@ -274,6 +313,53 @@ impl SchemaEditor {
     /// The section pages of a `sectioned` editor.
     pub fn pages(&self) -> Vec<(String, GtkBox)> {
         self.pages.clone()
+    }
+
+    /// Detached list items as `(path, widget)`, in list order.
+    pub fn item_pages(&self) -> Vec<(Vec<String>, GtkBox)> {
+        self.ctx
+            .pages
+            .as_ref()
+            .map(|r| {
+                r.entries
+                    .borrow()
+                    .iter()
+                    .map(|e| (e.path.clone(), e.widget.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Live title of a detached item page.
+    pub fn item_page_title(&self, path: &[String]) -> Option<String> {
+        self.ctx.pages.as_ref().and_then(|r| {
+            r.entries
+                .borrow()
+                .iter()
+                .find(|e| e.path == path)
+                .map(|e| (e.title)())
+        })
+    }
+
+    pub fn item_page_search_terms(&self, path: &[String]) -> Vec<String> {
+        self.ctx
+            .pages
+            .as_ref()
+            .and_then(|r| {
+                r.entries
+                    .borrow()
+                    .iter()
+                    .find(|e| e.path == path)
+                    .map(|e| e.search_terms.clone())
+            })
+            .unwrap_or_default()
+    }
+
+    /// Called after the set of item pages changed, with the path to select.
+    pub fn set_on_item_pages_changed(&self, cb: Rc<dyn Fn(Option<Vec<String>>)>) {
+        if let Some(r) = &self.ctx.pages {
+            *r.changed.borrow_mut() = Some(cb);
+        }
     }
 
     /// Replace the model and refresh every control without firing changes.
@@ -340,6 +426,10 @@ impl SchemaEditor {
     /// Break the control ↔ closure cycles.
     pub fn cleanup(&self) {
         *self.on_change.borrow_mut() = None;
+        if let Some(r) = &self.ctx.pages {
+            *r.changed.borrow_mut() = None;
+            r.entries.borrow_mut().clear();
+        }
         cleanup_rows(&mut self.rows.borrow_mut());
     }
 }
@@ -1278,13 +1368,17 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
             min_items,
             item_label,
             add_label,
+            item_summary,
         } => build_list_row(
             prop,
-            item.clone(),
-            *new_item,
-            *min_items,
-            item_label,
-            add_label,
+            ListSpec {
+                item_props: item.clone(),
+                new_item: *new_item,
+                min_items: *min_items,
+                item_label,
+                add_label,
+                item_summary: *item_summary,
+            },
             model,
             ctx,
             fire,
@@ -1302,25 +1396,53 @@ fn list_items(model: &Model, key: &str) -> Vec<Value> {
         .unwrap_or_default()
 }
 
-/// A `PropKind::List` row: a heading with the add button, then one frame
-/// per item holding rows built from the item props over that item's own
-/// object. Every item change writes the whole array back under `key`.
-/// Add/remove/move rebuild the frames (index-captured closures would go
-/// stale otherwise) with `loading` held, so the rebuilt controls do not
-/// fire a commit per control.
-#[allow(clippy::too_many_arguments)]
-fn build_list_row(
-    prop: &Prop,
+struct ListSpec {
     item_props: Vec<Prop>,
     new_item: fn(usize) -> Value,
     min_items: usize,
     item_label: &'static str,
     add_label: &'static str,
+    item_summary: Option<fn(&Value) -> String>,
+}
+
+fn item_title(
+    spec_label: &str,
+    index: usize,
+    summary: Option<fn(&Value) -> String>,
+    item: &Value,
+) -> String {
+    let base = format!("{} {}", spec_label, index + 1);
+    match summary.map(|f| f(item)).filter(|s| !s.is_empty()) {
+        Some(s) => format!("{} · {}", base, s),
+        None => base,
+    }
+}
+
+/// A `PropKind::List` row: a heading with Add/Paste, then the items. Inline
+/// (source editors, combo item pages) each item is a frame of rows separated
+/// by a rule; in a tree editor (`Ctx::pages` set) each item is a page of its
+/// own, registered for the tree, and the row shows only a compact line per
+/// item with Edit/move/duplicate/copy/remove. Every item change writes the
+/// whole array back under `key`. Structural edits rebuild the items with
+/// `loading` held, so the rebuilt controls do not fire a commit per control,
+/// and then tell the tree which item to select.
+fn build_list_row(
+    prop: &Prop,
+    spec: ListSpec,
     model: &Model,
     ctx: &Ctx,
     fire: &Rc<dyn Fn()>,
 ) -> Row {
     let key = prop.key;
+    let ListSpec {
+        item_props,
+        new_item,
+        min_items,
+        item_label,
+        add_label,
+        item_summary,
+    } = spec;
+    let detached = ctx.pages.is_some();
     let add_btn = Button::with_label(add_label);
     let paste_btn = Button::with_label("Paste");
     paste_btn.set_tooltip_text(Some("Append the copied item"));
@@ -1333,6 +1455,28 @@ fn build_list_row(
     let rebuild_slot: Rc<RefCell<Option<Rebuild>>> = Rc::new(RefCell::new(None));
     let item_props = Rc::new(item_props);
     let items: Rc<RefCell<Vec<Rc<Nested>>>> = Rc::new(RefCell::new(Vec::new()));
+    let list_path: Vec<String> = ctx
+        .path
+        .iter()
+        .cloned()
+        .chain(std::iter::once(key.to_string()))
+        .collect();
+    let item_path = {
+        let list_path = list_path.clone();
+        move |i: usize| -> Vec<String> {
+            let mut p = list_path.clone();
+            p.push(i.to_string());
+            p
+        }
+    };
+    let notify = {
+        let pages = ctx.pages.clone();
+        Rc::new(move |select: Option<Vec<String>>| {
+            if let Some(r) = &pages {
+                r.notify(select);
+            }
+        })
+    };
 
     let rebuild: Rebuild = {
         let items_box = items_box.clone();
@@ -1342,6 +1486,9 @@ fn build_list_row(
         let item_props = item_props.clone();
         let items = items.clone();
         let rebuild_weak = Rc::downgrade(&rebuild_slot);
+        let list_path = list_path.clone();
+        let item_path = item_path.clone();
+        let notify = notify.clone();
         Rc::new(move |values: &[Value]| {
             let was_loading = ctx.loading.replace(true);
             while let Some(child) = items_box.first_child() {
@@ -1350,26 +1497,25 @@ fn build_list_row(
             for n in items.borrow_mut().drain(..) {
                 n.cleanup();
             }
+            if let Some(r) = &ctx.pages {
+                r.entries
+                    .borrow_mut()
+                    .retain(|e| !e.path.starts_with(&list_path));
+            }
             let count = values.len();
             for (i, value) in values.iter().enumerate() {
-                let frame = Frame::new(None);
-                let vbox = GtkBox::new(Orientation::Vertical, 6);
-                vbox.set_margin_start(8);
-                vbox.set_margin_end(8);
-                vbox.set_margin_top(6);
-                vbox.set_margin_bottom(6);
-                frame.set_child(Some(&vbox));
-
                 let head = GtkBox::new(Orientation::Horizontal, 6);
-                let name = Label::new(Some(&format!("{} {}", item_label, i + 1)));
+                let name = Label::new(Some(&item_title(item_label, i, item_summary, value)));
                 name.set_xalign(0.0);
                 name.set_hexpand(true);
-                name.add_css_class("heading");
+                name.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+                let edit = Button::with_label("Edit…");
                 let up = Button::from_icon_name("go-up-symbolic");
                 let down = Button::from_icon_name("go-down-symbolic");
                 let duplicate = Button::from_icon_name("edit-copy-symbolic");
                 let copy = Button::with_label("Copy");
                 let remove = Button::with_label("Remove");
+                edit.set_tooltip_text(Some("Open this item"));
                 up.set_tooltip_text(Some("Move up"));
                 down.set_tooltip_text(Some("Move down"));
                 duplicate.set_tooltip_text(Some("Duplicate below"));
@@ -1381,12 +1527,16 @@ fn build_list_row(
                 remove.set_sensitive(count > min_items);
                 remove.add_css_class("destructive-action");
                 head.append(&name);
+                if detached {
+                    head.append(&edit);
+                } else {
+                    name.add_css_class("heading");
+                }
                 head.append(&up);
                 head.append(&down);
                 head.append(&duplicate);
                 head.append(&copy);
                 head.append(&remove);
-                vbox.append(&head);
 
                 let nested = Rc::new(Nested::build(
                     &item_props,
@@ -1397,17 +1547,59 @@ fn build_list_row(
                     &ctx,
                     &fire,
                 ));
-                vbox.append(&nested.container);
+
+                if detached {
+                    // Compact line here; the rows live on the item's page.
+                    items_box.append(&head);
+                    if let Some(r) = &ctx.pages {
+                        let title: Rc<dyn Fn() -> String> = {
+                            let m = nested.model.clone();
+                            Rc::new(move || {
+                                item_title(
+                                    item_label,
+                                    i,
+                                    item_summary,
+                                    &Value::Object(m.borrow().clone()),
+                                )
+                            })
+                        };
+                        let mut search_terms = Vec::new();
+                        collect_search_terms(item_props.iter(), &mut search_terms);
+                        r.entries.borrow_mut().push(PageEntry {
+                            path: item_path(i),
+                            widget: nested.container.clone(),
+                            title,
+                            search_terms,
+                        });
+                    }
+                } else {
+                    if i > 0 {
+                        items_box.append(&Separator::new(Orientation::Horizontal));
+                    }
+                    let frame = Frame::new(None);
+                    let vbox = GtkBox::new(Orientation::Vertical, 6);
+                    vbox.set_margin_start(8);
+                    vbox.set_margin_end(8);
+                    vbox.set_margin_top(6);
+                    vbox.set_margin_bottom(6);
+                    vbox.append(&head);
+                    vbox.append(&nested.container);
+                    frame.set_child(Some(&vbox));
+                    items_box.append(&frame);
+                }
                 items.borrow_mut().push(nested);
 
-                // Structural edits: mutate the array, rebuild, fire.
-                let restructure = |f: Rc<dyn Fn(&mut Vec<Value>)>| {
+                // Structural edits: mutate the array, rebuild, fire, then
+                // tell the tree which item to show.
+                let restructure = |f: Rc<dyn Fn(&mut Vec<Value>) -> Option<usize>>| {
                     let model = model.clone();
                     let fire = fire.clone();
                     let rebuild_weak = rebuild_weak.clone();
+                    let notify = notify.clone();
+                    let item_path = item_path.clone();
                     move |_: &Button| {
                         let mut items = list_items(&model, key);
-                        f(&mut items);
+                        let select = f(&mut items);
                         model
                             .borrow_mut()
                             .insert(key.to_string(), Value::Array(items.clone()));
@@ -1418,28 +1610,37 @@ fn build_list_row(
                             rebuild(&items);
                         }
                         fire();
+                        notify(select.map(&item_path));
                     }
                 };
                 remove.connect_clicked(restructure(Rc::new(move |items| {
                     if items.len() > min_items && i < items.len() {
                         items.remove(i);
                     }
+                    // The node is gone; the tree falls back to the parent.
+                    Some(i)
                 })));
                 up.connect_clicked(restructure(Rc::new(move |items| {
                     if i > 0 && i < items.len() {
                         items.swap(i - 1, i);
+                        return Some(i - 1);
                     }
+                    None
                 })));
                 down.connect_clicked(restructure(Rc::new(move |items| {
                     if i + 1 < items.len() {
                         items.swap(i, i + 1);
+                        return Some(i + 1);
                     }
+                    None
                 })));
                 duplicate.connect_clicked(restructure(Rc::new(move |items| {
                     if i < items.len() {
                         let copy = items[i].clone();
                         items.insert(i + 1, copy);
+                        return Some(i + 1);
                     }
+                    None
                 })));
                 {
                     let model = model.clone();
@@ -1451,54 +1652,59 @@ fn build_list_row(
                         }
                     });
                 }
-
-                items_box.append(&frame);
+                {
+                    let notify = notify.clone();
+                    let path = item_path(i);
+                    edit.connect_clicked(move |_| notify(Some(path.clone())));
+                }
             }
             ctx.loading.set(was_loading);
         })
     };
     *rebuild_slot.borrow_mut() = Some(rebuild.clone());
 
-    {
+    let append_item = {
         let model = model.clone();
         let fire = fire.clone();
         let rebuild = rebuild.clone();
-        add_btn.connect_clicked(move |_| {
-            let mut items = list_items(&model, key);
-            items.push(new_item(items.len()));
-            model
-                .borrow_mut()
-                .insert(key.to_string(), Value::Array(items.clone()));
-            rebuild(&items);
-            fire();
-        });
-    }
-
-    {
-        let model = model.clone();
-        let fire = fire.clone();
-        let rebuild = rebuild.clone();
-        paste_btn.connect_clicked(move |_| {
-            // Items are only interchangeable within lists of the same key.
-            let pasted = CLIPBOARD
-                .lock()
-                .ok()
-                .and_then(|cb| cb.paste_list_item())
-                .filter(|(k, _)| k == key);
-            let Some((_, item)) = pasted else { return };
+        let notify = notify.clone();
+        let item_path = item_path.clone();
+        Rc::new(move |item: Value| {
             let mut items = list_items(&model, key);
             items.push(item);
+            let index = items.len() - 1;
             model
                 .borrow_mut()
                 .insert(key.to_string(), Value::Array(items.clone()));
             rebuild(&items);
             fire();
+            notify(Some(item_path(index)));
+        })
+    };
+    {
+        let model = model.clone();
+        let append_item = append_item.clone();
+        add_btn.connect_clicked(move |_| {
+            let n = list_items(&model, key).len();
+            append_item(new_item(n));
         });
     }
+    paste_btn.connect_clicked(move |_| {
+        // Items are only interchangeable within lists of the same key.
+        let pasted = CLIPBOARD
+            .lock()
+            .ok()
+            .and_then(|cb| cb.paste_list_item())
+            .filter(|(k, _)| k == key);
+        if let Some((_, item)) = pasted {
+            append_item(item);
+        }
+    });
 
     let refresh: FieldRefresh = {
         // Owns `rebuild_slot`; dropping this row drops the rebuild closure.
         let rebuild_slot = rebuild_slot;
+        let notify = notify.clone();
         Box::new(move |m: &Map<String, Value>| {
             let items = m
                 .get(key)
@@ -1508,6 +1714,9 @@ fn build_list_row(
             if let Some(rebuild) = rebuild_slot.borrow().clone() {
                 rebuild(&items);
             }
+            // A load replaced the item pages; keep the selection if it
+            // still exists.
+            notify(None);
         })
     };
     let items_theme = items.clone();
@@ -1614,11 +1823,7 @@ impl SchemaDisplayEditor {
         let mut sections: Vec<Option<&str>> = props.iter().map(|p| p.section).collect();
         sections.sort_unstable();
         sections.dedup();
-        let editor = if sections.len() > 1 {
-            SchemaEditor::sectioned(props, fields)
-        } else {
-            SchemaEditor::with_fields(props, fields)
-        };
+        let editor = SchemaEditor::for_tree(props, fields, sections.len() > 1);
         Box::new(Self {
             displayer_id: displayer_id.to_string(),
             editor,
@@ -1657,15 +1862,44 @@ impl DisplayEditor for SchemaDisplayEditor {
         self.editor.cleanup();
     }
 
-    fn sections(&self) -> Vec<(String, Widget)> {
+    fn sections(&self) -> Vec<EditorPage> {
         self.editor
             .pages()
             .into_iter()
-            .map(|(name, page)| (name, page.upcast()))
+            .map(|(name, page)| EditorPage {
+                path: vec![name],
+                widget: page.upcast(),
+            })
+            .chain(
+                self.editor
+                    .item_pages()
+                    .into_iter()
+                    .map(|(path, page)| EditorPage {
+                        path,
+                        widget: page.upcast(),
+                    }),
+            )
             .collect()
     }
 
-    fn section_search_terms(&self, section: &str) -> Vec<String> {
-        self.editor.section_search_terms(section)
+    fn page_title(&self, path: &[String]) -> String {
+        match path {
+            [name] => name.clone(),
+            _ => self
+                .editor
+                .item_page_title(path)
+                .unwrap_or_else(|| path.last().cloned().unwrap_or_default()),
+        }
+    }
+
+    fn page_search_terms(&self, path: &[String]) -> Vec<String> {
+        match path {
+            [name] => self.editor.section_search_terms(name),
+            _ => self.editor.item_page_search_terms(path),
+        }
+    }
+
+    fn set_on_sections_changed(&self, cb: Rc<dyn Fn(Option<Vec<String>>)>) {
+        self.editor.set_on_item_pages_changed(cb);
     }
 }
