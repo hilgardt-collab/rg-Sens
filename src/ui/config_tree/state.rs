@@ -311,6 +311,12 @@ impl State {
 
     /// Apply the editors' state to the live panel.
     pub(super) fn commit_now(self: &Rc<Self>) {
+        // A debounced commit may fire after the window closed (panel
+        // deleted, dialog dismissed): nothing to apply to, and an error
+        // alert on a dead window would be an invisible modal.
+        if !self.alive.get() {
+            return;
+        }
         self.detach_theme_if_edited();
         let data = self.build_data();
         self.apply(data);
@@ -1385,13 +1391,19 @@ impl State {
     }
 
     pub(super) fn alert(&self, message: &str, detail: &str) {
+        // Never raise a modal alert without a live parent: it would block
+        // every window while staying invisible.
+        let Some(window) = self.window().filter(|w| w.is_visible()) else {
+            log::warn!("{}: {}", message, detail);
+            return;
+        };
         let dialog = gtk4::AlertDialog::builder()
             .modal(true)
             .message(message)
             .detail(detail)
             .buttons(["OK"])
             .build();
-        dialog.show(self.window().as_ref());
+        dialog.show(Some(&window));
     }
 }
 
