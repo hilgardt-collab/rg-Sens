@@ -12,6 +12,7 @@
 //! `DisplayerConfig` enums.
 
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
+use crate::ui::config_tree::combo_items::ItemDisplayEditor;
 use crate::ui::config_tree::field_editors::register_field_editors;
 use crate::ui::config_tree::schema_combo::SchemaComboEditor;
 use crate::ui::config_tree::schema_editor::{
@@ -32,6 +33,7 @@ use rg_sens_types::display_configs::{
     SteampunkFrameConfig,
 };
 use rg_sens_types::schema::Schema;
+use rg_sens_types::schema::TreePage;
 use rg_sens_types::source_configs::claude::ClaudeSourceConfig;
 use rg_sens_types::source_configs::clock::ClockSourceConfig;
 use rg_sens_types::source_configs::cpu::CpuSourceConfig;
@@ -134,16 +136,19 @@ pub trait ComboDisplayEditor {
     /// Apply a group/item swap to the frame config (content item keys move
     /// with their sources).
     fn reorder(&self, op: ComboReorder);
-    /// Build the per-item display editor (display-as dropdown plus the
-    /// embedded, lazily built display editors) bound to this editor's config.
+    /// Build the per-item display editor (display-as dropdown, height, and
+    /// the display type's schema editor, whose pages the tree shows as child
+    /// nodes of the item) bound to this editor's config.
     fn item_editor(
         &self,
         slot: &str,
         fields: &[FieldMetadata],
         on_change: ChangeCallback,
-        theme_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        cleanup: &Rc<RefCell<Vec<Box<dyn Fn()>>>>,
-    ) -> Widget;
+    ) -> Rc<ItemDisplayEditor>;
+    /// The pages an item's display editor has (or would have), derived from
+    /// the config alone, so the tree lists every item's child nodes without
+    /// building the editors.
+    fn item_pages(&self, slot: &str) -> Vec<TreePage>;
     /// Trigger the editor's own theme-reference refreshers after
     /// `set_theme` (page colour pickers show the resolved theme).
     fn refresh_theme_refs(&self);
@@ -179,6 +184,12 @@ where
 pub fn create_source_editor(id: &str) -> Option<Box<dyn SourceEditor>> {
     let factory = SOURCE_EDITORS.with(|m| m.borrow().get(id).cloned())?;
     Some(factory())
+}
+
+/// Whether a source id has an editor (a source without one has no settings
+/// to show).
+pub fn has_source_editor(id: &str) -> bool {
+    SOURCE_EDITORS.with(|m| m.borrow().contains_key(id))
 }
 
 /// Create the editor for a displayer id, if one is registered.

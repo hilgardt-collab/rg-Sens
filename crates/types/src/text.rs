@@ -929,6 +929,35 @@ mod schema_tests {
         check_props_fit::<TextOverlayConfig>(&TextOverlayConfig::props()).unwrap();
     }
 
+    /// The overlay schema has one section, so a tree editor keeps its rows
+    /// on the parent page and files each line directly beneath it: the
+    /// object key `text_config` is not a path segment.
+    #[test]
+    fn overlay_tree_pages_are_the_lines() {
+        use crate::schema::{is_sectioned, tree_pages};
+        let props = TextOverlayConfig::props();
+        assert!(!is_sectioned(&props));
+        let mut overlay = TextOverlayConfig::default();
+        overlay.text_config.lines.truncate(1);
+        overlay
+            .text_config
+            .lines
+            .push(serde_json::from_value(new_text_line(1)).unwrap());
+        overlay.text_config.lines[1].field_id = "unit".to_string();
+        let value = serde_json::to_value(&overlay).unwrap();
+        let pages = tree_pages(&props, &value, false);
+        let paths: Vec<Vec<String>> = pages.iter().map(|p| p.path.clone()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                vec!["lines".to_string(), "0".to_string()],
+                vec!["lines".to_string(), "1".to_string()],
+            ]
+        );
+        assert_eq!(pages[1].title, "Line 2 · unit");
+        assert!(pages[1].search_terms.iter().any(|t| t == "Field"));
+    }
+
     #[test]
     fn default_round_trips_through_json() {
         let default = TextDisplayerConfig::default();

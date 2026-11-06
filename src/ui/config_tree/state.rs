@@ -6,6 +6,7 @@
 //! from them and hands it to `GridLayout::apply_panel_data`. `snapshot` is
 //! the state at open, for Revert.
 
+use super::combo_items::ItemDisplayEditor;
 use super::node::NodeKind;
 use super::util::*;
 use crate::config::AppConfig;
@@ -24,6 +25,7 @@ use gtk4::{
     gio, glib, Box as GtkBox, Button, CheckButton, DropDown, Label, SingleSelection, SpinButton,
     Stack, TreeListRow, Widget, Window,
 };
+use rg_sens_types::schema::TreePage;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
@@ -95,11 +97,29 @@ pub(super) fn theme_mode_hint(theme_ref: &ThemeRef) -> &'static str {
     }
 }
 
-/// Everything built for one content item page.
+/// The editors of one content item, shared by the item's pages (the item
+/// page, its Source page and its display section pages).
 pub(super) struct ItemEditor {
     pub source_editor: RefCell<Option<Box<dyn SourceEditor>>>,
-    /// The editor has no change signal and must be polled.
+    /// The source editor has no change signal and must be polled.
     pub needs_poll: Cell<bool>,
+    /// `None` for a displayer without per-item display settings
+    /// (css_template).
+    pub display: Option<Rc<ItemDisplayEditor>>,
+    /// The display editor's pages as last adopted (path and widget), so a
+    /// rebuilt page can be told from one that survived.
+    pub pages: RefCell<Vec<EditorPage>>,
+}
+
+impl ItemEditor {
+    pub fn cleanup(&self) {
+        if let Some(e) = self.source_editor.borrow().as_ref() {
+            e.cleanup();
+        }
+        if let Some(d) = self.display.as_ref() {
+            d.cleanup();
+        }
+    }
 }
 
 pub struct State {
@@ -132,9 +152,8 @@ pub struct State {
     pub(super) display_pages: RefCell<Vec<EditorPage>>,
     pub(super) background_editor: RefCell<Option<Rc<BackgroundConfigWidget>>>,
     pub(super) inline_theme_widget: RefCell<Option<Rc<GlobalThemeWidget>>>,
+    /// Item editors by slot, built on first use by any page of the item.
     pub(super) item_editors: RefCell<HashMap<String, Rc<ItemEditor>>>,
-    pub(super) item_theme_refreshers: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-    pub(super) item_cleanup: Rc<RefCell<Vec<Box<dyn Fn()>>>>,
     pub(super) geometry: RefCell<Option<GeometryControls>>,
     pub(super) appearance: RefCell<Option<AppearanceControls>>,
     pub(super) theme_controls: RefCell<Option<ThemeControls>>,
@@ -401,14 +420,8 @@ impl State {
     }
 
     pub(super) fn cleanup_editors(&self) {
-        for cb in self.item_cleanup.borrow_mut().drain(..) {
-            cb();
-        }
-        self.item_theme_refreshers.borrow_mut().clear();
         for (_, item) in self.item_editors.borrow_mut().drain() {
-            if let Some(e) = item.source_editor.borrow().as_ref() {
-                e.cleanup();
-            }
+            item.cleanup();
         }
         if let Some(e) = self.source_editor.borrow_mut().take() {
             e.cleanup();
@@ -537,13 +550,7 @@ impl State {
             .filter(|old| !new_pages.iter().any(|new| same(old, new)))
             .map(|p| NodeKind::Section(p.path.clone()).id())
             .collect();
-        for id in stale {
-            if let Some(page) = self.stack.child_by_name(&id) {
-                self.stack.remove(&page);
-            }
-            self.pages.borrow_mut().remove(&id);
-            self.poll_last.borrow_mut().remove(&id);
-        }
+        self.remove_pages(&stale);
         self.adopt_editor_pages(&**editor);
         let target = match select {
             Some(path) => self.page_node(&path),
@@ -569,8 +576,154 @@ impl State {
     fn node_exists(&self, kind: &NodeKind) -> bool {
         match kind {
             NodeKind::Section(path) => self.display_pages.borrow().iter().any(|p| &p.path == path),
+            NodeKind::ItemSection(slot, path) => {
+                self.item_page_paths(slot).iter().any(|p| p == path)
+            }
             _ => true,
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Combo item pages
+    // ------------------------------------------------------------------
+
+    /// The pages of an item's display editor, derived from the frame config
+    /// (`ComboDisplayEditor::item_pages`): the tree lists every item's child
+    /// nodes without building a single item editor.
+    pub(super) fn item_tree_pages(&self, slot: &str) -> Vec<TreePage> {
+        self.display_editor
+            .borrow()
+            .as_ref()
+            .and_then(|e| e.combo().map(|c| c.item_pages(slot)))
+            .unwrap_or_default()
+    }
+
+    fn item_page_paths(&self, slot: &str) -> Vec<Vec<String>> {
+        self.item_tree_pages(slot)
+            .into_iter()
+            .map(|p| p.path)
+            .collect()
+    }
+
+    /// The node showing an item page, or its nearest existing ancestor, or
+    /// the item.
+    pub(super) fn item_page_node(&self, slot: &str, path: &[String]) -> NodeKind {
+        item_node_for(slot, path, &self.item_page_paths(slot))
+    }
+
+    /// The editors of one content item, built on first use by any of the
+    /// item's pages (a section may be opened before the item page) and kept
+    /// until the structure changes.
+    pub(super) fn ensure_item_editor(self: &Rc<Self>, slot: &str) -> Rc<ItemEditor> {
+        if let Some(item) = self.item_editors.borrow().get(slot) {
+            return item.clone();
+        }
+        let (source_id, flat) = self
+            .combo_source
+            .borrow()
+            .as_ref()
+            .and_then(|cs| cs.slots.get(slot))
+            .map(|s| (s.source_id.clone(), s.source_config.clone()))
+            .unwrap_or_default();
+        let source_editor = if slot_has_source_editor(&source_id) {
+            editor_registry::create_source_editor(&source_id)
+        } else {
+            None
+        };
+        let needs_poll = Cell::new(false);
+        if let Some(editor) = source_editor.as_ref() {
+            if let Some(cfg) = source_config_from_flat(&source_id, &flat) {
+                editor.load(&cfg);
+            }
+            let weak = Rc::downgrade(self);
+            let has_signal = editor.set_on_change(Rc::new(move || {
+                if let Some(s) = weak.upgrade() {
+                    s.changed();
+                }
+            }));
+            needs_poll.set(!has_signal);
+        }
+        let fields = slot_fields(slot, &source_id);
+        let display = self.display_editor.borrow().as_ref().and_then(|e| {
+            let weak = Rc::downgrade(self);
+            e.combo().map(|c| {
+                c.item_editor(
+                    slot,
+                    &fields,
+                    Rc::new(move || {
+                        if let Some(s) = weak.upgrade() {
+                            s.changed();
+                        }
+                    }),
+                )
+            })
+        });
+        let pages = display.as_ref().map(|d| d.pages()).unwrap_or_default();
+        if let Some(d) = display.as_ref() {
+            let weak = Rc::downgrade(self);
+            let slot = slot.to_string();
+            d.set_on_pages_changed(Rc::new(move |select| {
+                if let Some(s) = weak.upgrade() {
+                    s.refresh_item_pages(&slot, select);
+                }
+            }));
+        }
+        let item = Rc::new(ItemEditor {
+            source_editor: RefCell::new(source_editor),
+            needs_poll,
+            display,
+            pages: RefCell::new(pages),
+        });
+        self.item_editors
+            .borrow_mut()
+            .insert(slot.to_string(), item.clone());
+        item
+    }
+
+    /// An item's display editor changed its pages (a line added or removed,
+    /// the display type switched): drop the stale pages, re-read them and
+    /// rebuild the tree, selecting `select` (or its nearest surviving
+    /// ancestor) when given, else keeping the current node if it still
+    /// exists. The tree itself derives the item's nodes from the frame, which
+    /// the editor has already written.
+    pub(super) fn refresh_item_pages(self: &Rc<Self>, slot: &str, select: Option<Vec<String>>) {
+        if !self.alive.get() {
+            return;
+        }
+        let item = self.item_editors.borrow().get(slot).cloned();
+        let Some(item) = item else { return };
+        let Some(display) = item.display.as_ref() else {
+            return;
+        };
+        let current: Vec<EditorPage> = item.pages.borrow().clone();
+        let new_pages = display.pages();
+        let same = |a: &EditorPage, b: &EditorPage| a.path == b.path && a.widget == b.widget;
+        let unchanged = current.len() == new_pages.len()
+            && current
+                .iter()
+                .zip(new_pages.iter())
+                .all(|(a, b)| same(a, b));
+        if unchanged {
+            if let Some(path) = select {
+                self.select_node(&self.item_page_node(slot, &path));
+            }
+            return;
+        }
+        let stale: Vec<String> = current
+            .iter()
+            .filter(|old| !new_pages.iter().any(|new| same(old, new)))
+            .map(|p| NodeKind::ItemSection(slot.to_string(), p.path.clone()).id())
+            .collect();
+        self.remove_pages(&stale);
+        *item.pages.borrow_mut() = new_pages;
+        let target = match select {
+            Some(path) => self.item_page_node(slot, &path),
+            None => self
+                .selected_node()
+                .filter(|k| self.node_exists(k))
+                .unwrap_or(NodeKind::ContentItem(slot.to_string())),
+        };
+        self.rebuild_tree(Some(target));
     }
 
     pub(super) fn ensure_source_editor(self: &Rc<Self>) -> Option<Widget> {
@@ -636,8 +789,10 @@ impl State {
         if let Some(bg) = self.background_editor.borrow().as_ref() {
             bg.set_theme_config(resolved.clone());
         }
-        for r in self.item_theme_refreshers.borrow().iter() {
-            r();
+        for item in self.item_editors.borrow().values() {
+            if let Some(d) = item.display.as_ref() {
+                d.set_theme(&resolved);
+            }
         }
         *self.theme_baseline.borrow_mut() = self.inline_payload();
     }
@@ -828,29 +983,35 @@ impl State {
         self.changed();
     }
 
-    fn drop_item_pages(&self) {
-        let slots: Vec<String> = self.item_editors.borrow().keys().cloned().collect();
-        for slot in slots {
-            let id = NodeKind::ContentItem(slot.clone()).id();
-            if let Some(page) = self.stack.child_by_name(&id) {
-                self.stack.remove(&page);
-            }
-            self.pages.borrow_mut().remove(&id);
-            self.poll_last.borrow_mut().remove(&id);
-        }
+    /// Drop every item editor and every page under Content (the structure
+    /// changed: counts, order or a slot's source); they rebuild on demand.
+    pub(super) fn drop_item_pages(&self) {
+        let ids: Vec<String> = self
+            .pages
+            .borrow()
+            .iter()
+            .filter(|id| {
+                *id == "content"
+                    || id.starts_with("group/")
+                    || id.starts_with("item/")
+                    || id.starts_with("itemsrc/")
+            })
+            .cloned()
+            .collect();
+        self.remove_pages(&ids);
         for (_, item) in self.item_editors.borrow_mut().drain() {
-            if let Some(e) = item.source_editor.borrow().as_ref() {
-                e.cleanup();
-            }
+            item.cleanup();
         }
-        for id in ["content".to_string()]
-            .into_iter()
-            .chain((0..64).map(|g| NodeKind::ContentGroup(g).id()))
-        {
-            if let Some(page) = self.stack.child_by_name(&id) {
+    }
+
+    /// Remove built pages from the stack by id.
+    fn remove_pages(&self, ids: &[String]) {
+        for id in ids {
+            if let Some(page) = self.stack.child_by_name(id) {
                 self.stack.remove(&page);
-                self.pages.borrow_mut().remove(&id);
             }
+            self.pages.borrow_mut().remove(id);
+            self.poll_last.borrow_mut().remove(id);
         }
     }
 
@@ -1062,9 +1223,31 @@ impl State {
             let groups: Vec<NodeKind> = (0..cs.groups.len()).map(NodeKind::ContentGroup).collect();
             spec.insert(NodeKind::Content.id(), groups);
             for (g, group) in cs.groups.iter().enumerate() {
-                let items = (1..=group.item_count)
-                    .map(|m| NodeKind::ContentItem(format!("group{}_{}", g + 1, m)))
-                    .collect();
+                let mut items = Vec::new();
+                for m in 1..=group.item_count {
+                    let slot = format!("group{}_{}", g + 1, m);
+                    items.push(NodeKind::ContentItem(slot.clone()));
+                    // The item's children: its source settings, then the
+                    // pages of its display editor, derived from the frame
+                    // (no item editor is built for the tree).
+                    let has_source = cs
+                        .slots
+                        .get(&slot)
+                        .map(|s| slot_has_source_editor(&s.source_id))
+                        .unwrap_or(false);
+                    if has_source {
+                        spec.entry(NodeKind::ContentItem(slot.clone()).id())
+                            .or_default()
+                            .push(NodeKind::ItemSource(slot.clone()));
+                    }
+                    let pages = self.item_page_paths(&slot);
+                    for path in &pages {
+                        let parent = item_node_for(&slot, &path[..path.len() - 1], &pages);
+                        spec.entry(parent.id())
+                            .or_default()
+                            .push(NodeKind::ItemSection(slot.clone(), path.clone()));
+                    }
+                }
                 spec.insert(NodeKind::ContentGroup(g).id(), items);
             }
         }
@@ -1076,8 +1259,38 @@ impl State {
 
         self.root_store.remove_all();
         self.root_store.append(&NodeKind::Root.boxed());
+        // Items start folded (29 items with eight children each would bury
+        // the overview); the way down to the reselected node stays open.
+        self.collapse_items(reselect.as_ref());
         if let Some(target) = reselect {
             self.select_node(&target);
+        }
+    }
+
+    /// Fold every content item row except the ancestors of `keep`. A no-op
+    /// while the tree is filtered: matches must stay visible.
+    fn collapse_items(&self, keep: Option<&NodeKind>) {
+        if !self.filter.borrow().is_empty() {
+            return;
+        }
+        let keep_ids: HashSet<String> = keep
+            .map(|k| self.breadcrumb_path(k).iter().map(NodeKind::id).collect())
+            .unwrap_or_default();
+        // Back to front: folding a row removes the rows after it.
+        for i in (0..self.selection.n_items()).rev() {
+            let Some(row) = self
+                .selection
+                .item(i)
+                .and_then(|o| o.downcast::<TreeListRow>().ok())
+            else {
+                continue;
+            };
+            let Some(kind) = row.item().and_then(|o| NodeKind::from_object(&o)) else {
+                continue;
+            };
+            if matches!(kind, NodeKind::ContentItem(_)) && !keep_ids.contains(&kind.id()) {
+                row.set_expanded(false);
+            }
         }
     }
 
@@ -1137,11 +1350,22 @@ impl State {
                 .as_ref()
                 .map(|e| e.search_terms())
                 .unwrap_or_default(),
-            NodeKind::ContentItem(slot) => self
-                .item_editors
-                .borrow()
-                .get(slot)
-                .and_then(|i| i.source_editor.borrow().as_ref().map(|e| e.search_terms()))
+            NodeKind::ContentItem(_) => vec!["caption order source display type height".into()],
+            NodeKind::ItemSource(slot) => {
+                let mut terms = self
+                    .item_editors
+                    .borrow()
+                    .get(slot)
+                    .and_then(|i| i.source_editor.borrow().as_ref().map(|e| e.search_terms()))
+                    .unwrap_or_default();
+                terms.push("source configuration copy paste".into());
+                terms
+            }
+            NodeKind::ItemSection(slot, path) => self
+                .item_tree_pages(slot)
+                .into_iter()
+                .find(|p| &p.path == path)
+                .map(|p| p.search_terms)
                 .unwrap_or_default(),
             NodeKind::Section(path) => self
                 .display_editor
@@ -1177,23 +1401,41 @@ impl State {
             .and_then(|o| NodeKind::from_object(&o))
     }
 
-    pub(super) fn select_node(&self, target: &NodeKind) {
-        let n = self.selection.n_items();
-        for i in 0..n {
-            let kind = self
+    /// The visible row of a node (rows under a folded row are not visible).
+    fn find_row(&self, target: &NodeKind) -> Option<(u32, TreeListRow)> {
+        (0..self.selection.n_items()).find_map(|i| {
+            let row = self
                 .selection
                 .item(i)
-                .and_then(|o| o.downcast::<TreeListRow>().ok())
-                .and_then(|row| row.item())
-                .and_then(|o| NodeKind::from_object(&o));
-            if kind.as_ref() == Some(target) {
-                if self.selection.selected() == i {
-                    // Same position: GTK fires no notify, drive the page ourselves.
-                    self.selection.set_selected(gtk4::INVALID_LIST_POSITION);
+                .and_then(|o| o.downcast::<TreeListRow>().ok())?;
+            let kind = row.item().and_then(|o| NodeKind::from_object(&o))?;
+            (&kind == target).then_some((i, row))
+        })
+    }
+
+    pub(super) fn select_node(&self, target: &NodeKind) {
+        if self.find_row(target).is_none() {
+            // Under a folded row: open the way down to it.
+            for crumb in self.breadcrumb_path(target) {
+                if let Some((_, row)) = self.find_row(&crumb) {
+                    row.set_expanded(true);
                 }
-                self.selection.set_selected(i);
-                return;
             }
+        }
+        let Some((i, _)) = self.find_row(target) else {
+            return;
+        };
+        if self.selection.selected() == i {
+            // Same position: GTK fires no notify, drive the page ourselves.
+            self.selection.set_selected(gtk4::INVALID_LIST_POSITION);
+        }
+        self.selection.set_selected(i);
+    }
+
+    /// Unfold a node's row (an item shows its children once selected).
+    pub(super) fn expand_node(&self, target: &NodeKind) {
+        if let Some((_, row)) = self.find_row(target) {
+            row.set_expanded(true);
         }
     }
 
@@ -1309,6 +1551,23 @@ impl State {
                     },
                 )
             }
+            NodeKind::ItemSource(slot) => (
+                "Source".into(),
+                self.combo_source
+                    .borrow()
+                    .as_ref()
+                    .and_then(|cs| cs.slots.get(slot))
+                    .map(|s| source_display_name(&s.source_id))
+                    .unwrap_or_default(),
+            ),
+            NodeKind::ItemSection(slot, path) => (
+                self.item_tree_pages(slot)
+                    .into_iter()
+                    .find(|p| &p.path == path)
+                    .map(|p| p.title)
+                    .unwrap_or_else(|| path.last().cloned().unwrap_or_default()),
+                String::new(),
+            ),
             NodeKind::Background => ("Background".into(), String::new()),
             NodeKind::Appearance => ("Border & Corners".into(), String::new()),
         }
@@ -1332,14 +1591,24 @@ impl State {
                 chain
             }
             NodeKind::ContentGroup(_) => vec![NodeKind::Root, NodeKind::Content, kind.clone()],
-            NodeKind::ContentItem(slot) => {
-                let g = NodeKind::parse_slot(slot).map(|(g, _)| g).unwrap_or(0);
-                vec![
-                    NodeKind::Root,
-                    NodeKind::Content,
-                    NodeKind::ContentGroup(g),
-                    kind.clone(),
-                ]
+            NodeKind::ContentItem(slot) => item_chain(slot),
+            NodeKind::ItemSource(slot) => {
+                let mut chain = item_chain(slot);
+                chain.push(kind.clone());
+                chain
+            }
+            NodeKind::ItemSection(slot, path) => {
+                // Up through the ancestor pages to the item.
+                let mut above = vec![kind.clone()];
+                let mut parent = self.item_page_node(slot, &path[..path.len() - 1]);
+                while let NodeKind::ItemSection(_, p) = &parent {
+                    above.push(parent.clone());
+                    parent = self.item_page_node(slot, &p[..p.len() - 1]);
+                }
+                above.reverse();
+                let mut chain = item_chain(slot);
+                chain.extend(above);
+                chain
             }
             other => vec![NodeKind::Root, other.clone()],
         }
@@ -1396,17 +1665,46 @@ pub(super) fn start_polling(state: &Rc<State>) {
     });
 }
 
-/// The node for an editor page path: the page itself when it exists,
-/// else its nearest existing ancestor page, else Display. Pure, so the
-/// shapes the tree meets are tested below.
+/// Root › Content › Group › Item, for a slot.
+fn item_chain(slot: &str) -> Vec<NodeKind> {
+    let g = NodeKind::parse_slot(slot).map(|(g, _)| g).unwrap_or(0);
+    vec![
+        NodeKind::Root,
+        NodeKind::Content,
+        NodeKind::ContentGroup(g),
+        NodeKind::ContentItem(slot.to_string()),
+    ]
+}
+
+/// Whether a slot's source has settings to show (a Source child node).
+fn slot_has_source_editor(source_id: &str) -> bool {
+    !source_id.is_empty() && source_id != "none" && editor_registry::has_source_editor(source_id)
+}
+
+/// The longest prefix of `path` that is a page: the page itself when it
+/// exists, else its nearest existing ancestor page. Pure, so the shapes the
+/// tree meets are tested below.
+pub(super) fn resolve_page_prefix(path: &[String], pages: &[Vec<String>]) -> Option<Vec<String>> {
+    (1..=path.len())
+        .rev()
+        .map(|k| &path[..k])
+        .find(|prefix| pages.iter().any(|p| p.as_slice() == *prefix))
+        .map(<[String]>::to_vec)
+}
+
+/// The node for a display editor page path, else Display.
 pub(super) fn resolve_page_node(path: &[String], pages: &[Vec<String>]) -> NodeKind {
-    for k in (1..=path.len()).rev() {
-        let prefix = &path[..k];
-        if pages.iter().any(|p| p.as_slice() == prefix) {
-            return NodeKind::Section(prefix.to_vec());
-        }
+    resolve_page_prefix(path, pages)
+        .map(NodeKind::Section)
+        .unwrap_or(NodeKind::Display)
+}
+
+/// The node for an item display editor page path, else the item.
+pub(super) fn item_node_for(slot: &str, path: &[String], pages: &[Vec<String>]) -> NodeKind {
+    match resolve_page_prefix(path, pages) {
+        Some(prefix) => NodeKind::ItemSection(slot.to_string(), prefix),
+        None => NodeKind::ContentItem(slot.to_string()),
     }
-    NodeKind::Display
 }
 
 #[cfg(test)]
@@ -1466,6 +1764,35 @@ mod page_node_tests {
         assert_eq!(
             resolve_page_node(&v(&["Text overlay", "lines", "1"]), &pages),
             NodeKind::Section(v(&["Text overlay"]))
+        );
+    }
+
+    #[test]
+    fn item_pages_resolve_to_item_sections_or_the_item() {
+        let slot = "group2_3";
+        let sectioned = vec![v(&["Style"]), v(&["Text overlay", "lines", "0"])];
+        assert_eq!(
+            item_node_for(slot, &v(&["Text overlay", "lines", "0"]), &sectioned),
+            NodeKind::ItemSection(slot.into(), v(&["Text overlay", "lines", "0"]))
+        );
+        // Its parent (the list) has no page, nor has its section here: the item.
+        assert_eq!(
+            item_node_for(slot, &v(&["Text overlay", "lines"]), &sectioned),
+            NodeKind::ContentItem(slot.into())
+        );
+        assert_eq!(
+            item_node_for(slot, &[], &sectioned),
+            NodeKind::ContentItem(slot.into())
+        );
+        // A text item: lines straight under the item.
+        let flat = vec![v(&["lines", "0"]), v(&["lines", "1"])];
+        assert_eq!(
+            item_node_for(slot, &v(&["lines", "1"]), &flat),
+            NodeKind::ItemSection(slot.into(), v(&["lines", "1"]))
+        );
+        assert_eq!(
+            item_node_for(slot, &v(&["lines", "2"]), &flat),
+            NodeKind::ContentItem(slot.into())
         );
     }
 }

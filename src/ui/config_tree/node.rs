@@ -3,7 +3,9 @@
 //! One enum describes every selectable thing. Rows carry a `NodeKind` in a
 //! `glib::BoxedAnyObject`; pages in the editor stack are keyed by
 //! [`NodeKind::id`]. `Section` is a page the display editor provides,
-//! addressed by path (a section, or a list item beneath one).
+//! addressed by path (a section, or a list item beneath one); `ItemSection`
+//! is the same for a combo item's display editor, and `ItemSource` the
+//! item's source settings.
 
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -31,6 +33,11 @@ pub enum NodeKind {
     /// A page of the display editor by path: `["Face"]` is a section,
     /// `["Text overlay", "lines", "0"]` a list item beneath one.
     Section(Vec<String>),
+    /// The source settings of one content item, by slot key.
+    ItemSource(String),
+    /// A page of one content item's display editor: the slot key and the
+    /// path, shaped as in `Section` (relative to the item).
+    ItemSection(String, Vec<String>),
 }
 
 impl NodeKind {
@@ -48,6 +55,8 @@ impl NodeKind {
             NodeKind::Background => "background".into(),
             NodeKind::Appearance => "appearance".into(),
             NodeKind::Section(path) => format!("sec/{}", path.join("/")),
+            NodeKind::ItemSource(slot) => format!("itemsrc/{}", slot),
+            NodeKind::ItemSection(slot, path) => format!("item/{}/{}", slot, path.join("/")),
         }
     }
 

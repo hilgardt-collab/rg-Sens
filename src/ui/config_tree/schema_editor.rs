@@ -28,7 +28,9 @@ use gtk4::{
     SpinButton, StringList, Widget,
 };
 use rg_sens_types::color::{Color, ColorStop};
-use rg_sens_types::schema::{Condition, Prop, PropKind};
+use rg_sens_types::schema::{
+    collect_search_terms, is_sectioned, list_item_title, section_name, Condition, Prop, PropKind,
+};
 use rg_sens_types::theme::{ColorSource, ColorStopSource, FontSource};
 use serde_json::{Map, Value};
 use std::cell::{Cell, RefCell};
@@ -272,7 +274,7 @@ impl SchemaEditor {
         let mut current_section: Option<&'static str> = None;
         for prop in props {
             let target: GtkBox = if sectioned {
-                let name = prop.section.unwrap_or("General");
+                let name = section_name(&prop);
                 ctx.path = vec![name.to_string()];
                 match pages.iter().find(|(n, _)| n == name) {
                     Some((_, page)) => page.clone(),
@@ -427,7 +429,7 @@ impl SchemaEditor {
                 .borrow()
                 .iter()
                 .map(|r| &r.prop)
-                .filter(|p| p.section.unwrap_or("General") == section),
+                .filter(|p| section_name(p) == section),
             &mut out,
         );
         out
@@ -441,31 +443,6 @@ impl SchemaEditor {
             r.entries.borrow_mut().clear();
         }
         cleanup_rows(&mut self.rows.borrow_mut());
-    }
-}
-
-fn collect_search_terms<'a>(props: impl Iterator<Item = &'a Prop>, out: &mut Vec<String>) {
-    for prop in props {
-        match &prop.kind {
-            PropKind::Note => {}
-            PropKind::List { item, .. } | PropKind::Object { props: item } => {
-                out.push(prop.label.to_string());
-                out.push(prop.key.replace('_', " "));
-                collect_search_terms(item.iter(), out);
-            }
-            PropKind::Variant { variants, .. } => {
-                out.push(prop.label.to_string());
-                out.push(prop.key.replace('_', " "));
-                for v in variants {
-                    out.push(v.label.to_string());
-                    collect_search_terms(v.props.iter(), out);
-                }
-            }
-            _ => {
-                out.push(prop.label.to_string());
-                out.push(prop.key.replace('_', " "));
-            }
-        }
     }
 }
 
@@ -1689,19 +1666,6 @@ fn store_items(model: &Model, key: &str, count_key: Option<&str>, items: &[Value
     }
 }
 
-fn item_title(
-    spec_label: &str,
-    index: usize,
-    summary: Option<fn(&Value) -> String>,
-    item: &Value,
-) -> String {
-    let base = format!("{} {}", spec_label, index + 1);
-    match summary.map(|f| f(item)).filter(|s| !s.is_empty()) {
-        Some(s) => format!("{} · {}", base, s),
-        None => base,
-    }
-}
-
 /// A `PropKind::List` row: a heading with Add/Paste, then the items. Inline
 /// (source editors, combo item pages) each item is a frame of rows separated
 /// by a rule; in a tree editor (`Ctx::pages` set) each item is a page of its
@@ -1790,7 +1754,7 @@ fn build_list_row(
             let count = values.len();
             for (i, value) in values.iter().enumerate() {
                 let head = GtkBox::new(Orientation::Horizontal, 6);
-                let name = Label::new(Some(&item_title(item_label, i, item_summary, value)));
+                let name = Label::new(Some(&list_item_title(item_label, i, item_summary, value)));
                 name.set_xalign(0.0);
                 name.set_hexpand(true);
                 name.set_ellipsize(gtk4::pango::EllipsizeMode::End);
@@ -1840,7 +1804,7 @@ fn build_list_row(
                         let title: Rc<dyn Fn() -> String> = {
                             let m = nested.model.clone();
                             Rc::new(move || {
-                                item_title(
+                                list_item_title(
                                     item_label,
                                     i,
                                     item_summary,
@@ -2101,10 +2065,8 @@ impl SchemaDisplayEditor {
     ) -> Box<dyn DisplayEditor> {
         // A single section (or none) needs no child nodes: show the rows on
         // the Display page itself.
-        let mut sections: Vec<Option<&str>> = props.iter().map(|p| p.section).collect();
-        sections.sort_unstable();
-        sections.dedup();
-        let editor = SchemaEditor::for_tree(props, fields, sections.len() > 1);
+        let sectioned = is_sectioned(&props);
+        let editor = SchemaEditor::for_tree(props, fields, sectioned);
         Box::new(Self {
             displayer_id: displayer_id.to_string(),
             editor,

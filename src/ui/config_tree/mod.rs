@@ -1,8 +1,9 @@
 //! Tree-based Panel Properties dialog (docs/config-ui-redesign.md, Option A).
 //!
 //! A tree of the panel's structure on the left (geometry, theme, source,
-//! display and its sections, combo content groups and items, background,
-//! appearance), one editor page on the right, a breadcrumb on top. Edits
+//! display and its sections, combo content groups and items with their
+//! source and display sections, background, appearance), one editor page on
+//! the right, a breadcrumb on top. Edits
 //! apply to the live panel after a short debounce; Revert restores the state
 //! the window opened with. Editors are built on first selection and kept for
 //! the window's lifetime.
@@ -163,8 +164,6 @@ pub fn show_tree_properties_dialog(
         background_editor: RefCell::new(None),
         inline_theme_widget: RefCell::new(None),
         item_editors: RefCell::new(HashMap::new()),
-        item_theme_refreshers: Rc::new(RefCell::new(Vec::new())),
-        item_cleanup: Rc::new(RefCell::new(Vec::new())),
         geometry: RefCell::new(None),
         appearance: RefCell::new(None),
         theme_controls: RefCell::new(None),
@@ -373,6 +372,10 @@ impl State {
         let id = self.ensure_page(&kind);
         self.stack.set_visible_child_name(&id);
         self.update_breadcrumb(&kind);
+        if matches!(kind, NodeKind::ContentItem(_)) {
+            // Items start folded; the selected one shows its children.
+            self.expand_node(&kind);
+        }
         self.reset_poll_baseline();
     }
 }

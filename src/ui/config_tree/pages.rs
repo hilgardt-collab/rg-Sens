@@ -2,20 +2,19 @@
 
 use super::node::NodeKind;
 use super::state::{
-    flat_button, theme_choice_index, theme_mode_hint, AppearanceControls, GeometryControls,
-    ItemEditor, State, ThemeChoice, ThemeControls,
+    flat_button, theme_choice_index, theme_mode_hint, AppearanceControls, GeometryControls, State,
+    ThemeChoice, ThemeControls,
 };
 use super::util::*;
 use crate::core::{global_registry, DisplayerConfig};
-use crate::ui::editor_registry;
 use crate::ui::theme::{ComboThemeConfig, ThemeRef};
 use crate::ui::{ColorButtonWidget, ComboReorder, GlobalThemeWidget, PanelStyle, CLIPBOARD};
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DropDown, Entry, Expander, Label, Orientation,
-    ScrolledWindow, SpinButton, StringList, Widget,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Label, Orientation, ScrolledWindow,
+    SpinButton, StringList, Widget,
 };
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 fn page_box() -> GtkBox {
@@ -32,6 +31,14 @@ fn heading(text: &str) -> Label {
     l.add_css_class("heading");
     l.set_halign(gtk4::Align::Start);
     l
+}
+
+/// Take a widget out of the box it sits in, so it can be placed on a page
+/// (an editor's widget outlives the page that showed it).
+fn detach(widget: &Widget) {
+    if let Some(parent) = widget.parent().and_then(|p| p.downcast::<GtkBox>().ok()) {
+        parent.remove(widget);
+    }
 }
 
 fn hint(text: &str) -> Label {
@@ -105,6 +112,8 @@ impl State {
             NodeKind::Background => self.build_background_page().upcast(),
             NodeKind::Appearance => self.build_appearance_page().upcast(),
             NodeKind::Section(path) => self.build_subpage(path).upcast(),
+            NodeKind::ItemSource(slot) => self.build_item_source_page(slot).upcast(),
+            NodeKind::ItemSection(slot, path) => self.build_item_subpage(slot, path).upcast(),
         };
         self.loading.set(false);
         let scroll = ScrolledWindow::new();
@@ -529,6 +538,12 @@ impl State {
                     // theme; the editor shows this panel's resolved theme.
                     e.set_theme(&s.resolved_theme());
                 }
+                if s.is_combo() {
+                    // The item editors hold copies of the old content items:
+                    // rebuild them (and the tree) from the pasted frame.
+                    s.drop_item_pages();
+                    s.rebuild_tree(s.selected_node());
+                }
                 s.changed();
             });
         }
@@ -569,7 +584,10 @@ impl State {
             .find(|p| p.path == path)
             .map(|p| p.widget.clone());
         match widget {
-            Some(w) => page.append(&w),
+            Some(w) => {
+                detach(&w);
+                page.append(&w);
+            }
             None => page.append(&hint("Page not available.")),
         }
         page
@@ -616,8 +634,8 @@ impl State {
             });
         }
         page.append(&hint(
-            "Each group is a child node; each item is a node under its group with \
-             its own source and display settings.",
+            "Each group is a child node; each item is a node under its group, with \
+             its source settings and display sections as child nodes of its own.",
         ));
         page
     }
@@ -703,6 +721,10 @@ impl State {
         page
     }
 
+    /// The item itself: caption and order, which source feeds it and how it
+    /// is shown. The source's settings are the item's Source child node; the
+    /// display type's sections are its other children (a single-section type
+    /// such as Text keeps its rows here, with its lines as children).
     fn build_item_page(self: &Rc<Self>, slot: &str) -> GtkBox {
         let page = page_box();
         let (group, item) = NodeKind::parse_slot(slot).unwrap_or((0, 0));
@@ -785,8 +807,7 @@ impl State {
             });
         }
 
-        // Source section
-        let source_box = GtkBox::new(Orientation::Vertical, 8);
+        // Source type; its settings live on the Source child node.
         let infos = global_registry().list_sources_with_info();
         let mut source_ids = vec!["none".to_string()];
         let mut source_names = vec!["None".to_string()];
@@ -795,154 +816,145 @@ impl State {
             source_names.push(info.display_name.clone());
         }
         let selected = source_ids.iter().position(|i| *i == source_id).unwrap_or(0);
-        let source_dropdown = dropdown_row(&source_box, "Source:", &source_names, selected);
+        let source_dropdown = dropdown_row(&page, "Source:", &source_names, selected);
         {
             let weak = Rc::downgrade(self);
             let slot = slot.to_string();
-            let ids = source_ids.clone();
             source_dropdown.connect_selected_notify(move |dd| {
                 let Some(s) = weak.upgrade() else { return };
                 if s.loading.get() {
                     return;
                 }
-                if let Some(id) = ids.get(dd.selected() as usize) {
+                if let Some(id) = source_ids.get(dd.selected() as usize) {
                     s.set_item_source(&slot, id);
                 }
             });
         }
-
-        let source_editor: RefCell<Option<Box<dyn crate::ui::editor_registry::SourceEditor>>> =
-            RefCell::new(None);
-        let needs_poll = Cell::new(false);
-        if !source_id.is_empty() && source_id != "none" {
-            let btn_row = GtkBox::new(Orientation::Horizontal, 6);
-            let copy_btn = Button::with_label("Copy");
-            let paste_btn = Button::with_label("Paste");
-            btn_row.append(&Label::new(Some("Source configuration")));
-            btn_row.append(&copy_btn);
-            btn_row.append(&paste_btn);
-            source_box.append(&btn_row);
-
-            match editor_registry::create_source_editor(&source_id) {
-                Some(editor) => {
-                    let flat = self
-                        .combo_source
-                        .borrow()
-                        .as_ref()
-                        .and_then(|cs| cs.slots.get(slot).map(|s| s.source_config.clone()))
-                        .unwrap_or_default();
-                    if let Some(cfg) = source_config_from_flat(&source_id, &flat) {
-                        editor.load(&cfg);
-                    }
-                    let weak = Rc::downgrade(self);
-                    let has_signal = editor.set_on_change(Rc::new(move || {
-                        if let Some(s) = weak.upgrade() {
-                            s.changed();
-                        }
-                    }));
-                    needs_poll.set(!has_signal);
-                    source_box.append(&editor.widget());
-                    *source_editor.borrow_mut() = Some(editor);
-                }
-                None => source_box.append(&hint("This source has no settings.")),
-            }
-            {
-                let weak = Rc::downgrade(self);
-                let slot = slot.to_string();
-                copy_btn.connect_clicked(move |_| {
-                    let Some(s) = weak.upgrade() else { return };
-                    let cfg =
-                        s.item_editors.borrow().get(&slot).and_then(|i| {
-                            i.source_editor.borrow().as_ref().and_then(|e| e.store())
-                        });
-                    if let Some(cfg) = cfg {
-                        if let Ok(mut cb) = CLIPBOARD.lock() {
-                            let json = serde_json::to_value(flatten_source_config(&cfg))
-                                .unwrap_or_default();
-                            cb.copy_source_config(cfg.source_type().to_string(), json);
-                        }
-                    }
-                });
-            }
-            {
-                let weak = Rc::downgrade(self);
-                let slot = slot.to_string();
-                let source_id = source_id.clone();
-                paste_btn.connect_clicked(move |_| {
-                    let Some(s) = weak.upgrade() else { return };
-                    let pasted = CLIPBOARD
-                        .lock()
-                        .ok()
-                        .and_then(|cb| cb.paste_source_config());
-                    let Some((source_type, value)) = pasted else {
-                        return;
-                    };
-                    if source_type != source_id {
-                        log::info!(
-                            "Source config paste skipped: clipboard has '{}'",
-                            source_type
-                        );
-                        return;
-                    }
-                    let flat: std::collections::HashMap<String, serde_json::Value> = value
-                        .as_object()
-                        .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-                        .unwrap_or_default();
-                    if let Some(cfg) = source_config_from_flat(&source_type, &flat) {
-                        if let Some(item) = s.item_editors.borrow().get(&slot) {
-                            if let Some(e) = item.source_editor.borrow().as_ref() {
-                                e.load(&cfg);
-                            }
-                        }
-                        s.changed();
-                    }
-                });
-            }
+        let editors = self.ensure_item_editor(slot);
+        page.append(&hint(if source_id.is_empty() || source_id == "none" {
+            "Select a data source for this item."
+        } else if editors.source_editor.borrow().is_some() {
+            "The source's settings are under the item's Source node."
         } else {
-            source_box.append(&hint("Select a data source to configure it."));
-        }
-        let source_expander = Expander::new(Some("Source"));
-        source_expander.set_expanded(true);
-        source_expander.set_child(Some(&source_box));
-        page.append(&source_expander);
+            "This source has no settings."
+        }));
 
-        // Display section
-        let display_box = GtkBox::new(Orientation::Vertical, 8);
-        let fields = slot_fields(slot, &source_id);
-        let item_widget = self.display_editor.borrow().as_ref().and_then(|e| {
-            let weak = Rc::downgrade(self);
-            e.combo().map(|c| {
-                c.item_editor(
-                    slot,
-                    &fields,
-                    Rc::new(move || {
-                        if let Some(s) = weak.upgrade() {
-                            s.changed();
-                        }
-                    }),
-                    &self.item_theme_refreshers,
-                    &self.item_cleanup,
-                )
-            })
-        });
-        match item_widget {
-            Some(w) => display_box.append(&w),
-            None => display_box.append(&hint(
+        // Display type and height; the type's sections are child nodes.
+        match editors.display.as_ref() {
+            Some(d) => {
+                let w = d.widget();
+                detach(&w);
+                page.append(&w);
+            }
+            None => page.append(&hint(
                 "This displayer has no per-item display settings; its mappings are under Display.",
             )),
         }
-        let display_expander = Expander::new(Some("Display"));
-        display_expander.set_expanded(true);
-        display_expander.set_child(Some(&display_box));
-        page.append(&display_expander);
+        page
+    }
 
-        self.item_editors.borrow_mut().insert(
-            slot.to_string(),
-            Rc::new(ItemEditor {
-                source_editor,
-                needs_poll,
-            }),
-        );
+    /// The source settings of one item: Copy/Paste and the source's editor.
+    fn build_item_source_page(self: &Rc<Self>, slot: &str) -> GtkBox {
+        let page = page_box();
+        let source_id = self
+            .combo_source
+            .borrow()
+            .as_ref()
+            .and_then(|cs| cs.slots.get(slot))
+            .map(|s| s.source_id.clone())
+            .unwrap_or_default();
+        page.append(&heading(&format!(
+            "{} settings",
+            source_display_name(&source_id)
+        )));
+
+        let btn_row = GtkBox::new(Orientation::Horizontal, 6);
+        let copy_btn = Button::with_label("Copy Source Config");
+        let paste_btn = Button::with_label("Paste Source Config");
+        btn_row.append(&copy_btn);
+        btn_row.append(&paste_btn);
+        page.append(&btn_row);
+        {
+            let weak = Rc::downgrade(self);
+            let slot = slot.to_string();
+            copy_btn.connect_clicked(move |_| {
+                let Some(s) = weak.upgrade() else { return };
+                let cfg = s
+                    .item_editors
+                    .borrow()
+                    .get(&slot)
+                    .and_then(|i| i.source_editor.borrow().as_ref().and_then(|e| e.store()));
+                if let Some(cfg) = cfg {
+                    if let Ok(mut cb) = CLIPBOARD.lock() {
+                        let json =
+                            serde_json::to_value(flatten_source_config(&cfg)).unwrap_or_default();
+                        cb.copy_source_config(cfg.source_type().to_string(), json);
+                    }
+                }
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            let slot = slot.to_string();
+            let source_id = source_id.clone();
+            paste_btn.connect_clicked(move |_| {
+                let Some(s) = weak.upgrade() else { return };
+                let pasted = CLIPBOARD
+                    .lock()
+                    .ok()
+                    .and_then(|cb| cb.paste_source_config());
+                let Some((source_type, value)) = pasted else {
+                    return;
+                };
+                if source_type != source_id {
+                    log::info!(
+                        "Source config paste skipped: clipboard has '{}'",
+                        source_type
+                    );
+                    return;
+                }
+                let flat: std::collections::HashMap<String, serde_json::Value> = value
+                    .as_object()
+                    .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+                    .unwrap_or_default();
+                if let Some(cfg) = source_config_from_flat(&source_type, &flat) {
+                    if let Some(item) = s.item_editors.borrow().get(&slot) {
+                        if let Some(e) = item.source_editor.borrow().as_ref() {
+                            e.load(&cfg);
+                        }
+                    }
+                    s.changed();
+                }
+            });
+        }
+
+        let editors = self.ensure_item_editor(slot);
+        let widget = editors.source_editor.borrow().as_ref().map(|e| e.widget());
+        match widget {
+            Some(w) => {
+                detach(&w);
+                page.append(&w);
+            }
+            None => page.append(&hint("This source has no settings.")),
+        }
+        page
+    }
+
+    /// A page of an item's display editor: a section or a list item, under
+    /// a heading with the node's live title.
+    fn build_item_subpage(self: &Rc<Self>, slot: &str, path: &[String]) -> GtkBox {
+        let page = page_box();
+        let (title, _) = self.row_text(&NodeKind::ItemSection(slot.to_string(), path.to_vec()));
+        page.append(&heading(&title));
+        let editors = self.ensure_item_editor(slot);
+        let widget = editors.display.as_ref().and_then(|d| d.page_widget(path));
+        match widget {
+            Some(w) => {
+                detach(&w);
+                page.append(&w);
+            }
+            None => page.append(&hint("Page not available.")),
+        }
         page
     }
 

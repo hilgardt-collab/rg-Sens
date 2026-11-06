@@ -225,6 +225,164 @@ pub trait Schema {
     fn props() -> Vec<Prop>;
 }
 
+// ----------------------------------------------------------------------------
+// Tree editor pages (pure: the tree dialog derives a combo item's child nodes
+// from these without building the item's editor)
+// ----------------------------------------------------------------------------
+
+/// Name of the page a prop's rows land on when an editor is split into one
+/// page per section.
+pub fn section_name(prop: &Prop) -> &'static str {
+    prop.section.unwrap_or("General")
+}
+
+/// Whether an editor over `props` splits into pages: more than one distinct
+/// section (a `None` section counts as one, shown as "General"). A single
+/// section keeps its rows on the parent page.
+pub fn is_sectioned(props: &[Prop]) -> bool {
+    let mut sections: Vec<Option<&str>> = props.iter().map(|p| p.section).collect();
+    sections.sort_unstable();
+    sections.dedup();
+    sections.len() > 1
+}
+
+/// Title of a list item: "Line 1", or "Line 1 · summary" when the list has a
+/// summary and it is not empty.
+pub fn list_item_title(
+    item_label: &str,
+    index: usize,
+    summary: Option<fn(&Value) -> String>,
+    item: &Value,
+) -> String {
+    let base = format!("{} {}", item_label, index + 1);
+    match summary.map(|f| f(item)).filter(|s| !s.is_empty()) {
+        Some(s) => format!("{} · {}", base, s),
+        None => base,
+    }
+}
+
+/// Labels and keys the tree search box may match, recursing into objects,
+/// variants and list items.
+pub fn collect_search_terms<'a>(props: impl Iterator<Item = &'a Prop>, out: &mut Vec<String>) {
+    for prop in props {
+        match &prop.kind {
+            PropKind::Note => {}
+            PropKind::List { item, .. } | PropKind::Object { props: item } => {
+                out.push(prop.label.to_string());
+                out.push(prop.key.replace('_', " "));
+                collect_search_terms(item.iter(), out);
+            }
+            PropKind::Variant { variants, .. } => {
+                out.push(prop.label.to_string());
+                out.push(prop.key.replace('_', " "));
+                for v in variants {
+                    out.push(v.label.to_string());
+                    collect_search_terms(v.props.iter(), out);
+                }
+            }
+            _ => {
+                out.push(prop.label.to_string());
+                out.push(prop.key.replace('_', " "));
+            }
+        }
+    }
+}
+
+/// One page a tree editor exposes: a section (one-part path) or a list item
+/// (`[section?, list key, index]`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreePage {
+    pub path: Vec<String>,
+    pub title: String,
+    pub search_terms: Vec<String>,
+}
+
+/// The pages a tree editor over `props` and `value` has, in its order:
+/// every section first (when `sectioned`, see [`is_sectioned`]), then one
+/// page per list item, filed under the list's section. Object and variant
+/// keys are not path segments (a bar's overlay lines are
+/// `["Text overlay", "lines", "0"]`), and lists inside list items are not
+/// pages. The UI's schema editor registers exactly these paths, so a tree can
+/// show an editor's nodes before the editor exists.
+pub fn tree_pages(props: &[Prop], value: &Value, sectioned: bool) -> Vec<TreePage> {
+    let mut out = Vec::new();
+    if sectioned {
+        let mut seen: Vec<&str> = Vec::new();
+        for prop in props {
+            let name = section_name(prop);
+            if seen.contains(&name) {
+                continue;
+            }
+            seen.push(name);
+            let mut search_terms = Vec::new();
+            collect_search_terms(
+                props.iter().filter(|p| section_name(p) == name),
+                &mut search_terms,
+            );
+            out.push(TreePage {
+                path: vec![name.to_string()],
+                title: name.to_string(),
+                search_terms,
+            });
+        }
+    }
+    for prop in props {
+        let base: Vec<String> = if sectioned {
+            vec![section_name(prop).to_string()]
+        } else {
+            Vec::new()
+        };
+        collect_list_pages(prop, value.get(prop.key), &base, &mut out);
+    }
+    out
+}
+
+fn collect_list_pages(
+    prop: &Prop,
+    value: Option<&Value>,
+    base: &[String],
+    out: &mut Vec<TreePage>,
+) {
+    match &prop.kind {
+        PropKind::List {
+            item,
+            item_label,
+            item_summary,
+            ..
+        } => {
+            let mut search_terms = Vec::new();
+            collect_search_terms(item.iter(), &mut search_terms);
+            let items = value
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            for (i, v) in items.iter().enumerate() {
+                let mut path = base.to_vec();
+                path.push(prop.key.to_string());
+                path.push(i.to_string());
+                out.push(TreePage {
+                    path,
+                    title: list_item_title(item_label, i, *item_summary, v),
+                    search_terms: search_terms.clone(),
+                });
+            }
+        }
+        PropKind::Object { props } => {
+            for p in props {
+                collect_list_pages(p, value.and_then(|v| v.get(p.key)), base, out);
+            }
+        }
+        PropKind::Variant { variants, .. } => {
+            for variant in variants {
+                for p in &variant.props {
+                    collect_list_pages(p, value.and_then(|v| v.get(p.key)), base, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// The one failure a stringly schema can hide from the compiler: a key,
 /// enum variant name, condition value or template that does not match the
 /// type.

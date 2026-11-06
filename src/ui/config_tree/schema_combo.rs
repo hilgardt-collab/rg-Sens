@@ -1,14 +1,15 @@
 //! A schema-driven editor for the themed combo frames: rows from the frame
 //! config's `Schema` (sections as tree nodes), the combo surface
-//! (`ComboDisplayEditor`) over the same JSON model, and item pages from
-//! `combo_items`. The frame's cached `theme`, `content_items` and group
-//! caches have no props and pass through untouched.
+//! (`ComboDisplayEditor`) over the same JSON model, and item display editors
+//! from `combo_items` (their pages are the item's child nodes). The frame's
+//! cached `theme`, `content_items` and group caches have no props and pass
+//! through untouched.
 //!
 //! The displayer config is a wrapper `{ frame, animation_enabled,
 //! animation_speed }`; the editor works on the frame object with the two
 //! animation keys copied in (what `to_frame`/`from_frame` do).
 
-use super::combo_items::create_item_page;
+use super::combo_items::{item_tree_pages, ItemDisplayEditor};
 use super::schema_editor::SchemaEditor;
 use crate::core::{DisplayerConfig, FieldMetadata};
 use crate::ui::editor_registry::{
@@ -18,7 +19,7 @@ use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
 use gtk4::Widget;
 use rg_sens_types::combo::TransferableComboConfig;
-use rg_sens_types::schema::Prop;
+use rg_sens_types::schema::{Prop, TreePage};
 use serde_json::{Map, Value};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -288,23 +289,25 @@ impl ComboDisplayEditor for SchemaComboEditor {
         slot: &str,
         fields: &[FieldMetadata],
         on_change: ChangeCallback,
-        theme_refreshers: &Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
-        cleanup: &Rc<RefCell<Vec<Box<dyn Fn()>>>>,
-    ) -> Widget {
-        create_item_page(
+    ) -> Rc<ItemDisplayEditor> {
+        ItemDisplayEditor::new(
             self.editor.model_rc(),
             slot,
             fields.to_vec(),
             self.theme.clone(),
             on_change,
-            theme_refreshers,
-            cleanup,
         )
     }
 
+    fn item_pages(&self, slot: &str) -> Vec<TreePage> {
+        let model = self.editor.model_rc();
+        let frame = model.borrow();
+        item_tree_pages(&frame, slot)
+    }
+
     fn refresh_theme_refs(&self) {
-        // `set_theme` reaches every row and the item pages' refreshers run
-        // from the dialog.
+        // `set_theme` reaches every row; the dialog pushes the theme to the
+        // item editors it built.
     }
 }
 

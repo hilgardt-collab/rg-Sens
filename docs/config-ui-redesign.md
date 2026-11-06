@@ -1401,3 +1401,83 @@ Structural cleanup, and the css_template decision.
 Remaining: docs consolidation (§8-§21 are a build log; the design sections
 above still describe `DisplaySection`), and the open policy on
 `ThemeLibrary::resolve_missing_named`.
+
+## 22. Combo items as subtrees (2026-11-06)
+
+User request: "take the combo config to more branches (currently stopping
+at each Item)". An item node used to be one long page: caption and order,
+a Source expander with the source's editor, a Display expander with the
+display-as dropdown, the height controls and all seven per-type schema
+editors (built eagerly, only one visible). Now an item has children, as a
+standalone panel has Source and Display › sections:
+
+```
+Content
+└ Group 2                      3 items
+  └ Item 2                     CPU → Bar
+    ├ Source                   CPU             (only when the source has an editor)
+    ├ Style
+    ├ Foreground
+    ├ Background
+    ├ Border
+    ├ Text overlay
+    │ ├ Line 1 · value
+    │ └ Line 2 · unit
+    └ Animation
+```
+
+* **Item page** keeps the identity of the item: caption and order, the
+  Source dropdown (with a hint pointing at the Source node), the display-as
+  dropdown and the height controls (the head widget of
+  `combo_items::ItemDisplayEditor`). A display type with a single section
+  (Text, i.e. `TextOverlayConfig`) keeps its rows on the item page and its
+  lines become direct children, exactly as the standalone text displayer
+  does under Display (`schema::is_sectioned`, shared with
+  `SchemaDisplayEditor::create`).
+* **`NodeKind::ItemSource(slot)`** (`itemsrc/<slot>`): heading, Copy/Paste
+  Source Config, the source's editor. **`NodeKind::ItemSection(slot, path)`**
+  (`item/<slot>/<path>`): a section or a list item of the item's display
+  editor, resolved like `Section` through `state::resolve_page_prefix` →
+  `item_node_for` (tested).
+* **The tree never builds an item editor.** Every slot's children are
+  derived from the frame JSON at each `rebuild_tree`:
+  `schema::tree_pages(props, value, sectioned)` (types crate, pure, tested
+  on bar and text overlay) lists the sections then every list item at
+  `[section?, key, index]` — object and variant keys are not path segments,
+  lists inside list items are not pages — with live titles
+  (`list_item_title`) and search terms (`collect_search_terms`, both moved
+  from `schema_editor.rs` so the editor and the derivation cannot drift).
+  `combo_items::item_tree_pages(frame, slot)` picks the sub-config of the
+  slot's `display_as` (default item for an unconfigured slot) and
+  `ComboDisplayEditor::item_pages` exposes it. Opening a 29-item panel costs
+  29 props walks, no widgets.
+* **`State::ensure_item_editor(slot)`** builds the source editor and the
+  `ItemDisplayEditor` on first use by *any* of the item's pages (a search
+  hit may open a section first); `build_data` and `poll` see the source
+  editor as before. The display editor builds only the current type's
+  `SchemaEditor::for_tree`, dropping it on a type switch and rebuilding
+  from the model (bar and text both edit `bar_config`; the old eager seven
+  needed a reload-all for that). `refresh_item_pages(slot, select)` mirrors
+  `refresh_display_pages`: evict pages with no `(path, widget)` match,
+  adopt, rebuild, select. `drop_item_pages` removes every stack page under
+  Content by id prefix (`item/`, `itemsrc/`, `group/`, `content`) and
+  cleans the editors; the `item_theme_refreshers`/`item_cleanup` lists are
+  gone (the dialog iterates `item_editors`).
+* **Folded items.** `TreeListModel` autoexpands everything; 29 items with
+  eight children each would bury the overview, so `rebuild_tree` folds
+  every item row except the ancestors of the reselected node
+  (`collapse_items`, skipped while the search filter is active), selecting
+  an item unfolds it (`show_selected`), and `select_node` unfolds the way
+  down to a hidden target before selecting (a line added under a folded
+  item is still selected).
+* **Paste Display Config on a combo** now drops the item editors and
+  rebuilds the tree: they held copies of the old content items and their
+  next edit would have overwritten the pasted sub-config (pre-existing;
+  visible now that the tree shows the pasted structure).
+* Visible changes besides the subtree: Copy/Paste Source Config moved from
+  the item page to the item's Source node; the Content hint and the Display
+  hint were reworded; "Item height (px)" and "Display as" rows sit directly
+  under the Source dropdown.
+
+Remaining as in §21: docs consolidation and the `resolve_missing_named`
+policy.

@@ -713,6 +713,54 @@ mod schema_tests {
         check_props_fit::<BarDisplayConfig>(&BarDisplayConfig::props()).unwrap();
     }
 
+    /// Sectioned: every section is a page, then the overlay's lines sit
+    /// under "Text overlay" (object keys are not path segments).
+    #[test]
+    fn tree_pages_are_sections_then_overlay_lines() {
+        use crate::schema::{is_sectioned, tree_pages};
+        let props = BarDisplayConfig::props();
+        assert!(is_sectioned(&props));
+        let bar = BarDisplayConfig::default();
+        let lines = bar.text_overlay.text_config.lines.len();
+        assert!(lines > 0, "the default overlay has lines");
+        let value = serde_json::to_value(&bar).unwrap();
+        let pages = tree_pages(&props, &value, true);
+        let sections: Vec<&str> = pages
+            .iter()
+            .filter(|p| p.path.len() == 1)
+            .map(|p| p.path[0].as_str())
+            .collect();
+        assert_eq!(
+            sections,
+            vec![
+                "Style",
+                "Foreground",
+                "Background",
+                "Border",
+                "Text overlay",
+                "Animation"
+            ]
+        );
+        let items: Vec<&Vec<String>> = pages
+            .iter()
+            .filter(|p| p.path.len() > 1)
+            .map(|p| &p.path)
+            .collect();
+        assert_eq!(items.len(), lines);
+        assert_eq!(
+            items[0],
+            &vec![
+                "Text overlay".to_string(),
+                "lines".to_string(),
+                "0".to_string()
+            ]
+        );
+        // Sections come first, so a line always finds its section placed.
+        assert!(pages.iter().position(|p| p.path.len() > 1).unwrap() >= sections.len());
+        let overlay = pages.iter().find(|p| p.path == ["Text overlay"]).unwrap();
+        assert!(overlay.search_terms.iter().any(|t| t == "Lines"));
+    }
+
     #[test]
     fn default_round_trips_through_json() {
         let default = BarDisplayConfig::default();
