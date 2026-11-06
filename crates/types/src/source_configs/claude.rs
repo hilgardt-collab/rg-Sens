@@ -144,3 +144,90 @@ impl Default for ClaudeSourceConfig {
         }
     }
 }
+
+impl crate::schema::Schema for ClaudeSourceConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "metric",
+                "Metric",
+                PropKind::Enum {
+                    options: vec![
+                        ("SessionUsage", "Session Usage (%)"),
+                        ("WeeklyUsage", "Weekly Usage (%)"),
+                        ("WeeklyScopedUsage", "Weekly Model Usage (%)"),
+                        ("ExtraUsage", "Extra Usage / Credits (%)"),
+                        ("WeeklyOpusUsage", "Weekly Opus (%, legacy)"),
+                        ("WeeklySonnetUsage", "Weekly Sonnet (%, legacy)"),
+                        ("SessionTokens", "Session Tokens"),
+                        ("AllTimeTokens", "All-Time Tokens"),
+                        ("SessionResetIn", "Session Resets In (min)"),
+                        ("WeeklyResetIn", "Weekly Resets In (min)"),
+                    ],
+                },
+            ),
+            Prop::new(
+                "custom_caption",
+                "Caption",
+                PropKind::OptionalText {
+                    placeholder: "Auto-generated if empty",
+                },
+            ),
+            Prop::new(
+                "update_interval_ms",
+                "Update interval (ms)",
+                PropKind::Int {
+                    min: 5000,
+                    max: 600000,
+                    step: 1000,
+                },
+            ),
+            Prop::new(
+                "session_hours",
+                "Session window (h)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 48.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .help("Length of the local token session window (Claude's is 5 hours)")
+            .visible_when(Condition::Equals {
+                key: "metric",
+                values: vec!["SessionTokens"],
+            }),
+            Prop::new(
+                "max_limit",
+                "Gauge maximum (tokens)",
+                PropKind::OptionalFloat {
+                    min: 1.0,
+                    max: 1_000_000_000.0,
+                    step: 1000.0,
+                    digits: 0,
+                },
+            )
+            .help("Unset tracks the largest session total seen")
+            .visible_when(Condition::Equals {
+                key: "metric",
+                values: vec!["SessionTokens", "AllTimeTokens"],
+            }),
+            Prop::note(
+                "Percentage and reset metrics query Anthropic's usage API. Token metrics \
+                 read local Claude Code transcripts and never go to the network.",
+            ),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<ClaudeSourceConfig>(&ClaudeSourceConfig::props()).unwrap();
+    }
+}

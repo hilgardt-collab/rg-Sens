@@ -49,3 +49,84 @@ impl Default for StaticTextSourceConfig {
         }
     }
 }
+
+/// Template for a new line appended as the `n`th item (0-based).
+fn new_line(n: usize) -> serde_json::Value {
+    let number = n + 1;
+    serde_json::json!({
+        "field_id": format!("line{}", number),
+        "text": format!("Line {}", number),
+        "label": format!("Line {}", number),
+    })
+}
+
+impl crate::schema::Schema for StaticTextSourceConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Prop, PropKind};
+        vec![
+            Prop::new(
+                "lines",
+                "Text lines",
+                PropKind::List {
+                    item: vec![
+                        Prop::new(
+                            "text",
+                            "Text",
+                            PropKind::Text {
+                                placeholder: "The text to display",
+                            },
+                        ),
+                        Prop::new(
+                            "label",
+                            "Label",
+                            PropKind::Text {
+                                placeholder: "Human-readable name",
+                            },
+                        )
+                        .help("Shown in displayer field pickers"),
+                        Prop::new(
+                            "field_id",
+                            "Field ID",
+                            PropKind::Text {
+                                placeholder: "e.g., line1",
+                            },
+                        )
+                        .help("Key displayers bind to; must be unique within the source"),
+                    ],
+                    new_item: new_line,
+                    min_items: 1,
+                    item_label: "Line",
+                    add_label: "Add line",
+                },
+            )
+            .help("The first line is the source's primary value"),
+            Prop::new(
+                "custom_caption",
+                "Caption",
+                PropKind::OptionalText {
+                    placeholder: "(auto-generated from first line)",
+                },
+            ),
+            Prop::new(
+                "update_interval_ms",
+                "Update interval (ms)",
+                PropKind::Int {
+                    min: 100,
+                    max: 60000,
+                    step: 100,
+                },
+            ),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<StaticTextSourceConfig>(&StaticTextSourceConfig::props()).unwrap();
+    }
+}

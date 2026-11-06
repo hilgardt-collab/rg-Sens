@@ -71,3 +71,58 @@ impl Default for ClockSourceConfig {
         }
     }
 }
+
+impl crate::schema::Schema for ClockSourceConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Prop, PropKind};
+        vec![
+            Prop::new(
+                "time_format",
+                "Time format",
+                PropKind::Enum {
+                    options: vec![("24h", "24 hour"), ("12h", "12 hour")],
+                },
+            ),
+            Prop::new(
+                "date_format",
+                "Date format",
+                PropKind::Enum {
+                    options: vec![
+                        ("yyyy-mm-dd", "YYYY-MM-DD"),
+                        ("dd/mm/yyyy", "DD/MM/YYYY"),
+                        ("mm/dd/yyyy", "MM/DD/YYYY"),
+                        ("day, month dd, yyyy", "Day, Month DD, YYYY"),
+                    ],
+                },
+            ),
+            Prop::new("show_seconds", "Show seconds", PropKind::Bool),
+            Prop::new(
+                "timezone",
+                "Timezone",
+                PropKind::Custom { editor: "timezone" },
+            )
+            .help("IANA zone name, or Local"),
+            Prop::new(
+                "update_interval_ms",
+                "Update interval (ms)",
+                PropKind::Int {
+                    min: 16,
+                    max: 1000,
+                    step: 10,
+                },
+            ),
+            Prop::note("Tip: click the bell icon on the clock panel for alarm and timer controls."),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<ClockSourceConfig>(&ClockSourceConfig::props()).unwrap();
+    }
+}

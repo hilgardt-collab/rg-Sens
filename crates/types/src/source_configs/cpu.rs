@@ -72,9 +72,134 @@ impl Default for CpuSourceConfig {
             core_selection: CoreSelection::Overall,
             custom_caption: None,
             update_interval_ms: default_update_interval(),
-            min_limit: None,
-            max_limit: None,
+            // The displayers map a value without limits to 0 once it passes
+            // 100, so a fixed range is the usable default while auto-detect
+            // is off (the old config widgets always saved these).
+            min_limit: Some(0.0),
+            max_limit: Some(100.0),
             auto_detect_limits: default_auto_detect_limits(),
         }
+    }
+}
+
+impl crate::schema::Schema for CpuSourceConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "field",
+                "Field",
+                PropKind::Enum {
+                    options: vec![
+                        ("Usage", "Usage (%)"),
+                        ("Temperature", "Temperature"),
+                        ("Frequency", "Frequency"),
+                    ],
+                },
+            ),
+            Prop::new(
+                "sensor_index",
+                "Temperature sensor",
+                PropKind::IndexChoice {
+                    provider: "cpu_sensors",
+                },
+            )
+            .visible_when(Condition::Equals {
+                key: "field",
+                values: vec!["Temperature"],
+            }),
+            Prop::new(
+                "temp_unit",
+                "Temperature unit",
+                PropKind::Enum {
+                    options: vec![
+                        ("Celsius", "Celsius (°C)"),
+                        ("Fahrenheit", "Fahrenheit (°F)"),
+                        ("Kelvin", "Kelvin (K)"),
+                    ],
+                },
+            )
+            .visible_when(Condition::Equals {
+                key: "field",
+                values: vec!["Temperature"],
+            }),
+            Prop::new(
+                "freq_unit",
+                "Frequency unit",
+                PropKind::Enum {
+                    options: vec![("MHz", "MHz"), ("GHz", "GHz")],
+                },
+            )
+            .visible_when(Condition::Equals {
+                key: "field",
+                values: vec!["Frequency"],
+            }),
+            Prop::new(
+                "core_selection",
+                "Core",
+                PropKind::Custom {
+                    editor: "cpu_core_selection",
+                },
+            )
+            .help("Overall, or one core's usage / frequency"),
+            Prop::new(
+                "custom_caption",
+                "Caption",
+                PropKind::OptionalText {
+                    placeholder: "Auto-generated if empty",
+                },
+            ),
+            Prop::new(
+                "update_interval_ms",
+                "Update interval (ms)",
+                PropKind::Int {
+                    min: 100,
+                    max: 60000,
+                    step: 100,
+                },
+            ),
+            Prop::new("auto_detect_limits", "Auto-detect limits", PropKind::Bool)
+                .section("Limits")
+                .help("Track the observed range instead of fixed limits"),
+            Prop::new(
+                "min_limit",
+                "Minimum",
+                PropKind::OptionalFloat {
+                    min: -1000.0,
+                    max: 10000.0,
+                    step: 1.0,
+                    digits: 2,
+                },
+            )
+            .section("Limits")
+            .visible_when(Condition::IsFalse {
+                key: "auto_detect_limits",
+            }),
+            Prop::new(
+                "max_limit",
+                "Maximum",
+                PropKind::OptionalFloat {
+                    min: -1000.0,
+                    max: 10000.0,
+                    step: 1.0,
+                    digits: 2,
+                },
+            )
+            .section("Limits")
+            .visible_when(Condition::IsFalse {
+                key: "auto_detect_limits",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<CpuSourceConfig>(&CpuSourceConfig::props()).unwrap();
     }
 }

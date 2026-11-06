@@ -72,9 +72,86 @@ impl Default for FanSpeedConfig {
             sensor_index: 0,
             update_interval_ms: default_update_interval(),
             custom_caption: None,
-            min_limit: None,
-            max_limit: None,
+            // The displayers map a value without limits to 0 once it passes
+            // 100, so a fixed range is the usable default while auto-detect
+            // is off (the old config widgets always saved these).
+            min_limit: Some(0.0),
+            max_limit: Some(3000.0),
             auto_detect_limits: default_auto_detect_limits(),
         }
+    }
+}
+
+impl crate::schema::Schema for FanSpeedConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "sensor_label",
+                "Fan sensor",
+                PropKind::Custom {
+                    editor: "fan_sensor",
+                },
+            )
+            .help("The fan's label is its identity; a saved fan that is missing shows N/A"),
+            Prop::new(
+                "custom_caption",
+                "Caption",
+                PropKind::OptionalText {
+                    placeholder: "Auto-generated if empty",
+                },
+            ),
+            Prop::new(
+                "update_interval_ms",
+                "Update interval (ms)",
+                PropKind::Int {
+                    min: 100,
+                    max: 60000,
+                    step: 100,
+                },
+            ),
+            Prop::new("auto_detect_limits", "Auto-detect limits", PropKind::Bool)
+                .section("Limits")
+                .help("Track the observed range instead of fixed limits"),
+            Prop::new(
+                "min_limit",
+                "Minimum",
+                PropKind::OptionalFloat {
+                    min: 0.0,
+                    max: 10000.0,
+                    step: 50.0,
+                    digits: 0,
+                },
+            )
+            .section("Limits")
+            .visible_when(Condition::IsFalse {
+                key: "auto_detect_limits",
+            }),
+            Prop::new(
+                "max_limit",
+                "Maximum",
+                PropKind::OptionalFloat {
+                    min: 0.0,
+                    max: 10000.0,
+                    step: 50.0,
+                    digits: 0,
+                },
+            )
+            .section("Limits")
+            .visible_when(Condition::IsFalse {
+                key: "auto_detect_limits",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<FanSpeedConfig>(&FanSpeedConfig::props()).unwrap();
     }
 }

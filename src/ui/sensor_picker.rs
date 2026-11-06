@@ -1,4 +1,4 @@
-//! Sensor dropdown shared by the fan speed and system temperature config widgets.
+//! Sensor dropdown behind the fan speed and system temperature field editors.
 //!
 //! Row 0 is a placeholder ("(no fan selected)") so that a saved sensor that is
 //! not present on this system can be shown as "nothing selected" with a
@@ -6,13 +6,14 @@
 //! is a no-op (verified by probe), so a real row is the only way to display
 //! that state, and it also guarantees that choosing any real sensor afterwards
 //! changes the selection and fires `notify::selected`. Rows 1.. map to sensor
-//! indices 0.. .
+//! indices 0.. . Nothing is pre-selected: the editor's load drives the
+//! selection through `set_resolved`.
 
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, DropDown, Label, Orientation, StringList};
 
 pub struct SensorPicker {
-    row: GtkBox,
+    widget: GtkBox,
     combo: DropDown,
     warning: Label,
     /// "fan" / "sensor", for messages
@@ -21,8 +22,8 @@ pub struct SensorPicker {
 
 impl SensorPicker {
     /// `labels` are the sensor display names in index order. `on_pick(index)`
-    /// runs whenever the user (or `select`) chooses a real sensor row.
-    pub fn new<F>(title: &str, kind: &'static str, labels: &[String], on_pick: F) -> Self
+    /// runs whenever the user (or `set_resolved`) chooses a real sensor row.
+    pub fn new<F>(kind: &'static str, labels: &[String], on_pick: F) -> Self
     where
         F: Fn(usize) + 'static,
     {
@@ -36,15 +37,16 @@ impl SensorPicker {
         );
         combo.set_hexpand(true);
 
-        let row = GtkBox::new(Orientation::Horizontal, 6);
-        row.append(&Label::new(Some(title)));
-        row.append(&combo);
-
         let warning = Label::new(None);
         warning.set_halign(gtk4::Align::Start);
+        warning.set_xalign(0.0);
         warning.set_wrap(true);
         warning.add_css_class("warning");
         warning.set_visible(false);
+
+        let widget = GtkBox::new(Orientation::Vertical, 4);
+        widget.append(&combo);
+        widget.append(&warning);
 
         let warning_clone = warning.clone();
         combo.connect_selected_notify(move |combo| {
@@ -54,34 +56,22 @@ impl SensorPicker {
             }
         });
 
-        // A fresh widget starts on the first real sensor, like before the
-        // placeholder row existed (new panels get a usable default)
-        if !labels.is_empty() {
-            combo.set_selected(1);
-        }
-
         Self {
-            row,
+            widget,
             combo,
             warning,
             kind,
         }
     }
 
-    /// Append the dropdown row and its warning label to `container`
-    pub fn append_to(&self, container: &GtkBox) {
-        container.append(&self.row);
-        container.append(&self.warning);
+    /// The dropdown with its warning label underneath
+    pub fn widget(&self) -> &GtkBox {
+        &self.widget
     }
 
     /// Sensor index of a dropdown row (None for the placeholder / no selection)
     fn index_of_row(row: u32) -> Option<usize> {
         (row != gtk4::INVALID_LIST_POSITION && row > 0).then(|| row as usize - 1)
-    }
-
-    /// Currently chosen sensor index, or None while the placeholder is showing
-    pub fn selected(&self) -> Option<usize> {
-        Self::index_of_row(self.combo.selected())
     }
 
     /// Show the resolved sensor, or the placeholder plus a warning naming the

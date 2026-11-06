@@ -13,12 +13,20 @@
 
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
 use crate::ui::combo_config_base::{self, TransferableComboConfig};
+use crate::ui::config_tree::field_editors::register_field_editors;
 use crate::ui::config_tree::schema_editor::{register_choice_provider, SchemaSourceEditor};
 use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Notebook, Widget};
 use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
 use rg_sens_types::schema::Schema;
+use rg_sens_types::source_configs::claude::ClaudeSourceConfig;
+use rg_sens_types::source_configs::clock::ClockSourceConfig;
+use rg_sens_types::source_configs::cpu::CpuSourceConfig;
+use rg_sens_types::source_configs::fan_speed::FanSpeedConfig;
+use rg_sens_types::source_configs::gpu::GpuSourceConfig;
+use rg_sens_types::source_configs::static_text::StaticTextSourceConfig;
+use rg_sens_types::source_configs::system_temp::SystemTempConfig;
 use rg_sens_types::source_configs::{DiskSourceConfig, MemorySourceConfig, NetworkSourceConfig};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -170,31 +178,6 @@ pub fn is_combo_display(id: &str) -> bool {
 // ============================================================================
 
 macro_rules! source_editor {
-    // set_config takes the config by value
-    ($name:ident, $widget:ident, $variant:ident, by_value, $setup:expr) => {
-        pub struct $name(crate::ui::$widget);
-        impl $name {
-            fn create() -> Box<dyn SourceEditor> {
-                let w = crate::ui::$widget::new();
-                let setup: fn(&crate::ui::$widget) = $setup;
-                setup(&w);
-                Box::new(Self(w))
-            }
-        }
-        impl SourceEditor for $name {
-            fn widget(&self) -> Widget {
-                self.0.widget().clone().upcast()
-            }
-            fn load(&self, config: &SourceConfig) {
-                if let SourceConfig::$variant(c) = config {
-                    self.0.set_config(c.clone());
-                }
-            }
-            fn store(&self) -> Option<SourceConfig> {
-                Some(SourceConfig::$variant(self.0.get_config()))
-            }
-        }
-    };
     // set_config takes a reference
     ($name:ident, $widget:ident, $variant:ident, by_ref, $setup:expr) => {
         pub struct $name(crate::ui::$widget);
@@ -222,43 +205,6 @@ macro_rules! source_editor {
     };
 }
 
-source_editor!(CpuEditor, CpuSourceConfigWidget, Cpu, by_value, |w| {
-    w.set_available_sensors(crate::sources::CpuSource::get_cached_sensors());
-    w.set_cpu_core_count(crate::sources::CpuSource::get_cached_core_count());
-});
-source_editor!(GpuEditor, GpuSourceConfigWidget, Gpu, by_value, |w| {
-    let names = crate::sources::GpuSource::get_cached_gpu_names();
-    w.set_available_gpus(&names);
-});
-source_editor!(
-    SystemTempEditor,
-    SystemTempConfigWidget,
-    SystemTemp,
-    by_value,
-    |_w| {}
-);
-source_editor!(
-    FanSpeedEditor,
-    FanSpeedConfigWidget,
-    FanSpeed,
-    by_ref,
-    |_w| {}
-);
-source_editor!(ClockEditor, ClockSourceConfigWidget, Clock, by_ref, |_w| {});
-source_editor!(
-    ClaudeEditor,
-    ClaudeSourceConfigWidget,
-    Claude,
-    by_value,
-    |_w| {}
-);
-source_editor!(
-    StaticTextEditor,
-    StaticTextConfigWidget,
-    StaticText,
-    by_ref,
-    |_w| {}
-);
 source_editor!(TestEditor, TestSourceConfigWidget, Test, by_ref, |_w| {});
 
 // ============================================================================
@@ -728,22 +674,58 @@ pub fn register_all_editors() {
             .collect()
     });
 
-    register_source_editor("cpu", CpuEditor::create);
-    register_source_editor("gpu", GpuEditor::create);
+    register_choice_provider("cpu_sensors", || {
+        crate::sources::CpuSource::get_cached_sensors()
+            .iter()
+            .map(|s| (s.index.to_string(), s.label.clone()))
+            .collect()
+    });
+    register_choice_provider("gpus", || {
+        crate::sources::GpuSource::get_cached_gpu_names()
+            .into_iter()
+            .enumerate()
+            .map(|(i, name)| (i.to_string(), name))
+            .collect()
+    });
+    register_field_editors();
+
+    // Schema-driven sources: no widget, rows come from `Schema::props()`.
+    register_source_editor("cpu", || {
+        SchemaSourceEditor::create("cpu", CpuSourceConfig::props())
+    });
+    register_source_editor("gpu", || {
+        SchemaSourceEditor::create("gpu", GpuSourceConfig::props())
+    });
     register_source_editor("memory", || {
         SchemaSourceEditor::create("memory", MemorySourceConfig::props())
     });
-    register_source_editor("system_temp", SystemTempEditor::create);
-    register_source_editor("fan_speed", FanSpeedEditor::create);
+    register_source_editor("system_temp", || {
+        SchemaSourceEditor::create("system_temp", SystemTempConfig::props())
+    });
+    register_source_editor("fan_speed", || {
+        SchemaSourceEditor::create("fan_speed", FanSpeedConfig::props())
+    });
     register_source_editor("disk", || {
         SchemaSourceEditor::create("disk", DiskSourceConfig::props())
     });
     register_source_editor("network", || {
         SchemaSourceEditor::create("network", NetworkSourceConfig::props())
     });
-    register_source_editor("clock", ClockEditor::create);
-    register_source_editor("claude", ClaudeEditor::create);
-    register_source_editor("static_text", StaticTextEditor::create);
+    register_source_editor("clock", || {
+        SchemaSourceEditor::create("clock", ClockSourceConfig::props())
+    });
+    register_source_editor("claude", || {
+        SchemaSourceEditor::create_with_footer(
+            "claude",
+            ClaudeSourceConfig::props(),
+            &crate::ui::claude_account::account_widget(),
+        )
+    });
+    register_source_editor("static_text", || {
+        SchemaSourceEditor::create("static_text", StaticTextSourceConfig::props())
+    });
+    // The test source keeps its widget: its values live in the global Test
+    // Source dialog, the widget only edits the interval.
     register_source_editor("test", TestEditor::create);
 
     register_display_editor("text", |fields| {

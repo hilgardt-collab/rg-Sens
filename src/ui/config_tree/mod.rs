@@ -13,6 +13,7 @@
 
 mod node;
 mod pages;
+pub mod field_editors;
 pub mod schema_editor;
 mod state;
 mod util;
