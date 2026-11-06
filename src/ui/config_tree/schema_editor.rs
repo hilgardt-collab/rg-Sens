@@ -12,7 +12,8 @@ use crate::core::SourceConfig;
 use crate::ui::editor_registry::{ChangeCallback, SourceEditor};
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CheckButton, DropDown, Entry, Label, Orientation, SpinButton, StringList, Widget,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, SpinButton,
+    StringList, Widget,
 };
 use rg_sens_types::schema::{Condition, Prop, PropKind};
 use serde_json::{Map, Value};
@@ -22,9 +23,41 @@ use std::rc::Rc;
 
 type Provider = Rc<dyn Fn() -> Vec<(String, String)>>;
 type Model = Rc<RefCell<Map<String, Value>>>;
+/// Sets a control from the flat config (load / rebuild).
+pub type FieldRefresh = Box<dyn Fn(&Map<String, Value>)>;
+type FieldEditorFactory = Rc<dyn Fn(FieldContext) -> (Widget, FieldRefresh)>;
 
 thread_local! {
     static PROVIDERS: RefCell<HashMap<&'static str, Provider>> = RefCell::new(HashMap::new());
+    static FIELD_EDITORS: RefCell<HashMap<&'static str, FieldEditorFactory>> =
+        RefCell::new(HashMap::new());
+}
+
+/// What a `PropKind::Custom` editor is handed: its prop and a way to write
+/// the flat config. Writes while the editor is loading are silent
+/// (normalisation of a saved value); otherwise they fire the change signal.
+#[derive(Clone)]
+pub struct FieldContext {
+    pub prop: Prop,
+    set: Rc<dyn Fn(Vec<(&'static str, Value)>)>,
+}
+
+impl FieldContext {
+    pub fn set(&self, values: Vec<(&'static str, Value)>) {
+        (self.set)(values);
+    }
+}
+
+/// Register the editor a `PropKind::Custom { editor }` names. The factory
+/// returns the control and a refresh closure that reads the whole flat
+/// config (an editor may span several keys).
+pub fn register_field_editor(
+    name: &'static str,
+    f: impl Fn(FieldContext) -> (Widget, FieldRefresh) + 'static,
+) {
+    FIELD_EDITORS.with(|e| {
+        e.borrow_mut().insert(name, Rc::new(f));
+    });
 }
 
 /// Register the `(value, label)` list a `PropKind::DynamicChoice { provider }`
@@ -57,7 +90,7 @@ struct Row {
     prop: Prop,
     widget: GtkBox,
     /// Set the control from the model (load).
-    refresh: Box<dyn Fn(&Map<String, Value>)>,
+    refresh: FieldRefresh,
 }
 
 /// Rows for a list of props over one JSON object.
@@ -154,19 +187,41 @@ impl SchemaEditor {
         *self.on_change.borrow_mut() = Some(cb);
     }
 
+    /// Append a widget below the rows (stateful UI that is not a property,
+    /// such as the Claude sign-in block).
+    pub fn append_footer(&self, footer: &impl IsA<Widget>) {
+        footer.set_margin_top(8);
+        self.container.append(footer);
+    }
+
     /// Labels and keys, for the tree search box.
     pub fn search_terms(&self) -> Vec<String> {
-        self.rows
-            .borrow()
-            .iter()
-            .flat_map(|r| [r.prop.label.to_string(), r.prop.key.replace('_', " ")])
-            .collect()
+        let mut out = Vec::new();
+        collect_search_terms(self.rows.borrow().iter().map(|r| &r.prop), &mut out);
+        out
     }
 
     /// Break the control ↔ closure cycles.
     pub fn cleanup(&self) {
         *self.on_change.borrow_mut() = None;
         self.rows.borrow_mut().clear();
+    }
+}
+
+fn collect_search_terms<'a>(props: impl Iterator<Item = &'a Prop>, out: &mut Vec<String>) {
+    for prop in props {
+        match &prop.kind {
+            PropKind::Note => {}
+            PropKind::List { item, .. } => {
+                out.push(prop.label.to_string());
+                out.push(prop.key.replace('_', " "));
+                collect_search_terms(item.iter(), out);
+            }
+            _ => {
+                out.push(prop.label.to_string());
+                out.push(prop.key.replace('_', " "));
+            }
+        }
     }
 }
 
@@ -203,7 +258,7 @@ fn build_row(
     model: &Model,
     loading: &Rc<Cell<bool>>,
     fire: &Rc<dyn Fn()>,
-) -> (GtkBox, Box<dyn Fn(&Map<String, Value>)>) {
+) -> (GtkBox, FieldRefresh) {
     let key = prop.key;
     match &prop.kind {
         PropKind::Bool => {
@@ -475,7 +530,327 @@ fn build_row(
                 }),
             )
         }
+        PropKind::IndexChoice { provider } => {
+            // The value is the position in the provider's list. A saved
+            // index past the end is kept as its own row, as for
+            // DynamicChoice.
+            let provider: &'static str = provider;
+            let dropdown = DropDown::new(None::<StringList>, None::<gtk4::Expression>);
+            let values: Rc<RefCell<Vec<i64>>> = Rc::new(RefCell::new(Vec::new()));
+            let row = labelled_row(prop, &dropdown);
+            {
+                let model = model.clone();
+                let fire = fire.clone();
+                let loading = loading.clone();
+                let values = values.clone();
+                dropdown.connect_selected_notify(move |d| {
+                    if loading.get() {
+                        return;
+                    }
+                    if let Some(v) = values.borrow().get(d.selected() as usize) {
+                        model.borrow_mut().insert(key.to_string(), Value::from(*v));
+                        fire();
+                    }
+                });
+            }
+            let d = dropdown.clone();
+            (
+                row,
+                Box::new(move |m| {
+                    let saved = m.get(key).and_then(|v| v.as_i64()).unwrap_or(0);
+                    let mut labels: Vec<String> = provider_choices(provider)
+                        .into_iter()
+                        .map(|(_, label)| label)
+                        .collect();
+                    let mut indices: Vec<i64> = (0..labels.len() as i64).collect();
+                    if labels.is_empty() {
+                        labels.push("(none detected)".to_string());
+                        indices.push(saved);
+                    } else if saved < 0 || saved >= labels.len() as i64 {
+                        labels.push(format!("#{} (not present)", saved));
+                        indices.push(saved);
+                    }
+                    let idx = indices.iter().position(|i| *i == saved).unwrap_or(0);
+                    let refs: Vec<&str> = labels.iter().map(|s| s.as_str()).collect();
+                    *values.borrow_mut() = indices;
+                    d.set_model(Some(&StringList::new(&refs)));
+                    d.set_selected(idx as u32);
+                }),
+            )
+        }
+        PropKind::Custom { editor } => {
+            let set: Rc<dyn Fn(Vec<(&'static str, Value)>)> = {
+                let model = model.clone();
+                let fire = fire.clone();
+                Rc::new(move |values| {
+                    {
+                        let mut m = model.borrow_mut();
+                        for (k, v) in values {
+                            m.insert(k.to_string(), v);
+                        }
+                    }
+                    // `fire` is silent while loading, so a normalising
+                    // write during load does not commit.
+                    fire();
+                })
+            };
+            let ctx = FieldContext {
+                prop: prop.clone(),
+                set,
+            };
+            let factory = FIELD_EDITORS.with(|e| e.borrow().get(editor).cloned());
+            let (control, refresh) = match factory {
+                Some(f) => f(ctx),
+                None => {
+                    log::error!("no field editor registered as '{}'", editor);
+                    let label = Label::new(Some(&format!("(no editor '{}')", editor)));
+                    label.set_xalign(0.0);
+                    (
+                        label.upcast(),
+                        Box::new(|_: &Map<String, Value>| {}) as FieldRefresh,
+                    )
+                }
+            };
+            (labelled_row(prop, &control), refresh)
+        }
+        PropKind::Note => {
+            let row = GtkBox::new(Orientation::Horizontal, 0);
+            let label = Label::new(Some(prop.label));
+            label.set_wrap(true);
+            label.set_xalign(0.0);
+            label.add_css_class("dim-label");
+            label.set_margin_top(4);
+            row.append(&label);
+            (row, Box::new(|_| {}))
+        }
+        PropKind::List {
+            item,
+            new_item,
+            min_items,
+            item_label,
+            add_label,
+        } => build_list_row(
+            prop,
+            item.clone(),
+            *new_item,
+            *min_items,
+            item_label,
+            add_label,
+            model,
+            loading,
+            fire,
+        ),
     }
+}
+
+/// Current array under `key` (empty when absent or not an array).
+fn list_items(model: &Model, key: &str) -> Vec<Value> {
+    model
+        .borrow()
+        .get(key)
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// A `PropKind::List` row: a heading with the add button, then one frame
+/// per item holding rows built from the item props over that item's own
+/// object. Every item change writes the whole array back under `key`.
+/// Add/remove/move rebuild the frames (index-captured closures would go
+/// stale otherwise) with `loading` held, so the rebuilt controls do not
+/// fire a commit per control.
+#[allow(clippy::too_many_arguments)]
+fn build_list_row(
+    prop: &Prop,
+    item_props: Vec<Prop>,
+    new_item: fn(usize) -> Value,
+    min_items: usize,
+    item_label: &'static str,
+    add_label: &'static str,
+    model: &Model,
+    loading: &Rc<Cell<bool>>,
+    fire: &Rc<dyn Fn()>,
+) -> (GtkBox, FieldRefresh) {
+    let key = prop.key;
+    let outer = GtkBox::new(Orientation::Vertical, 6);
+    let header = GtkBox::new(Orientation::Horizontal, 8);
+    let title = Label::new(Some(prop.label));
+    title.set_xalign(0.0);
+    title.set_hexpand(true);
+    if !prop.help.is_empty() {
+        title.set_tooltip_text(Some(prop.help));
+    }
+    let add_btn = Button::with_label(add_label);
+    header.append(&title);
+    header.append(&add_btn);
+    outer.append(&header);
+    let items_box = GtkBox::new(Orientation::Vertical, 6);
+    outer.append(&items_box);
+
+    type Rebuild = Rc<dyn Fn(&[Value])>;
+    // The item buttons call back into the rebuild through a weak handle, so
+    // the only strong owner is this row's refresh closure (see `cleanup`).
+    let rebuild_slot: Rc<RefCell<Option<Rebuild>>> = Rc::new(RefCell::new(None));
+    let item_props = Rc::new(item_props);
+
+    let rebuild: Rebuild = {
+        let items_box = items_box.clone();
+        let model = model.clone();
+        let loading = loading.clone();
+        let fire = fire.clone();
+        let item_props = item_props.clone();
+        let rebuild_weak = Rc::downgrade(&rebuild_slot);
+        Rc::new(move |values: &[Value]| {
+            let was_loading = loading.replace(true);
+            while let Some(child) = items_box.first_child() {
+                items_box.remove(&child);
+            }
+            let count = values.len();
+            for (i, value) in values.iter().enumerate() {
+                let item_model: Model =
+                    Rc::new(RefCell::new(value.as_object().cloned().unwrap_or_default()));
+                let frame = Frame::new(None);
+                let vbox = GtkBox::new(Orientation::Vertical, 6);
+                vbox.set_margin_start(8);
+                vbox.set_margin_end(8);
+                vbox.set_margin_top(6);
+                vbox.set_margin_bottom(6);
+                frame.set_child(Some(&vbox));
+
+                let head = GtkBox::new(Orientation::Horizontal, 6);
+                let name = Label::new(Some(&format!("{} {}", item_label, i + 1)));
+                name.set_xalign(0.0);
+                name.set_hexpand(true);
+                name.add_css_class("heading");
+                let up = Button::from_icon_name("go-up-symbolic");
+                let down = Button::from_icon_name("go-down-symbolic");
+                let remove = Button::with_label("Remove");
+                up.set_tooltip_text(Some("Move up"));
+                down.set_tooltip_text(Some("Move down"));
+                up.set_sensitive(i > 0);
+                down.set_sensitive(i + 1 < count);
+                remove.set_sensitive(count > min_items);
+                remove.add_css_class("destructive-action");
+                head.append(&name);
+                head.append(&up);
+                head.append(&down);
+                head.append(&remove);
+                vbox.append(&head);
+
+                // Item rows write the item object, then the array.
+                let item_rows: Rc<RefCell<Vec<Row>>> = Rc::new(RefCell::new(Vec::new()));
+                let item_fire: Rc<dyn Fn()> = {
+                    let model = model.clone();
+                    let fire = fire.clone();
+                    let loading = loading.clone();
+                    let item_rows = item_rows.clone();
+                    let item_model = item_model.clone();
+                    Rc::new(move || {
+                        if loading.get() {
+                            return;
+                        }
+                        update_visibility(&item_rows.borrow(), &item_model.borrow());
+                        let object = Value::Object(item_model.borrow().clone());
+                        {
+                            let mut m = model.borrow_mut();
+                            let array = m
+                                .entry(key.to_string())
+                                .or_insert_with(|| Value::Array(Vec::new()));
+                            if let Some(items) = array.as_array_mut() {
+                                if i < items.len() {
+                                    items[i] = object;
+                                }
+                            }
+                        }
+                        fire();
+                    })
+                };
+                let snapshot = item_model.borrow().clone();
+                for p in item_props.iter() {
+                    let (widget, refresh) = build_row(p, &item_model, &loading, &item_fire);
+                    vbox.append(&widget);
+                    refresh(&snapshot);
+                    item_rows.borrow_mut().push(Row {
+                        prop: p.clone(),
+                        widget,
+                        refresh,
+                    });
+                }
+                update_visibility(&item_rows.borrow(), &snapshot);
+
+                // Structural edits: mutate the array, rebuild, fire.
+                let restructure = |f: Rc<dyn Fn(&mut Vec<Value>)>| {
+                    let model = model.clone();
+                    let fire = fire.clone();
+                    let rebuild_weak = rebuild_weak.clone();
+                    move |_: &Button| {
+                        let mut items = list_items(&model, key);
+                        f(&mut items);
+                        model
+                            .borrow_mut()
+                            .insert(key.to_string(), Value::Array(items.clone()));
+                        if let Some(rebuild) = rebuild_weak
+                            .upgrade()
+                            .and_then(|slot| slot.borrow().clone())
+                        {
+                            rebuild(&items);
+                        }
+                        fire();
+                    }
+                };
+                remove.connect_clicked(restructure(Rc::new(move |items| {
+                    if items.len() > min_items && i < items.len() {
+                        items.remove(i);
+                    }
+                })));
+                up.connect_clicked(restructure(Rc::new(move |items| {
+                    if i > 0 && i < items.len() {
+                        items.swap(i - 1, i);
+                    }
+                })));
+                down.connect_clicked(restructure(Rc::new(move |items| {
+                    if i + 1 < items.len() {
+                        items.swap(i, i + 1);
+                    }
+                })));
+
+                items_box.append(&frame);
+            }
+            loading.set(was_loading);
+        })
+    };
+    *rebuild_slot.borrow_mut() = Some(rebuild.clone());
+
+    {
+        let model = model.clone();
+        let fire = fire.clone();
+        let rebuild = rebuild.clone();
+        add_btn.connect_clicked(move |_| {
+            let mut items = list_items(&model, key);
+            items.push(new_item(items.len()));
+            model
+                .borrow_mut()
+                .insert(key.to_string(), Value::Array(items.clone()));
+            rebuild(&items);
+            fire();
+        });
+    }
+
+    let refresh: FieldRefresh = {
+        // Owns `rebuild_slot`; dropping this row drops the rebuild closure.
+        let rebuild_slot = rebuild_slot;
+        Box::new(move |m: &Map<String, Value>| {
+            let items = m
+                .get(key)
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            if let Some(rebuild) = rebuild_slot.borrow().clone() {
+                rebuild(&items);
+            }
+        })
+    };
+    (outer, refresh)
 }
 
 /// A [`SourceEditor`] over a schema: load/store go through the per-slot
@@ -490,6 +865,20 @@ impl SchemaSourceEditor {
         Box::new(Self {
             source_id: source_id.to_string(),
             editor: SchemaEditor::new(props),
+        })
+    }
+
+    /// As [`Self::create`], with a widget appended below the rows.
+    pub fn create_with_footer(
+        source_id: &str,
+        props: Vec<Prop>,
+        footer: &impl IsA<Widget>,
+    ) -> Box<dyn SourceEditor> {
+        let editor = SchemaEditor::new(props);
+        editor.append_footer(footer);
+        Box::new(Self {
+            source_id: source_id.to_string(),
+            editor,
         })
     }
 }
