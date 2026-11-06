@@ -876,8 +876,7 @@ impl ComboFrameConfig for LcarsFrameConfig {
 
     fn group_item_counts_mut(&mut self) -> &mut Vec<usize> {
         // Sync from u32 to usize before returning
-        self.group_item_counts_usize =
-            self.group_item_counts.iter().map(|&c| c as usize).collect();
+        self.group_item_counts_usize = self.group_item_counts.iter().map(|&c| c as usize).collect();
         &mut self.group_item_counts_usize
     }
 
@@ -912,8 +911,7 @@ impl ComboFrameConfig for LcarsFrameConfig {
 impl LcarsFrameConfig {
     /// Sync the usize shadow field from the u32 field
     pub fn sync_group_item_counts(&mut self) {
-        self.group_item_counts_usize =
-            self.group_item_counts.iter().map(|&c| c as usize).collect();
+        self.group_item_counts_usize = self.group_item_counts.iter().map(|&c| c as usize).collect();
     }
 
     /// Migrate legacy primary/secondary config to groups format
@@ -985,5 +983,40 @@ impl LcarsFrameConfig {
             }
         }
         names
+    }
+}
+
+impl crate::schema::Schema for StaticDisplayConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Prop, PropKind};
+        vec![
+            Prop::new(
+                "background",
+                "Background",
+                PropKind::Custom {
+                    editor: "background",
+                },
+            )
+            .section("Background"),
+            Prop::new(
+                "text_overlay",
+                "Text overlay",
+                PropKind::Object {
+                    props: <crate::text::TextOverlayConfig as crate::schema::Schema>::props(),
+                },
+            )
+            .section("Text overlay"),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod static_schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn static_props_fit_the_type() {
+        check_props_fit::<StaticDisplayConfig>(&StaticDisplayConfig::props()).unwrap();
     }
 }

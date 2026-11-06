@@ -190,3 +190,210 @@ impl CoreBarsConfig {
         }
     }
 }
+
+impl crate::schema::Schema for CoreBarsConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use super::bar::{background_prop, border_prop, fill_prop};
+        use crate::schema::{Condition, Prop, PropKind};
+        let core = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Int {
+                    min: 0,
+                    max: 255,
+                    step: 1,
+                },
+            )
+            .help("Clamped to the cores the source reports")
+        };
+        let padding = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: 0.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+        };
+        let labelled = Condition::IsTrue { key: "show_labels" };
+        vec![
+            core("start_core", "First core").section("Cores"),
+            core("end_core", "Last core").section("Cores"),
+            Prop::new(
+                "bar_style",
+                "Style",
+                PropKind::Enum {
+                    options: vec![
+                        ("full", "Full"),
+                        ("rectangle", "Rectangle"),
+                        ("segmented", "Segmented"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "orientation",
+                "Orientation",
+                PropKind::Enum {
+                    options: vec![("horizontal", "Horizontal"), ("vertical", "Vertical")],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "fill_direction",
+                "Fill direction",
+                PropKind::Enum {
+                    options: vec![
+                        ("left_to_right", "Left to right"),
+                        ("right_to_left", "Right to left"),
+                        ("bottom_to_top", "Bottom to top"),
+                        ("top_to_bottom", "Top to bottom"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "corner_radius",
+                "Corner radius (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "bar_spacing",
+                "Bar spacing (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "segment_count",
+                "Segments",
+                PropKind::Int {
+                    min: 1,
+                    max: 100,
+                    step: 1,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "bar_style",
+                values: vec!["segmented"],
+            }),
+            Prop::new(
+                "segment_spacing",
+                "Segment spacing (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 50.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Style")
+            .visible_when(Condition::Equals {
+                key: "bar_style",
+                values: vec!["segmented"],
+            }),
+            padding("padding_top", "Padding top (px)").section("Style"),
+            padding("padding_bottom", "Padding bottom (px)").section("Style"),
+            padding("padding_left", "Padding left (px)").section("Style"),
+            padding("padding_right", "Padding right (px)").section("Style"),
+            fill_prop("foreground", "Fill").section("Colours"),
+            Prop::new(
+                "gradient_spans_bars",
+                "Gradient spans all bars",
+                PropKind::Bool,
+            )
+            .section("Colours")
+            .help("One gradient across the whole set instead of per bar"),
+            background_prop("background", "Background").section("Colours"),
+            border_prop("border", "Border").section("Colours"),
+            Prop::new("show_labels", "Show core labels", PropKind::Bool).section("Labels"),
+            Prop::new(
+                "label_prefix",
+                "Label prefix",
+                PropKind::Text {
+                    placeholder: "e.g., C",
+                },
+            )
+            .section("Labels")
+            .visible_when(labelled.clone()),
+            Prop::new(
+                "label_position",
+                "Label position",
+                PropKind::Enum {
+                    options: vec![("start", "Start"), ("end", "End"), ("inside", "Inside")],
+                },
+            )
+            .section("Labels")
+            .visible_when(Condition::IsTrue { key: "show_labels" }),
+            Prop::new(
+                "label_font",
+                "Label font",
+                PropKind::PlainFont {
+                    size_key: "label_size",
+                },
+            )
+            .section("Labels")
+            .visible_when(Condition::IsTrue { key: "show_labels" }),
+            Prop::new("label_color", "Label colour", PropKind::Color)
+                .section("Labels")
+                .visible_when(Condition::IsTrue { key: "show_labels" }),
+            Prop::new("label_bold", "Bold labels", PropKind::Bool)
+                .section("Labels")
+                .visible_when(Condition::IsTrue { key: "show_labels" }),
+            Prop::new("animate", "Smooth animation", PropKind::Bool).section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.01,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue { key: "animate" }),
+            Prop::new(
+                "text_overlay",
+                "Text overlay",
+                PropKind::Object {
+                    props: <crate::text::TextOverlayConfig as crate::schema::Schema>::props(),
+                },
+            )
+            .section("Text overlay"),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<CoreBarsConfig>(&CoreBarsConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(CoreBarsConfig::default()).unwrap();
+        let back: CoreBarsConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+}

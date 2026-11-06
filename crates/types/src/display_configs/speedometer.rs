@@ -5,9 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::background::BackgroundConfig;
 use crate::color::Color;
 use crate::text::TextOverlayConfig;
-use crate::theme::{
-    deserialize_color_or_source, ColorSource, ColorStopSource,
-};
+use crate::theme::{deserialize_color_or_source, ColorSource, ColorStopSource};
 
 /// Needle style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -414,5 +412,330 @@ impl Default for SpeedometerConfig {
             bounce_animation: default_false(),
             text_overlay: TextOverlayConfig::default(),
         }
+    }
+}
+
+fn new_zone(n: usize) -> serde_json::Value {
+    let start = (n as f64 * 0.25).min(0.75);
+    serde_json::to_value(ValueZone {
+        start_percent: start,
+        end_percent: (start + 0.25).min(1.0),
+        color: Color::new(1.0, 0.3, 0.2, 1.0),
+        alpha: default_zone_alpha(),
+    })
+    .expect("zone serializes")
+}
+
+impl crate::schema::Schema for SpeedometerConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        let fraction = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+        };
+        let px = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: 0.5,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+        };
+        let tick_style = |key: &'static str| {
+            Prop::new(
+                key,
+                "Tick style",
+                PropKind::Enum {
+                    options: vec![("line", "Line"), ("wedge", "Wedge"), ("dot", "Dot")],
+                },
+            )
+        };
+        vec![
+            Prop::new(
+                "start_angle",
+                "Start angle (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+            .section("Geometry")
+            .help("0 = right, 90 = down, 180 = left, 270 = up"),
+            Prop::new(
+                "end_angle",
+                "End angle (°)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+            .section("Geometry"),
+            fraction("arc_width", "Arc width (fraction of radius)").section("Geometry"),
+            fraction("radius_percent", "Radius (fraction of space)").section("Geometry"),
+            Prop::new("show_track", "Show track", PropKind::Bool).section("Track"),
+            Prop::new("track_color", "Track colour", PropKind::Color)
+                .section("Track")
+                .visible_when(Condition::IsTrue { key: "show_track" }),
+            Prop::new(
+                "track_color_stops",
+                "Track colour zones",
+                PropKind::ColorStops {
+                    linear: false,
+                    themed: true,
+                },
+            )
+            .section("Track")
+            .help("Colours along the track from start to end")
+            .visible_when(Condition::IsTrue { key: "show_track" }),
+            Prop::new("show_major_ticks", "Major ticks", PropKind::Bool).section("Ticks"),
+            Prop::new(
+                "major_tick_count",
+                "Major tick count",
+                PropKind::Int {
+                    min: 2,
+                    max: 50,
+                    step: 1,
+                },
+            )
+            .section("Ticks")
+            .visible_when(Condition::IsTrue {
+                key: "show_major_ticks",
+            }),
+            fraction(
+                "major_tick_length",
+                "Major tick length (fraction of arc width)",
+            )
+            .section("Ticks")
+            .visible_when(Condition::IsTrue {
+                key: "show_major_ticks",
+            }),
+            px("major_tick_width", "Major tick width (px)")
+                .section("Ticks")
+                .visible_when(Condition::IsTrue {
+                    key: "show_major_ticks",
+                }),
+            Prop::new("major_tick_color", "Major tick colour", PropKind::Color)
+                .section("Ticks")
+                .visible_when(Condition::IsTrue {
+                    key: "show_major_ticks",
+                }),
+            tick_style("major_tick_style")
+                .section("Ticks")
+                .visible_when(Condition::IsTrue {
+                    key: "show_major_ticks",
+                }),
+            Prop::new("show_minor_ticks", "Minor ticks", PropKind::Bool).section("Ticks"),
+            Prop::new(
+                "minor_ticks_per_major",
+                "Minor ticks per major",
+                PropKind::Int {
+                    min: 1,
+                    max: 20,
+                    step: 1,
+                },
+            )
+            .section("Ticks")
+            .visible_when(Condition::IsTrue {
+                key: "show_minor_ticks",
+            }),
+            fraction(
+                "minor_tick_length",
+                "Minor tick length (fraction of arc width)",
+            )
+            .section("Ticks")
+            .visible_when(Condition::IsTrue {
+                key: "show_minor_ticks",
+            }),
+            px("minor_tick_width", "Minor tick width (px)")
+                .section("Ticks")
+                .visible_when(Condition::IsTrue {
+                    key: "show_minor_ticks",
+                }),
+            Prop::new("minor_tick_color", "Minor tick colour", PropKind::Color)
+                .section("Ticks")
+                .visible_when(Condition::IsTrue {
+                    key: "show_minor_ticks",
+                }),
+            tick_style("minor_tick_style")
+                .section("Ticks")
+                .visible_when(Condition::IsTrue {
+                    key: "show_minor_ticks",
+                }),
+            Prop::new("show_tick_labels", "Tick labels", PropKind::Bool).section("Ticks"),
+            Prop::new(
+                "tick_label_config",
+                "Tick labels",
+                PropKind::Object {
+                    props: vec![
+                        Prop::new(
+                            "font_family",
+                            "Font",
+                            PropKind::PlainFont {
+                                size_key: "font_size",
+                            },
+                        ),
+                        Prop::new("color", "Colour", PropKind::Color),
+                        Prop::new("bold", "Bold", PropKind::Bool),
+                        Prop::new("italic", "Italic", PropKind::Bool),
+                        Prop::new("use_percentage", "Show as 0–100 %", PropKind::Bool),
+                    ],
+                },
+            )
+            .section("Ticks")
+            .visible_when(Condition::IsTrue {
+                key: "show_tick_labels",
+            }),
+            Prop::new("show_needle", "Show needle", PropKind::Bool).section("Needle"),
+            Prop::new(
+                "needle_style",
+                "Needle style",
+                PropKind::Enum {
+                    options: vec![
+                        ("arrow", "Arrow"),
+                        ("line", "Line"),
+                        ("tapered", "Tapered"),
+                        ("triangle", "Triangle"),
+                    ],
+                },
+            )
+            .section("Needle")
+            .visible_when(Condition::IsTrue { key: "show_needle" }),
+            Prop::new(
+                "needle_tail_style",
+                "Needle tail",
+                PropKind::Enum {
+                    options: vec![
+                        ("none", "None"),
+                        ("short", "Short"),
+                        ("balanced", "Balanced"),
+                    ],
+                },
+            )
+            .section("Needle")
+            .visible_when(Condition::IsTrue { key: "show_needle" }),
+            fraction("needle_length", "Needle length (fraction of radius)")
+                .section("Needle")
+                .visible_when(Condition::IsTrue { key: "show_needle" }),
+            px("needle_width", "Needle width (px)")
+                .section("Needle")
+                .visible_when(Condition::IsTrue { key: "show_needle" }),
+            Prop::new("needle_color", "Needle colour", PropKind::Color)
+                .section("Needle")
+                .visible_when(Condition::IsTrue { key: "show_needle" }),
+            Prop::new("needle_shadow", "Needle shadow", PropKind::Bool)
+                .section("Needle")
+                .visible_when(Condition::IsTrue { key: "show_needle" }),
+            Prop::new("show_center_hub", "Show centre hub", PropKind::Bool).section("Needle"),
+            fraction("center_hub_radius", "Hub radius (fraction of radius)")
+                .section("Needle")
+                .visible_when(Condition::IsTrue {
+                    key: "show_center_hub",
+                }),
+            Prop::new("center_hub_color", "Hub colour", PropKind::Color)
+                .section("Needle")
+                .visible_when(Condition::IsTrue {
+                    key: "show_center_hub",
+                }),
+            Prop::new("show_bezel", "Show bezel", PropKind::Bool).section("Bezel"),
+            fraction("bezel_width", "Bezel width (fraction of radius)")
+                .section("Bezel")
+                .visible_when(Condition::IsTrue { key: "show_bezel" }),
+            Prop::new("bezel_solid_color", "Bezel colour", PropKind::Color)
+                .section("Bezel")
+                .visible_when(Condition::IsTrue { key: "show_bezel" }),
+            Prop::new(
+                "bezel_background",
+                "Bezel background",
+                PropKind::Custom {
+                    editor: "background",
+                },
+            )
+            .section("Bezel")
+            .visible_when(Condition::IsTrue { key: "show_bezel" }),
+            Prop::new(
+                "zones",
+                "Value zones",
+                PropKind::List {
+                    item: vec![
+                        fraction("start_percent", "From (fraction)"),
+                        fraction("end_percent", "To (fraction)"),
+                        Prop::new("color", "Colour", PropKind::Rgba),
+                        fraction("alpha", "Opacity"),
+                    ],
+                    new_item: new_zone,
+                    min_items: 0,
+                    item_label: "Zone",
+                    add_label: "Add zone",
+                    item_summary: Some(|v| {
+                        let f = |k: &str| v.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0);
+                        format!(
+                            "{:.0}–{:.0} %",
+                            f("start_percent") * 100.0,
+                            f("end_percent") * 100.0
+                        )
+                    }),
+                },
+            )
+            .section("Zones")
+            .help("Coloured bands drawn behind the track"),
+            Prop::new("animate", "Animate value changes", PropKind::Bool).section("Animation"),
+            Prop::new(
+                "animation_duration",
+                "Duration (s)",
+                PropKind::Float {
+                    min: 0.05,
+                    max: 5.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue { key: "animate" }),
+            Prop::new("bounce_animation", "Bounce at the end", PropKind::Bool)
+                .section("Animation")
+                .visible_when(Condition::IsTrue { key: "animate" }),
+            Prop::new(
+                "text_overlay",
+                "Text overlay",
+                PropKind::Object {
+                    props: <crate::text::TextOverlayConfig as crate::schema::Schema>::props(),
+                },
+            )
+            .section("Text overlay"),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<SpeedometerConfig>(&SpeedometerConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(SpeedometerConfig::default()).unwrap();
+        let back: SpeedometerConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
     }
 }

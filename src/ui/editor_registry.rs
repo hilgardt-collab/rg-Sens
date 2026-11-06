@@ -21,7 +21,10 @@ use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Notebook, Widget};
 use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
-use rg_sens_types::display_configs::{ArcDisplayConfig, BarDisplayConfig};
+use rg_sens_types::display_configs::{
+    ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig, GraphDisplayConfig, IndicatorConfig,
+    SpeedometerConfig,
+};
 use rg_sens_types::schema::Schema;
 use rg_sens_types::source_configs::claude::ClaudeSourceConfig;
 use rg_sens_types::source_configs::clock::ClockSourceConfig;
@@ -241,56 +244,6 @@ source_editor!(TestEditor, TestSourceConfigWidget, Test, by_ref, |_w| {});
 // Standalone display editor adapters
 // ============================================================================
 
-pub struct SpeedometerEditor(crate::ui::SpeedometerConfigWidget);
-impl DisplayEditor for SpeedometerEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::Speedometer(c) = config {
-            self.0.set_config(c);
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::Speedometer(self.0.get_config()))
-    }
-    fn set_on_change(&self, cb: ChangeCallback) -> bool {
-        self.0.set_on_change(move || cb());
-        true
-    }
-    fn set_theme(&self, theme: &ComboThemeConfig) {
-        self.0.set_theme(theme.clone());
-    }
-    fn cleanup(&self) {
-        self.0.cleanup();
-    }
-}
-
-pub struct GraphEditor(crate::ui::GraphConfigWidget);
-impl DisplayEditor for GraphEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::Graph(c) = config {
-            self.0.set_config(c.clone());
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::Graph(self.0.get_config()))
-    }
-    fn set_on_change(&self, cb: ChangeCallback) -> bool {
-        self.0.set_on_change(move || cb());
-        true
-    }
-    fn set_theme(&self, theme: &ComboThemeConfig) {
-        self.0.set_theme(theme.clone());
-    }
-    fn cleanup(&self) {
-        self.0.cleanup();
-    }
-}
-
 pub struct ClockAnalogEditor(crate::ui::ClockAnalogConfigWidget);
 impl DisplayEditor for ClockAnalogEditor {
     fn widget(&self) -> Widget {
@@ -327,51 +280,6 @@ impl DisplayEditor for ClockDigitalEditor {
     }
 }
 
-pub struct CpuCoresEditor(crate::ui::CoreBarsConfigWidget);
-impl DisplayEditor for CpuCoresEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::CpuCores(c) = config {
-            self.0.set_config(c.clone());
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::CpuCores(self.0.get_config()))
-    }
-    fn set_on_change(&self, cb: ChangeCallback) -> bool {
-        self.0.set_on_change(move || cb());
-        true
-    }
-    fn set_theme(&self, theme: &ComboThemeConfig) {
-        self.0.set_theme(theme.clone());
-    }
-    fn cleanup(&self) {
-        self.0.cleanup();
-    }
-}
-
-pub struct IndicatorEditor(crate::ui::IndicatorConfigWidget);
-impl DisplayEditor for IndicatorEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::Indicator(c) = config {
-            self.0.set_config(c);
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::Indicator(self.0.get_config()))
-    }
-    fn set_on_change(&self, cb: ChangeCallback) -> bool {
-        self.0.set_on_change(move || cb());
-        true
-    }
-}
-
-#[cfg(feature = "webkit")]
 pub struct CssTemplateEditor(crate::ui::CssTemplateConfigWidget);
 #[cfg(feature = "webkit")]
 impl DisplayEditor for CssTemplateEditor {
@@ -694,12 +602,10 @@ pub fn register_all_editors() {
         SchemaDisplayEditor::create("arc", ArcDisplayConfig::props(), fields)
     });
     register_display_editor("speedometer", |fields| {
-        Box::new(SpeedometerEditor(crate::ui::SpeedometerConfigWidget::new(
-            fields,
-        )))
+        SchemaDisplayEditor::create("speedometer", SpeedometerConfig::props(), fields)
     });
     register_display_editor("graph", |fields| {
-        Box::new(GraphEditor(crate::ui::GraphConfigWidget::new(fields)))
+        SchemaDisplayEditor::create("graph", GraphDisplayConfig::props(), fields)
     });
     register_display_editor("clock_analog", |_| {
         Box::new(ClockAnalogEditor(crate::ui::ClockAnalogConfigWidget::new()))
@@ -710,14 +616,10 @@ pub fn register_all_editors() {
         ))
     });
     register_display_editor("cpu_cores", |fields| {
-        let w = crate::ui::CoreBarsConfigWidget::with_fields(&fields);
-        w.set_max_cores(crate::sources::CpuSource::get_cached_core_count());
-        Box::new(CpuCoresEditor(w))
+        SchemaDisplayEditor::create("cpu_cores", CoreBarsConfig::props(), fields)
     });
     register_display_editor("indicator", |fields| {
-        Box::new(IndicatorEditor(crate::ui::IndicatorConfigWidget::new(
-            fields,
-        )))
+        SchemaDisplayEditor::create("indicator", IndicatorConfig::props(), fields)
     });
     #[cfg(feature = "webkit")]
     register_display_editor("css_template", |_| {

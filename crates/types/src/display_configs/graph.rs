@@ -329,3 +329,310 @@ pub struct DataPoint {
     pub value: f64,
     pub timestamp: f64, // Relative time in seconds
 }
+
+fn axis_props() -> Vec<crate::schema::Prop> {
+    use crate::schema::{Condition, Prop, PropKind};
+    let shown = Condition::IsTrue { key: "show" };
+    let labelled = Condition::IsTrue { key: "show_labels" };
+    let gridded = Condition::IsTrue { key: "show_grid" };
+    vec![
+        Prop::new("show", "Show axis", PropKind::Bool),
+        Prop::new("color", "Axis colour", PropKind::Color).visible_when(shown.clone()),
+        Prop::new(
+            "width",
+            "Axis width (px)",
+            PropKind::Float {
+                min: 0.5,
+                max: 10.0,
+                step: 0.5,
+                digits: 1,
+            },
+        )
+        .visible_when(shown),
+        Prop::new("show_labels", "Show labels", PropKind::Bool),
+        Prop::new("label_color", "Label colour", PropKind::Color).visible_when(labelled.clone()),
+        Prop::new(
+            "label_font_family",
+            "Label font",
+            PropKind::PlainFont {
+                size_key: "label_font_size",
+            },
+        )
+        .visible_when(labelled.clone()),
+        Prop::new("label_bold", "Bold labels", PropKind::Bool).visible_when(labelled.clone()),
+        Prop::new("label_italic", "Italic labels", PropKind::Bool).visible_when(labelled),
+        Prop::new("show_grid", "Show grid", PropKind::Bool),
+        Prop::new("grid_color", "Grid colour", PropKind::Color).visible_when(gridded.clone()),
+        Prop::new(
+            "grid_width",
+            "Grid width (px)",
+            PropKind::Float {
+                min: 0.1,
+                max: 5.0,
+                step: 0.1,
+                digits: 1,
+            },
+        )
+        .visible_when(gridded.clone()),
+        Prop::new(
+            "grid_line_style",
+            "Grid line style",
+            PropKind::Enum {
+                options: vec![
+                    ("Solid", "Solid"),
+                    ("Dashed", "Dashed"),
+                    ("Dotted", "Dotted"),
+                ],
+            },
+        )
+        .visible_when(gridded),
+    ]
+}
+
+fn margin_prop(key: &'static str, label: &'static str) -> crate::schema::Prop {
+    use crate::schema::{Prop, PropKind};
+    let side = |k: &'static str, l: &'static str| {
+        Prop::new(
+            k,
+            l,
+            PropKind::Float {
+                min: 0.0,
+                max: 200.0,
+                step: 1.0,
+                digits: 0,
+            },
+        )
+    };
+    Prop::new(
+        key,
+        label,
+        PropKind::Object {
+            props: vec![
+                side("top", "Top (px)"),
+                side("right", "Right (px)"),
+                side("bottom", "Bottom (px)"),
+                side("left", "Left (px)"),
+            ],
+        },
+    )
+}
+
+impl crate::schema::Schema for GraphDisplayConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new(
+                "graph_type",
+                "Graph type",
+                PropKind::Enum {
+                    options: vec![
+                        ("Line", "Line"),
+                        ("Bar", "Bars"),
+                        ("Area", "Area"),
+                        ("SteppedLine", "Stepped line"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "line_style",
+                "Line style",
+                PropKind::Enum {
+                    options: vec![
+                        ("Solid", "Solid"),
+                        ("Dashed", "Dashed"),
+                        ("Dotted", "Dotted"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new(
+                "line_width",
+                "Line width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 10.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Style"),
+            Prop::new("line_color", "Line colour", PropKind::Color).section("Style"),
+            Prop::new("smooth_lines", "Smooth lines", PropKind::Bool).section("Style"),
+            Prop::new(
+                "fill_mode",
+                "Fill",
+                PropKind::Enum {
+                    options: vec![
+                        ("None", "None"),
+                        ("Solid", "Solid colour"),
+                        ("Gradient", "Gradient"),
+                    ],
+                },
+            )
+            .section("Fill"),
+            Prop::new("fill_color", "Fill colour", PropKind::Color)
+                .section("Fill")
+                .visible_when(Condition::Equals {
+                    key: "fill_mode",
+                    values: vec!["Solid"],
+                }),
+            Prop::new("fill_gradient_start", "Gradient start", PropKind::Color)
+                .section("Fill")
+                .visible_when(Condition::Equals {
+                    key: "fill_mode",
+                    values: vec!["Gradient"],
+                }),
+            Prop::new("fill_gradient_end", "Gradient end", PropKind::Color)
+                .section("Fill")
+                .visible_when(Condition::Equals {
+                    key: "fill_mode",
+                    values: vec!["Gradient"],
+                }),
+            Prop::new(
+                "fill_opacity",
+                "Fill opacity",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Fill")
+            .visible_when(Condition::Equals {
+                key: "fill_mode",
+                values: vec!["Solid", "Gradient"],
+            }),
+            Prop::new(
+                "max_data_points",
+                "Data points kept",
+                PropKind::Int {
+                    min: 10,
+                    max: 10000,
+                    step: 10,
+                },
+            )
+            .section("Data"),
+            Prop::new("show_points", "Show points", PropKind::Bool).section("Data"),
+            Prop::new(
+                "point_radius",
+                "Point radius (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Data")
+            .visible_when(Condition::IsTrue { key: "show_points" }),
+            Prop::new("point_color", "Point colour", PropKind::Color)
+                .section("Data")
+                .visible_when(Condition::IsTrue { key: "show_points" }),
+            Prop::new("auto_scale", "Auto-scale values", PropKind::Bool).section("Data"),
+            Prop::new(
+                "value_padding",
+                "Scale padding (fraction)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Data")
+            .visible_when(Condition::IsTrue { key: "auto_scale" }),
+            Prop::new(
+                "min_value",
+                "Minimum",
+                PropKind::Float {
+                    min: -1000000.0,
+                    max: 1000000.0,
+                    step: 1.0,
+                    digits: 2,
+                },
+            )
+            .section("Data")
+            .visible_when(Condition::IsFalse { key: "auto_scale" }),
+            Prop::new(
+                "max_value",
+                "Maximum",
+                PropKind::Float {
+                    min: -1000000.0,
+                    max: 1000000.0,
+                    step: 1.0,
+                    digits: 2,
+                },
+            )
+            .section("Data")
+            .visible_when(Condition::IsFalse { key: "auto_scale" }),
+            Prop::new(
+                "x_axis",
+                "X axis",
+                PropKind::Object {
+                    props: axis_props(),
+                },
+            )
+            .section("Axes"),
+            Prop::new(
+                "y_axis",
+                "Y axis",
+                PropKind::Object {
+                    props: axis_props(),
+                },
+            )
+            .section("Axes"),
+            margin_prop("margin", "Margins").section("Layout"),
+            Prop::new("background_color", "Background", PropKind::Rgba).section("Layout"),
+            Prop::new("plot_background_color", "Plot background", PropKind::Rgba).section("Layout"),
+            Prop::new(
+                "text_overlay",
+                "Text overlay",
+                PropKind::Object {
+                    props: <crate::text::TextOverlayConfig as crate::schema::Schema>::props(),
+                },
+            )
+            .section("Text overlay"),
+            Prop::new(
+                "animate_new_points",
+                "Scroll new points smoothly",
+                PropKind::Bool,
+            )
+            .section("Animation"),
+            Prop::new(
+                "update_interval",
+                "Expected update interval (s)",
+                PropKind::Float {
+                    min: 0.1,
+                    max: 60.0,
+                    step: 0.1,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .help("Pace of the source, so scrolling matches it")
+            .visible_when(Condition::IsTrue {
+                key: "animate_new_points",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<GraphDisplayConfig>(&GraphDisplayConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(GraphDisplayConfig::default()).unwrap();
+        let back: GraphDisplayConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+}

@@ -138,3 +138,131 @@ impl Default for IndicatorConfig {
         }
     }
 }
+
+impl crate::schema::Schema for IndicatorConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        vec![
+            Prop::new("value_field", "Value field", PropKind::Field).section("Shape"),
+            Prop::new(
+                "shape",
+                "Shape",
+                PropKind::Custom {
+                    editor: "indicator_shape",
+                },
+            )
+            .section("Shape"),
+            Prop::new(
+                "shape_size",
+                "Size (fraction)",
+                PropKind::Float {
+                    min: 0.05,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+            .section("Shape"),
+            Prop::new(
+                "rotation_angle",
+                "Rotation (°)",
+                PropKind::Float {
+                    min: -360.0,
+                    max: 360.0,
+                    step: 5.0,
+                    digits: 0,
+                },
+            )
+            .section("Shape"),
+            Prop::new(
+                "gradient_stops",
+                "Colour by value",
+                PropKind::ColorStops {
+                    linear: true,
+                    themed: false,
+                },
+            )
+            .section("Colours")
+            .help("Colour at the minimum (left) through the maximum (right)"),
+            Prop::new(
+                "min_value",
+                "Minimum",
+                PropKind::Float {
+                    min: -1000000.0,
+                    max: 1000000.0,
+                    step: 1.0,
+                    digits: 2,
+                },
+            )
+            .section("Colours"),
+            Prop::new(
+                "max_value",
+                "Maximum",
+                PropKind::Float {
+                    min: -1000000.0,
+                    max: 1000000.0,
+                    step: 1.0,
+                    digits: 2,
+                },
+            )
+            .section("Colours"),
+            Prop::new(
+                "border_width",
+                "Border width (px)",
+                PropKind::Float {
+                    min: 0.0,
+                    max: 20.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Style"),
+            Prop::new("border_color", "Border colour", PropKind::Rgba).section("Style"),
+            Prop::new("show_text", "Show text", PropKind::Bool).section("Text"),
+            Prop::new(
+                "text_config",
+                "Text",
+                PropKind::Object {
+                    props: <crate::text::TextDisplayerConfig as crate::schema::Schema>::props(),
+                },
+            )
+            .section("Text")
+            .visible_when(Condition::IsTrue { key: "show_text" }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<IndicatorConfig>(&IndicatorConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(IndicatorConfig::default()).unwrap();
+        let back: IndicatorConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+
+    #[test]
+    fn every_shape_the_editor_writes_deserializes() {
+        for v in [
+            serde_json::json!("fill"),
+            serde_json::json!("circle"),
+            serde_json::json!("square"),
+            serde_json::json!({ "polygon": 3 }),
+            serde_json::json!({ "polygon": 12 }),
+        ] {
+            serde_json::from_value::<IndicatorShape>(v).unwrap();
+        }
+        assert_eq!(
+            serde_json::to_value(IndicatorShape::Polygon(5)).unwrap(),
+            serde_json::json!({ "polygon": 5 })
+        );
+    }
+}

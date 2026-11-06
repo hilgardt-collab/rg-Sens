@@ -34,14 +34,10 @@ mod clock_digital_config_widget;
 mod color_picker;
 pub mod custom_color_picker;
 mod gradient_editor;
-mod graph_config_widget;
 mod grid_layout;
 mod position_grid_widget;
 pub(crate) mod sensor_picker;
 mod shared_font_dialog;
-mod speedometer_config_widget;
-mod text_line_config_widget;
-mod text_overlay_config_widget;
 mod timezone_dialog;
 pub mod widget_builder;
 pub use shared_font_dialog::{init_shared_font_dialog, warm_font_cache};
@@ -50,11 +46,9 @@ mod art_nouveau_config_widget;
 pub mod auto_scroll;
 mod color_button_widget;
 pub mod combo_config_base;
-pub mod config;
 pub mod config_helpers;
 pub mod config_tree;
 pub mod context_menu;
-mod core_bars_config_widget;
 #[cfg(feature = "webkit")]
 mod css_template_config_widget; // Config widget only when webkit is available
 pub mod css_template_display; // Config types always available for serialization
@@ -62,13 +56,11 @@ mod cyberpunk_config_widget;
 pub mod editor_registry;
 mod fighter_hud_config_widget;
 mod global_theme_widget;
-mod indicator_config_widget;
 mod industrial_config_widget;
 mod lcars_config_widget;
 mod material_config_widget;
 pub mod new_panel_dialog;
 mod retro_terminal_config_widget;
-mod static_config_widget;
 mod steampunk_config_widget;
 mod synthwave_config_widget;
 mod test_source_config_widget;
@@ -120,7 +112,6 @@ pub use clock_display::{
 };
 pub use color_button_widget::ColorButtonWidget;
 pub use color_picker::ColorPickerDialog;
-pub use core_bars_config_widget::{CoreBarsConfigWidget, LazyCoreBarsConfigWidget};
 pub use core_bars_display::{render_core_bars, CoreBarsConfig, LabelPosition};
 pub use rg_sens_types::source_configs::cpu::{
     CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit,
@@ -147,12 +138,10 @@ pub use rg_sens_types::source_configs::gpu::{
     FrequencyUnit as GpuFrequencyUnit, GpuField, GpuSourceConfig, MemoryUnit,
 };
 pub use gradient_editor::GradientEditor;
-pub use graph_config_widget::{GraphConfigWidget, LazyGraphConfigWidget};
 pub use graph_display::{
     render_graph, AxisConfig, DataPoint, FillMode, GraphDisplayConfig, GraphType, LineStyle, Margin,
 };
 pub use grid_layout::{BorderlessDragCallback, GridConfig, GridLayout};
-pub use indicator_config_widget::IndicatorConfigWidget;
 pub use industrial_config_widget::IndustrialConfigWidget;
 pub use industrial_display::{
     calculate_group_layouts as industrial_calculate_group_layouts,
@@ -189,12 +178,10 @@ pub use rg_sens_types::source_configs::memory::{MemoryField, MemorySourceConfig}
 pub use rg_sens_types::source_configs::network::{
     NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit,
 };
-pub use speedometer_config_widget::{LazySpeedometerConfigWidget, SpeedometerConfigWidget};
 pub use speedometer_display::{
     render_speedometer, BezelStyle, NeedleStyle, NeedleTailStyle, SpeedometerConfig,
     TickLabelConfig, TickStyle, ValueZone,
 };
-pub use static_config_widget::{LazyStaticConfigWidget, StaticConfigWidget};
 pub use steampunk_config_widget::SteampunkConfigWidget;
 pub use steampunk_display::{
     calculate_group_layouts as steampunk_calculate_group_layouts,
@@ -213,10 +200,6 @@ pub use synthwave_display::{
 pub use test_source_config_widget::TestSourceConfigWidget;
 pub use test_source_dialog::{
     show_test_source_dialog, show_test_source_dialog_with_callback, TestSourceSaveCallback,
-};
-pub use text_line_config_widget::{LazyTextLineConfigWidget, TextLineConfigWidget};
-pub use text_overlay_config_widget::{
-    LazyTextOverlayConfigWidget, TextOverlayConfig, TextOverlayConfigWidget,
 };
 pub use theme_color_selector::ThemeColorSelector;
 pub use theme_font_selector::ThemeFontSelector;

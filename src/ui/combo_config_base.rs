@@ -21,7 +21,10 @@ use crate::ui::theme::{ComboThemeConfig, FontSource};
 use crate::ui::widget_builder::{
     create_dropdown_row, create_page_container, create_spin_row_with_value, DEFAULT_MARGIN,
 };
-use rg_sens_types::display_configs::{ArcDisplayConfig, BarDisplayConfig};
+use rg_sens_types::display_configs::{
+    ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig, GraphDisplayConfig, SpeedometerConfig,
+    StaticDisplayConfig,
+};
 use rg_sens_types::schema::{Prop, Schema};
 use rg_sens_types::text::TextOverlayConfig;
 use serde::{de::DeserializeOwned, Serialize};
@@ -30,10 +33,7 @@ use serde_json::Value;
 // Re-export for convenience - combo config widgets can import from here
 use crate::ui::shared_font_dialog::show_font_dialog;
 pub use crate::ui::widget_builder::{notify_change, queue_redraw, OnChangeCallback};
-use crate::ui::{
-    ColorButtonWidget, GradientEditor, LazyCoreBarsConfigWidget, LazyGraphConfigWidget,
-    LazySpeedometerConfigWidget, LazyStaticConfigWidget,
-};
+use crate::ui::{ColorButtonWidget, GradientEditor};
 
 // Re-export combo traits and types from the types crate
 pub use rg_sens_types::combo::{LayoutFrameConfig, ThemedFrameConfig, TransferableComboConfig};
@@ -1243,71 +1243,22 @@ where
     let graph_config_frame = gtk4::Frame::new(Some("Graph Configuration"));
     graph_config_frame.set_margin_top(12);
 
-    // Use LazyGraphConfigWidget to defer expensive widget creation until user clicks
-    let graph_widget = LazyGraphConfigWidget::new(slot_fields.clone(), "Graph");
-    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
-    {
-        let cfg = config.borrow();
-        graph_widget.set_theme(get_theme(&cfg));
-    }
-    let current_graph_config = {
-        let cfg = config.borrow();
-        get_content_items(&cfg)
-            .get(slot_name)
-            .map(|item| item.graph_config.clone())
-            .unwrap_or_default()
-    };
-    graph_widget.set_config(current_graph_config);
-
-    // Connect graph widget on_change
-    let graph_widget_rc = Rc::new(graph_widget);
-    {
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let slot_name_clone = slot_name.to_string();
-        let get_content_items_clone = get_content_items.clone();
-        let set_content_item_clone = set_content_item.clone();
-        let graph_widget_for_cb = graph_widget_rc.clone();
-        graph_widget_rc.set_on_change(move || {
-            let graph_config = graph_widget_for_cb.get_config();
-            let mut cfg = config_clone.borrow_mut();
-            let mut item = get_content_items_clone(&cfg)
-                .get(&slot_name_clone)
-                .cloned()
-                .unwrap_or_default();
-            item.graph_config = graph_config;
-            set_content_item_clone(&mut cfg, &slot_name_clone, item);
-            drop(cfg);
-            queue_redraw(&preview_clone, &on_change_clone);
-        });
-    }
-
-    // Register theme refresh callback for graph widget
-    {
-        let graph_widget_for_theme = graph_widget_rc.clone();
-        let config_for_graph_theme = config.clone();
-        let get_theme_for_graph = get_theme.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = get_theme_for_graph(&config_for_graph_theme.borrow());
-            graph_widget_for_theme.set_theme(theme);
-        });
-        theme_ref_refreshers
-            .borrow_mut()
-            .push(theme_refresh_callback);
-    }
-
-    // Register cleanup callback to break graph widget reference cycles
-    {
-        let graph_widget_for_cleanup = graph_widget_rc.clone();
-        content_cleanup_callbacks
-            .borrow_mut()
-            .push(Box::new(move || {
-                graph_widget_for_cleanup.cleanup();
-            }));
-    }
-
-    graph_config_frame.set_child(Some(graph_widget_rc.widget()));
+    let graph_editor = item_schema_editor(
+        GraphDisplayConfig::props(),
+        slot_fields.clone(),
+        config,
+        on_change,
+        preview,
+        slot_name,
+        get_content_items.clone(),
+        set_content_item.clone(),
+        theme_ref_refreshers,
+        get_theme.clone(),
+        content_cleanup_callbacks,
+        |item| &item.graph_config,
+        |item, cfg| item.graph_config = cfg,
+    );
+    graph_config_frame.set_child(Some(graph_editor.widget()));
     inner_box.append(&graph_config_frame);
 
     // === Text Overlay Section (Lazy-loaded for performance) ===
@@ -1338,70 +1289,22 @@ where
     let core_bars_config_frame = gtk4::Frame::new(Some("Core Bars Configuration"));
     core_bars_config_frame.set_margin_top(12);
 
-    let core_bars_widget = LazyCoreBarsConfigWidget::new(slot_fields.clone(), "Core Bars");
-    let current_core_bars_config = {
-        let cfg = config.borrow();
-        get_content_items(&cfg)
-            .get(slot_name)
-            .map(|item| item.core_bars_config.clone())
-            .unwrap_or_default()
-    };
-    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
-    {
-        let cfg = config.borrow();
-        core_bars_widget.set_theme(get_theme(&cfg));
-    }
-    core_bars_widget.set_config(current_core_bars_config);
-
-    // Connect core bars widget on_change
-    let core_bars_widget_rc = Rc::new(core_bars_widget);
-    {
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let slot_name_clone = slot_name.to_string();
-        let get_content_items_clone = get_content_items.clone();
-        let set_content_item_clone = set_content_item.clone();
-        let core_bars_widget_for_cb = core_bars_widget_rc.clone();
-        core_bars_widget_rc.set_on_change(move || {
-            let core_bars_config = core_bars_widget_for_cb.get_config();
-            let mut cfg = config_clone.borrow_mut();
-            let mut item = get_content_items_clone(&cfg)
-                .get(&slot_name_clone)
-                .cloned()
-                .unwrap_or_default();
-            item.core_bars_config = core_bars_config;
-            set_content_item_clone(&mut cfg, &slot_name_clone, item);
-            drop(cfg);
-            queue_redraw(&preview_clone, &on_change_clone);
-        });
-    }
-
-    // Register theme refresh callback for core bars widget
-    {
-        let core_bars_widget_for_theme = core_bars_widget_rc.clone();
-        let config_for_core_bars_theme = config.clone();
-        let get_theme_for_core_bars = get_theme.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = get_theme_for_core_bars(&config_for_core_bars_theme.borrow());
-            core_bars_widget_for_theme.set_theme(theme);
-        });
-        theme_ref_refreshers
-            .borrow_mut()
-            .push(theme_refresh_callback);
-    }
-
-    // Register cleanup callback to break core bars widget reference cycles
-    {
-        let core_bars_widget_for_cleanup = core_bars_widget_rc.clone();
-        content_cleanup_callbacks
-            .borrow_mut()
-            .push(Box::new(move || {
-                core_bars_widget_for_cleanup.cleanup();
-            }));
-    }
-
-    core_bars_config_frame.set_child(Some(core_bars_widget_rc.widget()));
+    let core_bars_editor = item_schema_editor(
+        CoreBarsConfig::props(),
+        slot_fields.clone(),
+        config,
+        on_change,
+        preview,
+        slot_name,
+        get_content_items.clone(),
+        set_content_item.clone(),
+        theme_ref_refreshers,
+        get_theme.clone(),
+        content_cleanup_callbacks,
+        |item| &item.core_bars_config,
+        |item, cfg| item.core_bars_config = cfg,
+    );
+    core_bars_config_frame.set_child(Some(core_bars_editor.widget()));
     inner_box.append(&core_bars_config_frame);
 
     // === Arc Configuration Section ===
@@ -1430,140 +1333,44 @@ where
     let speedometer_config_frame = gtk4::Frame::new(Some("Speedometer Configuration"));
     speedometer_config_frame.set_margin_top(12);
 
-    let speedometer_widget = LazySpeedometerConfigWidget::new(slot_fields.clone(), "Speedometer");
-    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
-    {
-        let cfg = config.borrow();
-        speedometer_widget.set_theme(get_theme(&cfg));
-    }
-    let current_speedometer_config = {
-        let cfg = config.borrow();
-        get_content_items(&cfg)
-            .get(slot_name)
-            .map(|item| item.speedometer_config.clone())
-            .unwrap_or_default()
-    };
-    speedometer_widget.set_config(current_speedometer_config);
-
-    // Connect speedometer widget on_change
-    let speedometer_widget_rc = Rc::new(speedometer_widget);
-    {
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let slot_name_clone = slot_name.to_string();
-        let get_content_items_clone = get_content_items.clone();
-        let set_content_item_clone = set_content_item.clone();
-        let speedometer_widget_for_cb = speedometer_widget_rc.clone();
-        speedometer_widget_rc.set_on_change(move || {
-            let speedometer_config = speedometer_widget_for_cb.get_config();
-            let mut cfg = config_clone.borrow_mut();
-            let mut item = get_content_items_clone(&cfg)
-                .get(&slot_name_clone)
-                .cloned()
-                .unwrap_or_default();
-            item.speedometer_config = speedometer_config;
-            set_content_item_clone(&mut cfg, &slot_name_clone, item);
-            drop(cfg);
-            queue_redraw(&preview_clone, &on_change_clone);
-        });
-    }
-
-    // Register theme refresh callback for speedometer widget
-    {
-        let speedometer_widget_for_theme = speedometer_widget_rc.clone();
-        let config_for_speedometer_theme = config.clone();
-        let get_theme_for_speedometer = get_theme.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = get_theme_for_speedometer(&config_for_speedometer_theme.borrow());
-            speedometer_widget_for_theme.set_theme(theme);
-        });
-        theme_ref_refreshers
-            .borrow_mut()
-            .push(theme_refresh_callback);
-    }
-
-    // Register cleanup callback to break speedometer widget reference cycles
-    {
-        let speedometer_widget_for_cleanup = speedometer_widget_rc.clone();
-        content_cleanup_callbacks
-            .borrow_mut()
-            .push(Box::new(move || {
-                speedometer_widget_for_cleanup.cleanup();
-            }));
-    }
-
-    speedometer_config_frame.set_child(Some(speedometer_widget_rc.widget()));
+    let speedometer_editor = item_schema_editor(
+        SpeedometerConfig::props(),
+        slot_fields.clone(),
+        config,
+        on_change,
+        preview,
+        slot_name,
+        get_content_items.clone(),
+        set_content_item.clone(),
+        theme_ref_refreshers,
+        get_theme.clone(),
+        content_cleanup_callbacks,
+        |item| &item.speedometer_config,
+        |item, cfg| item.speedometer_config = cfg,
+    );
+    speedometer_config_frame.set_child(Some(speedometer_editor.widget()));
     inner_box.append(&speedometer_config_frame);
 
     // === Static Display Configuration Section ===
     let static_config_frame = gtk4::Frame::new(Some("Static Display Configuration"));
     static_config_frame.set_margin_top(12);
 
-    let static_widget = LazyStaticConfigWidget::new(slot_fields.clone(), "Static");
-    // Set theme BEFORE config, since set_config triggers UI rebuild that needs theme
-    {
-        let cfg = config.borrow();
-        static_widget.set_theme(get_theme(&cfg));
-    }
-    let current_static_config = {
-        let cfg = config.borrow();
-        get_content_items(&cfg)
-            .get(slot_name)
-            .map(|item| item.static_config.clone())
-            .unwrap_or_default()
-    };
-    static_widget.set_config(current_static_config);
-
-    // Connect static widget on_change
-    let static_widget_rc = Rc::new(static_widget);
-    {
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let preview_clone = preview.clone();
-        let slot_name_clone = slot_name.to_string();
-        let get_content_items_clone = get_content_items.clone();
-        let set_content_item_clone = set_content_item.clone();
-        let static_widget_for_cb = static_widget_rc.clone();
-        static_widget_rc.set_on_change(move || {
-            let static_config = static_widget_for_cb.get_config();
-            let mut cfg = config_clone.borrow_mut();
-            let mut item = get_content_items_clone(&cfg)
-                .get(&slot_name_clone)
-                .cloned()
-                .unwrap_or_default();
-            item.static_config = static_config;
-            set_content_item_clone(&mut cfg, &slot_name_clone, item);
-            drop(cfg);
-            queue_redraw(&preview_clone, &on_change_clone);
-        });
-    }
-
-    // Register theme refresh callback for static widget
-    {
-        let static_widget_for_theme = static_widget_rc.clone();
-        let config_for_static_theme = config.clone();
-        let get_theme_for_static = get_theme.clone();
-        let theme_refresh_callback: Rc<dyn Fn()> = Rc::new(move || {
-            let theme = get_theme_for_static(&config_for_static_theme.borrow());
-            static_widget_for_theme.set_theme(theme);
-        });
-        theme_ref_refreshers
-            .borrow_mut()
-            .push(theme_refresh_callback);
-    }
-
-    // Register cleanup callback to break static widget reference cycles
-    {
-        let static_widget_for_cleanup = static_widget_rc.clone();
-        content_cleanup_callbacks
-            .borrow_mut()
-            .push(Box::new(move || {
-                static_widget_for_cleanup.cleanup();
-            }));
-    }
-
-    static_config_frame.set_child(Some(static_widget_rc.widget()));
+    let static_editor = item_schema_editor(
+        StaticDisplayConfig::props(),
+        slot_fields.clone(),
+        config,
+        on_change,
+        preview,
+        slot_name,
+        get_content_items.clone(),
+        set_content_item.clone(),
+        theme_ref_refreshers,
+        get_theme.clone(),
+        content_cleanup_callbacks,
+        |item| &item.static_config,
+        |item, cfg| item.static_config = cfg,
+    );
+    static_config_frame.set_child(Some(static_editor.widget()));
     inner_box.append(&static_config_frame);
 
     // Show/hide frames based on display type
@@ -1595,6 +1402,10 @@ where
     let bar_editor_clone = bar_editor.clone();
     let arc_editor_clone = arc_editor.clone();
     let text_editor_clone = text_editor.clone();
+    let graph_editor_clone = graph_editor.clone();
+    let core_bars_editor_clone = core_bars_editor.clone();
+    let speedometer_editor_clone = speedometer_editor.clone();
+    let static_editor_clone = static_editor.clone();
     let config_clone = config.clone();
     let on_change_clone = on_change.clone();
     let preview_clone = preview.clone();
@@ -1644,6 +1455,22 @@ where
                 (
                     &text_editor_clone,
                     serde_json::to_value(&new_item.bar_config.text_overlay),
+                ),
+                (
+                    &graph_editor_clone,
+                    serde_json::to_value(&new_item.graph_config),
+                ),
+                (
+                    &core_bars_editor_clone,
+                    serde_json::to_value(&new_item.core_bars_config),
+                ),
+                (
+                    &speedometer_editor_clone,
+                    serde_json::to_value(&new_item.speedometer_config),
+                ),
+                (
+                    &static_editor_clone,
+                    serde_json::to_value(&new_item.static_config),
                 ),
             ] {
                 if let Ok(Value::Object(map)) = value {
