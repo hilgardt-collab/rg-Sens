@@ -690,6 +690,7 @@ impl crate::schema::Schema for SpeedometerConfig {
                             f("end_percent") * 100.0
                         )
                     }),
+                    count_key: None,
                 },
             )
             .section("Zones")

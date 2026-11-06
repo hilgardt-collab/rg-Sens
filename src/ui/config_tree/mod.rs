@@ -11,9 +11,11 @@
 //! `editor_registry`; the grid applies the assembled `PanelData` through
 //! `GridLayout::apply_panel_data`.
 
+pub mod combo_items;
 pub mod field_editors;
 mod node;
 mod pages;
+pub mod schema_combo;
 pub mod schema_editor;
 mod state;
 mod util;

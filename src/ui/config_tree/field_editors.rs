@@ -11,10 +11,12 @@ use crate::sources::{
 };
 use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::sensor_picker::SensorPicker;
-use crate::ui::{BackgroundConfigWidget, TimezoneDialog};
+use crate::ui::{BackgroundConfigWidget, ColorButtonWidget, TimezoneDialog};
 use gtk4::prelude::*;
 use gtk4::{Button, DropDown, StringList};
 use rg_sens_types::background::BackgroundConfig;
+use rg_sens_types::color::Color;
+use rg_sens_types::display_configs::synthwave::SynthwaveColorScheme;
 use rg_sens_types::display_configs::IndicatorShape;
 use rg_sens_types::text::TextPosition;
 use serde_json::{json, Map, Value};
@@ -30,6 +32,7 @@ pub fn register_field_editors() {
     register_field_editor("text_position", text_position_editor);
     register_field_editor("background", background_editor);
     register_field_editor("indicator_shape", indicator_shape_editor);
+    register_field_editor("synthwave_scheme", synthwave_scheme_editor);
 }
 
 /// A button showing the zone name; clicking opens the timezone dialog.
@@ -396,4 +399,110 @@ fn indicator_shape_editor(ctx: FieldContext) -> FieldEditor {
         })
     };
     FieldEditor::new(inner, refresh)
+}
+
+/// `SynthwaveColorScheme`: four presets or `Custom { primary, secondary,
+/// accent }`, externally tagged, so a dropdown plus three colour buttons.
+fn synthwave_scheme_editor(ctx: FieldContext) -> FieldEditor {
+    const PRESETS: [(&str, &str); 4] = [
+        ("classic", "Classic"),
+        ("sunset", "Sunset"),
+        ("night_drive", "Night Drive"),
+        ("miami", "Miami"),
+    ];
+    let key = ctx.prop.key;
+    let custom_index = PRESETS.len() as u32;
+    let labels: Vec<&str> = PRESETS
+        .iter()
+        .map(|(_, l)| *l)
+        .chain(std::iter::once("Custom"))
+        .collect();
+    let outer = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+    let dropdown = DropDown::new(Some(StringList::new(&labels)), None::<gtk4::Expression>);
+    outer.append(&dropdown);
+    let custom_row = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    let buttons: Vec<Rc<ColorButtonWidget>> = ["Primary", "Secondary", "Accent"]
+        .iter()
+        .map(|name| {
+            let b = Rc::new(ColorButtonWidget::new(Color::new(1.0, 1.0, 1.0, 1.0)));
+            b.widget().set_tooltip_text(Some(name));
+            custom_row.append(b.widget());
+            b
+        })
+        .collect();
+    custom_row.set_visible(false);
+    outer.append(&custom_row);
+    let refreshing = Rc::new(Cell::new(false));
+
+    let custom_value = {
+        let buttons = buttons.clone();
+        move || -> Value {
+            json!({ "custom": {
+                "primary": buttons[0].color(),
+                "secondary": buttons[1].color(),
+                "accent": buttons[2].color(),
+            } })
+        }
+    };
+    {
+        let ctx = ctx.clone();
+        let custom_row = custom_row.clone();
+        let refreshing = refreshing.clone();
+        let custom_value = custom_value.clone();
+        dropdown.connect_selected_notify(move |d| {
+            let sel = d.selected();
+            custom_row.set_visible(sel == custom_index);
+            if refreshing.get() {
+                return;
+            }
+            let value = match PRESETS.get(sel as usize) {
+                Some((tag, _)) => json!(tag),
+                None => custom_value(),
+            };
+            ctx.set(vec![(key, value)]);
+        });
+    }
+    for b in &buttons {
+        let ctx = ctx.clone();
+        let dropdown = dropdown.clone();
+        let refreshing = refreshing.clone();
+        let custom_value = custom_value.clone();
+        b.set_on_change(move |_| {
+            if refreshing.get() || dropdown.selected() != custom_index {
+                return;
+            }
+            ctx.set(vec![(key, custom_value())]);
+        });
+    }
+    let refresh: FieldRefresh = {
+        let dropdown = dropdown.clone();
+        let custom_row = custom_row.clone();
+        Box::new(move |m: &Map<String, Value>| {
+            let scheme = m
+                .get(key)
+                .and_then(|v| serde_json::from_value::<SynthwaveColorScheme>(v.clone()).ok())
+                .unwrap_or_default();
+            let (index, colors) = match &scheme {
+                SynthwaveColorScheme::Classic => (0, None),
+                SynthwaveColorScheme::Sunset => (1, None),
+                SynthwaveColorScheme::NightDrive => (2, None),
+                SynthwaveColorScheme::Miami => (3, None),
+                SynthwaveColorScheme::Custom {
+                    primary,
+                    secondary,
+                    accent,
+                } => (custom_index, Some([*primary, *secondary, *accent])),
+            };
+            refreshing.set(true);
+            if let Some(colors) = colors {
+                for (b, c) in buttons.iter().zip(colors) {
+                    b.set_color(c);
+                }
+            }
+            dropdown.set_selected(index);
+            custom_row.set_visible(index == custom_index);
+            refreshing.set(false);
+        })
+    };
+    FieldEditor::new(outer, refresh)
 }

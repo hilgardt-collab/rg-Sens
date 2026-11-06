@@ -476,6 +476,43 @@ impl DisplayerConfig {
         }
     }
 
+    /// Swap two groups of a combo displayer's frame (per-slot display
+    /// settings follow their source). No-op for standalone displayers.
+    pub fn swap_groups(&mut self, a: usize, b: usize) {
+        use crate::combo::ComboFrameConfig;
+        match self {
+            DisplayerConfig::Lcars(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::Cyberpunk(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::Material(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::Industrial(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::RetroTerminal(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::FighterHud(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::Synthwave(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::ArtDeco(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::ArtNouveau(cfg) => cfg.frame.swap_groups(a, b),
+            DisplayerConfig::Steampunk(cfg) => cfg.frame.swap_groups(a, b),
+            _ => {}
+        }
+    }
+
+    /// Swap two items within a group of a combo displayer's frame.
+    pub fn swap_items(&mut self, group: usize, i: usize, j: usize) {
+        use crate::combo::ComboFrameConfig;
+        match self {
+            DisplayerConfig::Lcars(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::Cyberpunk(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::Material(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::Industrial(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::RetroTerminal(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::FighterHud(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::Synthwave(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::ArtDeco(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::ArtNouveau(cfg) => cfg.frame.swap_items(group, i, j),
+            DisplayerConfig::Steampunk(cfg) => cfg.frame.swap_items(group, i, j),
+            _ => {}
+        }
+    }
+
     /// The frame's group size weights of a combo displayer.
     pub fn group_size_weights(&self) -> Option<&[f64]> {
         match self {

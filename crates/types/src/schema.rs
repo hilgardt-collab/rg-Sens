@@ -73,6 +73,19 @@ pub enum PropKind {
         /// Optional short description of an item for its heading or tree
         /// node ("Line 1 · value").
         item_summary: Option<fn(&Value) -> String>,
+        /// Integer key of the same object kept equal to the list length on
+        /// every structural edit (LCARS `segment_count`).
+        count_key: Option<&'static str>,
+    },
+    /// A `Vec` of a plain enum with one row per element ("Group 1 …"):
+    /// the row count follows the integer under `count_key`, elements past
+    /// the stored length show the value under `default_key` (or the first
+    /// option) and are written when changed.
+    EnumList {
+        options: Vec<(&'static str, &'static str)>,
+        count_key: &'static str,
+        default_key: Option<&'static str>,
+        item_label: &'static str,
     },
     /// An editor the UI registers under this name (timezone picker, sensor
     /// picker, …). It may read and write any keys of the flat config, not
@@ -443,9 +456,68 @@ fn check_object(
                     check_object(&variant.props, &candidate, &here, accept)?;
                 }
             }
-            PropKind::List { item, new_item, .. } => {
+            PropKind::EnumList {
+                options,
+                count_key,
+                default_key,
+                ..
+            } => {
+                if !current.is_array() {
+                    return Err(format!("enum list {} is not an array", display_path(&here)));
+                }
+                if !object
+                    .get(*count_key)
+                    .map(Value::is_number)
+                    .unwrap_or(false)
+                {
+                    return Err(format!(
+                        "count key '{}' of {} is not a number",
+                        count_key,
+                        display_path(&here)
+                    ));
+                }
+                if let Some(k) = default_key {
+                    if !object.contains_key(*k) {
+                        return Err(format!(
+                            "default key '{}' of {} is not a field",
+                            k,
+                            display_path(&here)
+                        ));
+                    }
+                }
+                for (value, _) in options {
+                    accept(with_value_at(
+                        root,
+                        &here,
+                        Value::Array(vec![Value::String(value.to_string())]),
+                    )?)
+                    .map_err(|e| {
+                        format!(
+                            "enum list option '{}' is not a variant of {}: {}",
+                            value,
+                            display_path(&here),
+                            e
+                        )
+                    })?;
+                }
+            }
+            PropKind::List {
+                item,
+                new_item,
+                count_key,
+                ..
+            } => {
                 if !current.is_array() {
                     return Err(format!("list {} is not an array", display_path(&here)));
+                }
+                if let Some(k) = count_key {
+                    if !object.get(*k).map(Value::is_number).unwrap_or(false) {
+                        return Err(format!(
+                            "count key '{}' of {} is not a number",
+                            k,
+                            display_path(&here)
+                        ));
+                    }
                 }
                 let template = new_item(0);
                 if !template.is_object() {
@@ -621,6 +693,7 @@ mod tests {
                     item_label: "Item",
                     add_label: "Add",
                     item_summary: None,
+                    count_key: None,
                 },
             ),
             Prop::note("a note"),

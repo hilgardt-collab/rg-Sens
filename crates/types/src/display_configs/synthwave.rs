@@ -551,3 +551,247 @@ impl ComboFrameConfig for SynthwaveFrameConfig {
         &mut self.group_item_counts
     }
 }
+
+impl crate::schema::Schema for SynthwaveFrameConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        let px = |key: &'static str, label: &'static str, max: f64| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: 0.0,
+                    max,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+        };
+        let fraction = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: 0.0,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+        };
+        vec![
+            Prop::new(
+                "frame_style",
+                "Frame style",
+                PropKind::Enum {
+                    options: vec![
+                        ("neon_border", "Neon border"),
+                        ("chrome", "Chrome"),
+                        ("minimal", "Minimal"),
+                        ("retro_double", "Retro double"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Frame"),
+            px("frame_width", "Frame width (px)", 20.0).section("Frame"),
+            px("corner_radius", "Corner radius (px)", 50.0).section("Frame"),
+            Prop::new(
+                "color_scheme",
+                "Colour scheme",
+                PropKind::Custom {
+                    editor: "synthwave_scheme",
+                },
+            )
+            .section("Frame")
+            .help("Picking a scheme also sets the theme colours"),
+            fraction("neon_glow_intensity", "Neon glow").section("Frame"),
+            Prop::new("scanline_effect", "Scanline effect", PropKind::Bool).section("Frame"),
+            Prop::new("show_grid", "Show grid", PropKind::Bool).section("Grid"),
+            Prop::new(
+                "grid_style",
+                "Grid style",
+                PropKind::Enum {
+                    options: vec![
+                        ("perspective", "Perspective"),
+                        ("flat", "Flat"),
+                        ("hexagon", "Hexagon"),
+                        ("scanlines", "Scanlines"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Grid")
+            .visible_when(Condition::IsTrue { key: "show_grid" }),
+            Prop::new(
+                "grid_spacing",
+                "Grid spacing (px)",
+                PropKind::Float {
+                    min: 5.0,
+                    max: 200.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Grid")
+            .visible_when(Condition::IsTrue { key: "show_grid" }),
+            Prop::new(
+                "grid_line_width",
+                "Grid line width (px)",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 10.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Grid")
+            .visible_when(Condition::IsTrue { key: "show_grid" }),
+            fraction("grid_horizon", "Horizon (fraction of height)")
+                .section("Grid")
+                .visible_when(Condition::IsTrue { key: "show_grid" }),
+            fraction("grid_perspective", "Perspective")
+                .section("Grid")
+                .visible_when(Condition::IsTrue { key: "show_grid" }),
+            Prop::new("show_sun", "Show sun", PropKind::Bool).section("Grid"),
+            fraction("sun_position", "Sun position (0 = bottom, 1 = horizon)")
+                .section("Grid")
+                .visible_when(Condition::IsTrue { key: "show_sun" }),
+            Prop::new("show_header", "Show header", PropKind::Bool).section("Header"),
+            Prop::new(
+                "header_text",
+                "Header text",
+                PropKind::Text {
+                    placeholder: "Panel title",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_style",
+                "Header style",
+                PropKind::Enum {
+                    options: vec![
+                        ("chrome", "Chrome"),
+                        ("neon", "Neon"),
+                        ("outline", "Outline"),
+                        ("simple", "Simple"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_font",
+                "Header font",
+                PropKind::PlainFont {
+                    size_key: "header_font_size",
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "header_height",
+                "Header height (px)",
+                PropKind::Float {
+                    min: 10.0,
+                    max: 120.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Header")
+            .visible_when(Condition::IsTrue { key: "show_header" }),
+            Prop::new(
+                "split_orientation",
+                "Group layout",
+                PropKind::Enum {
+                    options: vec![
+                        ("vertical", "Stack groups vertically"),
+                        ("horizontal", "Place groups side by side"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            Prop::new(
+                "group_item_orientations",
+                "Items within group",
+                PropKind::EnumList {
+                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
+                    count_key: "group_count",
+                    default_key: Some("split_orientation"),
+                    item_label: "Group",
+                },
+            )
+            .section("Layout"),
+            px("content_padding", "Content padding (px)", 100.0).section("Layout"),
+            px("item_spacing", "Item spacing (px)", 50.0).section("Layout"),
+            Prop::new(
+                "divider_style",
+                "Divider",
+                PropKind::Enum {
+                    options: vec![
+                        ("neon_line", "Neon line"),
+                        ("gradient", "Gradient"),
+                        ("neon_dots", "Neon dots"),
+                        ("line", "Line"),
+                        ("none", "None"),
+                    ],
+                },
+            )
+            .section("Layout"),
+            px("divider_padding", "Divider padding (px)", 50.0).section("Layout"),
+            Prop::new("animation_enabled", "Animate value changes", PropKind::Bool)
+                .section("Animation"),
+            Prop::new(
+                "animation_speed",
+                "Animation speed",
+                PropKind::Float {
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+            .section("Animation")
+            .visible_when(Condition::IsTrue {
+                key: "animation_enabled",
+            }),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<SynthwaveFrameConfig>(&SynthwaveFrameConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(SynthwaveFrameConfig::default()).unwrap();
+        let back: SynthwaveFrameConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+
+    #[test]
+    fn every_scheme_the_editor_writes_deserializes() {
+        for v in [
+            serde_json::json!("classic"),
+            serde_json::json!("sunset"),
+            serde_json::json!("night_drive"),
+            serde_json::json!("miami"),
+            serde_json::json!({ "custom": {
+                "primary": { "r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0 },
+                "secondary": { "r": 0.0, "g": 1.0, "b": 0.0, "a": 1.0 },
+                "accent": { "r": 0.0, "g": 0.0, "b": 1.0, "a": 1.0 } } }),
+        ] {
+            serde_json::from_value::<SynthwaveColorScheme>(v).unwrap();
+        }
+    }
+}

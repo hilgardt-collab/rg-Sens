@@ -103,6 +103,7 @@ impl crate::schema::Schema for StaticTextSourceConfig {
                             .unwrap_or("")
                             .to_string()
                     }),
+                    count_key: None,
                 },
             )
             .help("The first line is the source's primary value"),

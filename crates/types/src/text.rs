@@ -903,6 +903,7 @@ impl crate::schema::Schema for TextDisplayerConfig {
                         .unwrap_or("")
                         .to_string()
                 }),
+                count_key: None,
             },
         )]
     }

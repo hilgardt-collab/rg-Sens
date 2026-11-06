@@ -924,6 +924,226 @@ impl ComboThemeConfig {
         ]
     }
 
+    /// Named palettes a themed frame offers in its Theme page ("Gold &
+    /// Black" for Art Deco, …), on top of [`Self::builtin_presets`]. Moved
+    /// here from the frame widgets so the generic Theme editor can offer
+    /// them. Empty for displayers without palettes.
+    pub fn palette_presets(displayer_type: &str) -> Vec<(&'static str, ComboThemeConfig)> {
+        fn palette(
+            c1: (f64, f64, f64),
+            c2: (f64, f64, f64),
+            c3: (f64, f64, f64),
+            c4: (f64, f64, f64),
+            gradient_end: u8,
+            font1: &str,
+            font2: &str,
+        ) -> ComboThemeConfig {
+            let c = |(r, g, b): (f64, f64, f64)| Color::new(r, g, b, 1.0);
+            ComboThemeConfig {
+                color1: c(c1),
+                color2: c(c2),
+                color3: c(c3),
+                color4: c(c4),
+                gradient: LinearGradientSourceConfig {
+                    angle: 180.0,
+                    stops: vec![
+                        ColorStopSource::theme(0.0, 1),
+                        ColorStopSource::theme(1.0, gradient_end),
+                    ],
+                },
+                font1_family: font1.to_string(),
+                font1_size: 14.0,
+                font2_family: font2.to_string(),
+                font2_size: 11.0,
+            }
+        }
+        const GOLD: (f64, f64, f64) = (0.831, 0.686, 0.216);
+        const COPPER: (f64, f64, f64) = (0.722, 0.451, 0.200);
+        const BRONZE: (f64, f64, f64) = (0.804, 0.498, 0.196);
+        const BURGUNDY: (f64, f64, f64) = (0.502, 0.0, 0.125);
+        const TEAL: (f64, f64, f64) = (0.0, 0.502, 0.502);
+        const CREAM: (f64, f64, f64) = (0.961, 0.961, 0.863);
+        const GOLDENROD: (f64, f64, f64) = (0.855, 0.647, 0.125);
+        const OLIVE: (f64, f64, f64) = (0.420, 0.557, 0.137);
+        match displayer_type {
+            "art_deco" => vec![
+                (
+                    "Gold & Black",
+                    palette(
+                        GOLD,
+                        COPPER,
+                        (0.804, 0.608, 0.114),
+                        (0.102, 0.102, 0.102),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+                (
+                    "Copper & Teal",
+                    palette(
+                        COPPER,
+                        TEAL,
+                        (0.545, 0.271, 0.075),
+                        (0.067, 0.094, 0.106),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+                (
+                    "Silver & Navy",
+                    palette(
+                        (0.753, 0.753, 0.753),
+                        (0.0, 0.0, 0.502),
+                        (0.467, 0.533, 0.600),
+                        (0.059, 0.071, 0.118),
+                        3,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+                (
+                    "Bronze & Burgundy",
+                    palette(
+                        BRONZE,
+                        BURGUNDY,
+                        (0.647, 0.165, 0.165),
+                        (0.122, 0.063, 0.075),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+                (
+                    "Emerald & Gold",
+                    palette(
+                        (0.314, 0.784, 0.471),
+                        GOLD,
+                        (0.0, 0.392, 0.0),
+                        (0.059, 0.094, 0.067),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+            ],
+            "art_nouveau" => vec![
+                (
+                    "Olive & Gold",
+                    palette(
+                        OLIVE,
+                        GOLDENROD,
+                        CREAM,
+                        (0.180, 0.310, 0.180),
+                        4,
+                        "Serif",
+                        "Serif",
+                    ),
+                ),
+                (
+                    "Teal & Copper",
+                    palette(
+                        TEAL,
+                        COPPER,
+                        (1.0, 1.0, 0.941),
+                        BURGUNDY,
+                        4,
+                        "Serif",
+                        "Serif",
+                    ),
+                ),
+                (
+                    "Burgundy & Cream",
+                    palette(
+                        BURGUNDY,
+                        CREAM,
+                        GOLDENROD,
+                        (0.133, 0.369, 0.133),
+                        4,
+                        "Serif",
+                        "Serif",
+                    ),
+                ),
+                (
+                    "Peacock",
+                    palette(
+                        TEAL,
+                        GOLDENROD,
+                        (0.502, 0.0, 0.502),
+                        (0.0, 0.0, 0.545),
+                        4,
+                        "Serif",
+                        "Serif",
+                    ),
+                ),
+                (
+                    "Autumn",
+                    palette(
+                        (0.698, 0.133, 0.133),
+                        OLIVE,
+                        CREAM,
+                        (0.396, 0.263, 0.129),
+                        4,
+                        "Serif",
+                        "Serif",
+                    ),
+                ),
+            ],
+            "steampunk" => vec![
+                (
+                    "Brass & Brown",
+                    palette(
+                        GOLD,
+                        COPPER,
+                        BRONZE,
+                        (0.137, 0.102, 0.075),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+                (
+                    "Copper & Verdigris",
+                    palette(
+                        COPPER,
+                        (0.200, 0.502, 0.400),
+                        (0.545, 0.271, 0.075),
+                        (0.067, 0.094, 0.082),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+                (
+                    "Bronze & Burgundy",
+                    palette(
+                        BRONZE,
+                        BURGUNDY,
+                        (0.647, 0.165, 0.165),
+                        (0.122, 0.063, 0.075),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+                (
+                    "Iron & Rust",
+                    palette(
+                        (0.467, 0.467, 0.467),
+                        (0.698, 0.302, 0.129),
+                        (0.329, 0.329, 0.329),
+                        (0.102, 0.086, 0.078),
+                        2,
+                        "Sans Bold",
+                        "Sans",
+                    ),
+                ),
+            ],
+            _ => Vec::new(),
+        }
+    }
+
     /// Look up a built-in preset by its stable name.
     pub fn builtin_preset(name: &str) -> Option<ComboThemeConfig> {
         Self::builtin_presets()

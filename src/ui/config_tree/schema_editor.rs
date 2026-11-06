@@ -36,7 +36,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 type Provider = Rc<dyn Fn() -> Vec<(String, String)>>;
-type Model = Rc<RefCell<Map<String, Value>>>;
+/// The flat config an editor edits, shared with its nested rows (and, for
+/// combo editors, with the item pages).
+pub(super) type Model = Rc<RefCell<Map<String, Value>>>;
 /// Sets a control from the flat config (load / rebuild).
 pub type FieldRefresh = Box<dyn Fn(&Map<String, Value>)>;
 type ThemeHook = Box<dyn Fn(&ComboThemeConfig)>;
@@ -385,6 +387,11 @@ impl SchemaEditor {
 
     pub fn model(&self) -> Map<String, Value> {
         self.model.borrow().clone()
+    }
+
+    /// The live model (combo item pages write `content_items` into it).
+    pub(super) fn model_rc(&self) -> Model {
+        self.model.clone()
     }
 
     pub fn set_on_change(&self, cb: ChangeCallback) {
@@ -1485,6 +1492,7 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
             item_label,
             add_label,
             item_summary,
+            count_key,
         } => build_list_row(
             prop,
             ListSpec {
@@ -1494,12 +1502,135 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 item_label,
                 add_label,
                 item_summary: *item_summary,
+                count_key: *count_key,
             },
             model,
             ctx,
             fire,
         ),
+        PropKind::EnumList {
+            options,
+            count_key,
+            default_key,
+            item_label,
+        } => build_enum_list_row(
+            prop,
+            options.clone(),
+            count_key,
+            *default_key,
+            item_label,
+            model,
+            ctx,
+            fire,
+        ),
     }
+}
+
+/// A `PropKind::EnumList` row: one dropdown per element, the element count
+/// following `count_key`. Rows are rebuilt on every load, so a group added
+/// elsewhere shows up on the next refresh.
+#[allow(clippy::too_many_arguments)]
+fn build_enum_list_row(
+    prop: &Prop,
+    options: Vec<(&'static str, &'static str)>,
+    count_key: &'static str,
+    default_key: Option<&'static str>,
+    item_label: &'static str,
+    model: &Model,
+    ctx: &Ctx,
+    fire: &Rc<dyn Fn()>,
+) -> Row {
+    let key = prop.key;
+    let (outer, body) = titled_block(prop, &[]);
+    let options = Rc::new(options);
+    let refresh: FieldRefresh = {
+        let body = body.clone();
+        let model = model.clone();
+        let loading = ctx.loading.clone();
+        let fire = fire.clone();
+        Box::new(move |m: &Map<String, Value>| {
+            while let Some(child) = body.first_child() {
+                body.remove(&child);
+            }
+            let count = m.get(count_key).and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let stored: Vec<String> = m
+                .get(key)
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .map(|v| v.as_str().unwrap_or("").to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let default_value = default_key
+                .and_then(|k| m.get(k))
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| {
+                    options
+                        .first()
+                        .map(|(v, _)| v.to_string())
+                        .unwrap_or_default()
+                });
+            let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
+            for i in 0..count {
+                let dropdown =
+                    DropDown::new(Some(StringList::new(&labels)), None::<gtk4::Expression>);
+                let current = stored
+                    .get(i)
+                    .cloned()
+                    .unwrap_or_else(|| default_value.clone());
+                let idx = options.iter().position(|(v, _)| *v == current).unwrap_or(0);
+                let was = loading.replace(true);
+                dropdown.set_selected(idx as u32);
+                loading.set(was);
+                {
+                    let model = model.clone();
+                    let fire = fire.clone();
+                    let loading = loading.clone();
+                    let options = options.clone();
+                    let default_value = default_value.clone();
+                    dropdown.connect_selected_notify(move |d| {
+                        if loading.get() {
+                            return;
+                        }
+                        let Some((chosen, _)) = options.get(d.selected() as usize) else {
+                            return;
+                        };
+                        {
+                            let mut mm = model.borrow_mut();
+                            let mut values: Vec<Value> = mm
+                                .get(key)
+                                .and_then(|v| v.as_array())
+                                .cloned()
+                                .unwrap_or_default();
+                            while values.len() <= i {
+                                values.push(Value::String(default_value.clone()));
+                            }
+                            values[i] = Value::String(chosen.to_string());
+                            mm.insert(key.to_string(), Value::Array(values));
+                        }
+                        fire();
+                    });
+                }
+                let row = GtkBox::new(Orientation::Horizontal, 8);
+                let label = Label::new(Some(&format!("{} {}", item_label, i + 1)));
+                label.set_width_chars(18);
+                label.set_xalign(0.0);
+                dropdown.set_hexpand(true);
+                row.append(&label);
+                row.append(&dropdown);
+                body.append(&row);
+            }
+            if count == 0 {
+                let empty = Label::new(Some("No groups yet."));
+                empty.set_xalign(0.0);
+                empty.add_css_class("dim-label");
+                body.append(&empty);
+            }
+        })
+    };
+    Row::plain(prop, outer, refresh)
 }
 
 /// Current array under `key` (empty when absent or not an array).
@@ -1519,6 +1650,17 @@ struct ListSpec {
     item_label: &'static str,
     add_label: &'static str,
     item_summary: Option<fn(&Value) -> String>,
+    count_key: Option<&'static str>,
+}
+
+/// Store `items` under `key` and, when the list has a count key, its length
+/// beside it.
+fn store_items(model: &Model, key: &str, count_key: Option<&str>, items: &[Value]) {
+    let mut m = model.borrow_mut();
+    m.insert(key.to_string(), Value::Array(items.to_vec()));
+    if let Some(ck) = count_key {
+        m.insert(ck.to_string(), Value::from(items.len() as i64));
+    }
 }
 
 fn item_title(
@@ -1557,6 +1699,7 @@ fn build_list_row(
         item_label,
         add_label,
         item_summary,
+        count_key,
     } = spec;
     let detached = ctx.pages.is_some();
     let add_btn = Button::with_label(add_label);
@@ -1716,9 +1859,7 @@ fn build_list_row(
                     move |_: &Button| {
                         let mut items = list_items(&model, key);
                         let select = f(&mut items);
-                        model
-                            .borrow_mut()
-                            .insert(key.to_string(), Value::Array(items.clone()));
+                        store_items(&model, key, count_key, &items);
                         if let Some(rebuild) = rebuild_weak
                             .upgrade()
                             .and_then(|slot| slot.borrow().clone())
@@ -1789,9 +1930,7 @@ fn build_list_row(
             let mut items = list_items(&model, key);
             items.push(item);
             let index = items.len() - 1;
-            model
-                .borrow_mut()
-                .insert(key.to_string(), Value::Array(items.clone()));
+            store_items(&model, key, count_key, &items);
             rebuild(&items);
             fire();
             notify(Some(item_path(index)));
