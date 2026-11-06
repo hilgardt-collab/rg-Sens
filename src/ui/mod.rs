@@ -29,8 +29,6 @@ mod alarm_timer_dialog;
 mod background_config_widget;
 pub mod claude_account;
 pub mod clipboard;
-mod clock_analog_config_widget;
-mod clock_digital_config_widget;
 mod color_picker;
 pub mod custom_color_picker;
 mod gradient_editor;
@@ -90,19 +88,13 @@ pub use bar_display::{
     render_bar, BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
     BarStyle, BorderConfig,
 };
-pub use rg_sens_types::source_configs::claude::{ClaudeMetric, ClaudeSourceConfig};
 pub use clipboard::{PanelStyle, CLIPBOARD};
-pub use clock_analog_config_widget::ClockAnalogConfigWidget;
-pub use clock_digital_config_widget::ClockDigitalConfigWidget;
 pub use clock_display::{
     render_analog_clock, AnalogClockConfig, FaceStyle, HandStyle, TickStyle as ClockTickStyle,
 };
 pub use color_button_widget::ColorButtonWidget;
 pub use color_picker::ColorPickerDialog;
 pub use core_bars_display::{render_core_bars, CoreBarsConfig, LabelPosition};
-pub use rg_sens_types::source_configs::cpu::{
-    CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit,
-};
 #[cfg(feature = "webkit")]
 pub use css_template_config_widget::CssTemplateConfigWidget;
 pub use css_template_display::{CssTemplateDisplayConfig, PlaceholderMapping};
@@ -119,9 +111,6 @@ pub use fighter_hud_display::{
     HudHeaderStyle,
 };
 pub use global_theme_widget::GlobalThemeWidget;
-pub use rg_sens_types::source_configs::gpu::{
-    FrequencyUnit as GpuFrequencyUnit, GpuField, GpuSourceConfig, MemoryUnit,
-};
 pub use gradient_editor::GradientEditor;
 pub use graph_display::{
     render_graph, AxisConfig, DataPoint, FillMode, GraphDisplayConfig, GraphType, LineStyle, Margin,
@@ -154,7 +143,14 @@ pub use retro_terminal_display::{
     BezelStyle as RetroBezelStyle, PhosphorColor, RetroTerminalFrameConfig, RetroTerminalRenderer,
     TerminalDividerStyle, TerminalHeaderStyle,
 };
+pub use rg_sens_types::source_configs::claude::{ClaudeMetric, ClaudeSourceConfig};
+pub use rg_sens_types::source_configs::cpu::{
+    CoreSelection, CpuField, CpuSourceConfig, FrequencyUnit, TemperatureUnit,
+};
 pub use rg_sens_types::source_configs::disk::{DiskField, DiskSourceConfig, DiskUnit};
+pub use rg_sens_types::source_configs::gpu::{
+    FrequencyUnit as GpuFrequencyUnit, GpuField, GpuSourceConfig, MemoryUnit,
+};
 pub use rg_sens_types::source_configs::memory::{MemoryField, MemorySourceConfig};
 pub use rg_sens_types::source_configs::network::{
     NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTotalUnit,

@@ -11,7 +11,7 @@ use crate::sources::{
 };
 use crate::ui::position_grid_widget::PositionGridWidget;
 use crate::ui::sensor_picker::SensorPicker;
-use crate::ui::{BackgroundConfigWidget, ColorButtonWidget, TimezoneDialog};
+use crate::ui::{BackgroundConfigWidget, ColorButtonWidget, ThemeFontSelector, TimezoneDialog};
 use gtk4::prelude::*;
 use gtk4::{Button, DropDown, StringList};
 use rg_sens_types::background::BackgroundConfig;
@@ -19,6 +19,7 @@ use rg_sens_types::color::Color;
 use rg_sens_types::display_configs::synthwave::SynthwaveColorScheme;
 use rg_sens_types::display_configs::IndicatorShape;
 use rg_sens_types::text::TextPosition;
+use rg_sens_types::theme::FontSource;
 use serde_json::{json, Map, Value};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -31,6 +32,7 @@ pub fn register_field_editors() {
     register_field_editor("cpu_core_selection", cpu_core_editor);
     register_field_editor("text_position", text_position_editor);
     register_field_editor("background", background_editor);
+    register_field_editor("radius_font", radius_font_editor);
     register_field_editor("indicator_shape", indicator_shape_editor);
     register_field_editor("synthwave_scheme", synthwave_scheme_editor);
     register_field_editor("hud_color", |ctx| {
@@ -326,6 +328,56 @@ fn background_editor(ctx: FieldContext) -> FieldEditor {
         .with_cleanup(move || w_cleanup.set_on_change(|| {}))
 }
 
+/// A theme font whose size is a fraction of the clock radius
+/// (`AnalogClockConfig::number_font`, default 0.12). The selector's size
+/// spin starts at 6, so the fraction is shown as a percentage (12) and
+/// divided again on the way back.
+fn radius_font_editor(ctx: FieldContext) -> FieldEditor {
+    let key = ctx.prop.key;
+    let selector = Rc::new(ThemeFontSelector::new(FontSource::default()));
+    selector.set_theme_config(ctx.theme.clone());
+    let refreshing = Rc::new(Cell::new(false));
+    {
+        let ctx = ctx.clone();
+        let refreshing = refreshing.clone();
+        selector.set_on_change(move |source| {
+            if refreshing.get() {
+                return;
+            }
+            if let Ok(v) = serde_json::to_value(font_from_percent(&source)) {
+                ctx.set(vec![(key, v)]);
+            }
+        });
+    }
+    let refresh: FieldRefresh = {
+        let selector = selector.clone();
+        Box::new(move |m: &Map<String, Value>| {
+            if let Some(source) = m
+                .get(key)
+                .and_then(|v| serde_json::from_value::<FontSource>(v.clone()).ok())
+            {
+                // `set_source` toggles buttons, which fire on_change.
+                refreshing.set(true);
+                selector.set_source(font_to_percent(&source));
+                refreshing.set(false);
+            }
+        })
+    };
+    let s = selector.clone();
+    FieldEditor::new(selector.widget().clone(), refresh)
+        .with_theme(move |t| s.set_theme_config(t.clone()))
+}
+
+/// 0.12 of the radius shows as 12 in the size spin.
+fn font_to_percent(source: &FontSource) -> FontSource {
+    source.with_size(source.size() * 100.0)
+}
+
+/// 12 in the size spin is stored as 0.12 of the radius.
+fn font_from_percent(source: &FontSource) -> FontSource {
+    source.with_size(source.size() / 100.0)
+}
+
 /// `IndicatorShape` is externally tagged with a payload (`"circle"`,
 /// `{"polygon": 5}`): a dropdown of the common shapes plus a custom
 /// side count.
@@ -608,4 +660,24 @@ fn tagged_color_editor(
         })
     };
     FieldEditor::new(inner, refresh)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn radius_font_scales_both_ways() {
+        let stored = FontSource::custom("Sans".to_string(), 0.12);
+        let shown = font_to_percent(&stored);
+        assert!((shown.size() - 12.0).abs() < 1e-9);
+        let back = font_from_percent(&shown);
+        assert!((back.size() - 0.12).abs() < 1e-12);
+
+        let themed = FontSource::theme(2, 0.2);
+        let shown = font_to_percent(&themed);
+        assert!(matches!(shown, FontSource::Theme { index: 2, .. }));
+        assert!((shown.size() - 20.0).abs() < 1e-9);
+        assert!((font_from_percent(&shown).size() - 0.2).abs() < 1e-12);
+    }
 }

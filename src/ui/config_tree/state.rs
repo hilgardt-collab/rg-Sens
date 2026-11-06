@@ -33,8 +33,8 @@ use tokio::sync::RwLock;
 
 /// Debounce for live commits: coalesces spin-button ticks and slider drags.
 const COMMIT_DEBOUNCE: Duration = Duration::from_millis(50);
-/// Poll period for editors without a change signal (the source widgets and
-/// two clock widgets); only the visible page is polled.
+/// Poll period for editors without a change signal (today only the test
+/// source widget); only the visible page is polled.
 const POLL_PERIOD: Duration = Duration::from_millis(300);
 
 pub(super) struct GeometryControls {

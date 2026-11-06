@@ -163,3 +163,120 @@ impl Default for DigitalClockConfig {
         }
     }
 }
+
+impl crate::schema::Schema for DigitalClockConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+
+        let date = Condition::IsTrue { key: "show_date" };
+        let icon = Condition::IsTrue { key: "show_icon" };
+
+        vec![
+            // Style
+            Prop::new(
+                "style",
+                "Style",
+                PropKind::Enum {
+                    options: vec![
+                        ("simple", "Simple"),
+                        ("segment", "Seven-segment (LED)"),
+                        ("lcd", "LCD"),
+                    ],
+                },
+            )
+            .section("Style"),
+            Prop::new("blink_colon", "Blink the colon", PropKind::Bool).section("Style"),
+            // Time
+            Prop::new(
+                "time_font",
+                "Font",
+                PropKind::PlainFont {
+                    size_key: "time_size",
+                },
+            )
+            .section("Time"),
+            Prop::new("time_bold", "Bold", PropKind::Bool).section("Time"),
+            Prop::new("time_italic", "Italic", PropKind::Bool).section("Time"),
+            Prop::new("time_color", "Colour", PropKind::Rgba).section("Time"),
+            // Date
+            Prop::new("show_date", "Show date", PropKind::Bool).section("Date"),
+            Prop::new("show_day_name", "Show day name", PropKind::Bool).section("Date"),
+            Prop::new(
+                "date_font",
+                "Font",
+                PropKind::PlainFont {
+                    size_key: "date_size",
+                },
+            )
+            .section("Date")
+            .visible_when(date.clone()),
+            Prop::new("date_bold", "Bold", PropKind::Bool)
+                .section("Date")
+                .visible_when(date.clone()),
+            Prop::new("date_italic", "Italic", PropKind::Bool)
+                .section("Date")
+                .visible_when(date.clone()),
+            Prop::new("date_color", "Colour", PropKind::Rgba)
+                .section("Date")
+                .visible_when(date),
+            // Timer & alarm
+            Prop::new("show_timer", "Show running timer", PropKind::Bool).section("Timer & alarm"),
+            Prop::new("timer_color", "Timer colour", PropKind::Rgba)
+                .section("Timer & alarm")
+                .visible_when(Condition::IsTrue { key: "show_timer" }),
+            Prop::new(
+                "show_alarm_indicator",
+                "Show alarm indicator",
+                PropKind::Bool,
+            )
+            .section("Timer & alarm"),
+            Prop::new("alarm_color", "Alarm colour", PropKind::Rgba)
+                .section("Timer & alarm")
+                .visible_when(Condition::IsTrue {
+                    key: "show_alarm_indicator",
+                }),
+            // Icon
+            Prop::new("show_icon", "Show alarm/timer icon", PropKind::Bool).section("Icon"),
+            Prop::new(
+                "icon_text",
+                "Icon text",
+                PropKind::Text {
+                    placeholder: "\u{23f1}\u{fe0f}",
+                },
+            )
+            .section("Icon")
+            .visible_when(icon.clone()),
+            Prop::new(
+                "icon_font",
+                "Icon font",
+                PropKind::PlainFont {
+                    size_key: "icon_size",
+                },
+            )
+            .section("Icon")
+            .help("Size in pixels")
+            .visible_when(icon.clone()),
+            Prop::new("icon_bold", "Bold icon", PropKind::Bool)
+                .section("Icon")
+                .visible_when(icon),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<DigitalClockConfig>(&DigitalClockConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(DigitalClockConfig::default()).unwrap();
+        let back: DigitalClockConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+}

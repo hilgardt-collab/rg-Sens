@@ -331,3 +331,283 @@ impl Default for AnalogClockConfig {
         }
     }
 }
+
+impl crate::schema::Schema for AnalogClockConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+
+        let fraction = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: 0.1,
+                    max: 1.0,
+                    step: 0.05,
+                    digits: 2,
+                },
+            )
+        };
+        let px = |key: &'static str, label: &'static str, min: f64, max: f64| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min,
+                    max,
+                    step: 0.5,
+                    digits: 1,
+                },
+            )
+        };
+        let radius_percent = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: 50.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+        };
+        let tick_style = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Enum {
+                    options: vec![
+                        ("none", "None"),
+                        ("squares", "Squares"),
+                        ("lines", "Lines"),
+                        ("dots", "Dots"),
+                        ("triangles", "Triangles"),
+                    ],
+                },
+            )
+        };
+        let hand_style = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Enum {
+                    options: vec![
+                        ("line", "Line"),
+                        ("arrow", "Arrow"),
+                        ("sword", "Sword"),
+                        ("fancy", "Fancy"),
+                    ],
+                },
+            )
+        };
+        let offset = |key: &'static str, label: &'static str| {
+            Prop::new(
+                key,
+                label,
+                PropKind::Float {
+                    min: -100.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+        };
+        let numbers = Condition::IsTrue {
+            key: "show_numbers",
+        };
+        let second = Condition::IsTrue {
+            key: "show_second_hand",
+        };
+        let hub = Condition::IsTrue {
+            key: "show_center_hub",
+        };
+        let icon = Condition::IsTrue { key: "show_icon" };
+
+        vec![
+            // Face
+            Prop::new(
+                "face_background",
+                "Face background",
+                PropKind::Custom {
+                    editor: "background",
+                },
+            )
+            .section("Face"),
+            Prop::new("border_color", "Border colour", PropKind::Color).section("Face"),
+            px("border_width", "Border width (px)", 0.0, 20.0).section("Face"),
+            // Numbers
+            Prop::new("show_numbers", "Show numbers", PropKind::Bool).section("Numbers"),
+            Prop::new(
+                "face_style",
+                "Numerals",
+                PropKind::Enum {
+                    options: vec![
+                        ("classic", "Classic (1–12)"),
+                        ("minimal", "Minimal (12, 3, 6, 9)"),
+                        ("roman", "Roman"),
+                        ("modern", "Modern"),
+                        ("numbers", "Numbers"),
+                    ],
+                },
+            )
+            .section("Numbers")
+            .help("Modern and Numbers draw like Classic")
+            .visible_when(numbers.clone()),
+            Prop::new(
+                "number_font",
+                "Font",
+                PropKind::Custom {
+                    editor: "radius_font",
+                },
+            )
+            .section("Numbers")
+            .help("Size as a percentage of the radius")
+            .visible_when(numbers.clone()),
+            Prop::new("number_bold", "Bold", PropKind::Bool)
+                .section("Numbers")
+                .visible_when(numbers.clone()),
+            Prop::new("number_italic", "Italic", PropKind::Bool)
+                .section("Numbers")
+                .visible_when(numbers.clone()),
+            Prop::new("number_color", "Colour", PropKind::Color)
+                .section("Numbers")
+                .visible_when(numbers),
+            // Ticks
+            tick_style("hour_tick_style", "Hour ticks").section("Ticks"),
+            Prop::new("hour_tick_color", "Hour tick colour", PropKind::Color).section("Ticks"),
+            radius_percent("hour_tick_outer_percent", "Hour tick outer radius (%)")
+                .section("Ticks"),
+            radius_percent("hour_tick_inner_percent", "Hour tick inner radius (%)")
+                .section("Ticks"),
+            tick_style("minute_tick_style", "Minute ticks").section("Ticks"),
+            Prop::new("minute_tick_color", "Minute tick colour", PropKind::Color).section("Ticks"),
+            radius_percent("minute_tick_outer_percent", "Minute tick outer radius (%)")
+                .section("Ticks"),
+            radius_percent("minute_tick_inner_percent", "Minute tick inner radius (%)")
+                .section("Ticks"),
+            // Hands
+            hand_style("hour_hand_style", "Hour hand").section("Hands"),
+            Prop::new("hour_hand_color", "Hour hand colour", PropKind::Color).section("Hands"),
+            px("hour_hand_width", "Hour hand width (px)", 1.0, 20.0).section("Hands"),
+            fraction("hour_hand_length", "Hour hand length (fraction of radius)").section("Hands"),
+            hand_style("minute_hand_style", "Minute hand").section("Hands"),
+            Prop::new("minute_hand_color", "Minute hand colour", PropKind::Color).section("Hands"),
+            px("minute_hand_width", "Minute hand width (px)", 1.0, 20.0).section("Hands"),
+            fraction(
+                "minute_hand_length",
+                "Minute hand length (fraction of radius)",
+            )
+            .section("Hands"),
+            Prop::new("show_second_hand", "Show second hand", PropKind::Bool).section("Hands"),
+            hand_style("second_hand_style", "Second hand")
+                .section("Hands")
+                .visible_when(second.clone()),
+            Prop::new("second_hand_color", "Second hand colour", PropKind::Color)
+                .section("Hands")
+                .visible_when(second.clone()),
+            px("second_hand_width", "Second hand width (px)", 0.5, 10.0)
+                .section("Hands")
+                .visible_when(second.clone()),
+            fraction(
+                "second_hand_length",
+                "Second hand length (fraction of radius)",
+            )
+            .section("Hands")
+            .visible_when(second.clone()),
+            Prop::new("smooth_seconds", "Sweep the second hand", PropKind::Bool)
+                .section("Hands")
+                .help("Move continuously instead of ticking once a second")
+                .visible_when(second),
+            Prop::new("show_center_hub", "Show centre hub", PropKind::Bool).section("Hands"),
+            Prop::new("center_hub_color", "Hub colour", PropKind::Color)
+                .section("Hands")
+                .visible_when(hub.clone()),
+            Prop::new(
+                "center_hub_size",
+                "Hub size (fraction of radius)",
+                PropKind::Float {
+                    min: 0.01,
+                    max: 0.2,
+                    step: 0.005,
+                    digits: 3,
+                },
+            )
+            .section("Hands")
+            .visible_when(hub),
+            // Icon
+            Prop::new("show_icon", "Show alarm/timer icon", PropKind::Bool).section("Icon"),
+            Prop::new(
+                "icon_text",
+                "Icon text",
+                PropKind::Text {
+                    placeholder: "\u{23f1}\u{fe0f}",
+                },
+            )
+            .section("Icon")
+            .visible_when(icon.clone()),
+            Prop::new(
+                "icon_font",
+                "Icon font",
+                PropKind::PlainFont {
+                    size_key: "icon_size",
+                },
+            )
+            .section("Icon")
+            .help("The size is a percentage of the panel's shorter side (5–30)")
+            .visible_when(icon.clone()),
+            Prop::new("icon_bold", "Bold icon", PropKind::Bool)
+                .section("Icon")
+                .visible_when(icon.clone()),
+            Prop::new(
+                "icon_position",
+                "Icon position",
+                PropKind::Custom {
+                    editor: "text_position",
+                },
+            )
+            .section("Icon")
+            .visible_when(icon.clone()),
+            offset("icon_offset_x", "Horizontal offset (px)")
+                .section("Icon")
+                .visible_when(icon.clone()),
+            offset("icon_offset_y", "Vertical offset (px)")
+                .section("Icon")
+                .visible_when(icon.clone()),
+            Prop::new(
+                "shrink_for_indicator",
+                "Shrink the face to make room",
+                PropKind::Bool,
+            )
+            .section("Icon")
+            .visible_when(icon),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<AnalogClockConfig>(&AnalogClockConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_through_json() {
+        let value = serde_json::to_value(AnalogClockConfig::default()).unwrap();
+        let back: AnalogClockConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+
+    /// The deprecated `center_indicator` has no row; it must still survive
+    /// a load/store cycle because the editor keeps the whole object.
+    #[test]
+    fn unlisted_keys_are_not_schema_keys() {
+        let keys: Vec<&str> = AnalogClockConfig::props().iter().map(|p| p.key).collect();
+        assert!(!keys.contains(&"center_indicator"));
+        assert!(keys.contains(&"shrink_for_indicator"));
+    }
+}

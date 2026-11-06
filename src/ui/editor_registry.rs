@@ -23,8 +23,8 @@ use gtk4::Widget;
 use rg_sens_types::combo::TransferableComboConfig;
 use rg_sens_types::display_configs::synthwave::SynthwaveFrameConfig;
 use rg_sens_types::display_configs::{
-    ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig, GraphDisplayConfig, IndicatorConfig,
-    SpeedometerConfig,
+    AnalogClockConfig, ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig, DigitalClockConfig,
+    GraphDisplayConfig, IndicatorConfig, SpeedometerConfig,
 };
 use rg_sens_types::display_configs::{
     ArtDecoFrameConfig, ArtNouveauFrameConfig, CyberpunkFrameConfig, FighterHudFrameConfig,
@@ -250,42 +250,6 @@ source_editor!(TestEditor, TestSourceConfigWidget, Test, by_ref, |_w| {});
 // Standalone display editor adapters
 // ============================================================================
 
-pub struct ClockAnalogEditor(crate::ui::ClockAnalogConfigWidget);
-impl DisplayEditor for ClockAnalogEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::ClockAnalog(c) = config {
-            self.0.set_config(c.clone());
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::ClockAnalog(self.0.get_config()))
-    }
-    fn set_theme(&self, theme: &ComboThemeConfig) {
-        self.0.set_theme(theme.clone());
-    }
-    fn cleanup(&self) {
-        self.0.cleanup();
-    }
-}
-
-pub struct ClockDigitalEditor(crate::ui::ClockDigitalConfigWidget);
-impl DisplayEditor for ClockDigitalEditor {
-    fn widget(&self) -> Widget {
-        self.0.widget().clone().upcast()
-    }
-    fn load(&self, config: &DisplayerConfig) {
-        if let DisplayerConfig::ClockDigital(c) = config {
-            self.0.set_config(c.clone());
-        }
-    }
-    fn store(&self) -> Option<DisplayerConfig> {
-        Some(DisplayerConfig::ClockDigital(self.0.get_config()))
-    }
-}
-
 pub struct CssTemplateEditor(crate::ui::CssTemplateConfigWidget);
 #[cfg(feature = "webkit")]
 impl DisplayEditor for CssTemplateEditor {
@@ -411,13 +375,11 @@ pub fn register_all_editors() {
     register_display_editor("graph", |fields| {
         SchemaDisplayEditor::create("graph", GraphDisplayConfig::props(), fields)
     });
-    register_display_editor("clock_analog", |_| {
-        Box::new(ClockAnalogEditor(crate::ui::ClockAnalogConfigWidget::new()))
+    register_display_editor("clock_analog", |fields| {
+        SchemaDisplayEditor::create("clock_analog", AnalogClockConfig::props(), fields)
     });
-    register_display_editor("clock_digital", |_| {
-        Box::new(ClockDigitalEditor(
-            crate::ui::ClockDigitalConfigWidget::new(),
-        ))
+    register_display_editor("clock_digital", |fields| {
+        SchemaDisplayEditor::create("clock_digital", DigitalClockConfig::props(), fields)
     });
     register_display_editor("cpu_cores", |fields| {
         SchemaDisplayEditor::create("cpu_cores", CoreBarsConfig::props(), fields)
