@@ -269,7 +269,7 @@ impl Displayer for MyDisplayer {
 ```
 
 2. Register in `src/displayers/mod.rs`
-3. Add config widget in `src/ui/` if needed
+3. Implement `rg_sens_types::schema::Schema` for the display config and register `SchemaDisplayEditor::create("my_id", MyConfig::props(), fields)` in `src/ui/editor_registry.rs` (gotcha 15); sections become tree child nodes, and a hand-written widget is only needed for what no schema kind or field editor can express
 
 ### Adding a New Data Source
 
