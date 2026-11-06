@@ -262,6 +262,7 @@ fn text_overlay_editor(ctx: FieldContext) -> FieldEditor {
     let w_theme = widget.clone();
     let w_cleanup = widget.clone();
     FieldEditor::new(widget.widget().clone(), refresh)
+        .as_block()
         .with_theme(move |t| w_theme.set_theme(t.clone()))
         .with_cleanup(move || w_cleanup.cleanup())
 }

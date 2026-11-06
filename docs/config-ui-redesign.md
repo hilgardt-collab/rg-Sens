@@ -1122,8 +1122,9 @@ same schema editors.
   label, props, template }` (internally tagged enum with payload; choosing a
   variant replaces the whole object with the template, so a `gradient`
   object never keeps a stale `color`), `PropKind::Color` (`ColorSource`),
-  `PropKind::ColorStops` (`Vec<ColorStopSource>`, no angle; a sibling Float
-  carries the angle where one exists), `Condition::IsTrue`. `check_props_fit`
+  `PropKind::ColorStops { linear }` (`Vec<ColorStopSource>`, no angle; a
+  sibling Float carries the angle where one exists; `linear` picks the bar-style
+  ramp preview over the arc-style sweep), `Condition::IsTrue`. `check_props_fit`
   is recursive over paths: every template is substituted into the default
   and the whole type deserialized, nested props are checked against the
   nested object (or the variant's template / the list's template item).

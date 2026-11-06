@@ -314,9 +314,13 @@ impl crate::schema::Schema for ArcDisplayConfig {
                 key: "taper_style",
                 values: vec!["start", "end", "both"],
             }),
-            Prop::new("color_stops", "Colour stops", PropKind::ColorStops)
-                .section("Colours")
-                .help("Colours along the arc from start to end"),
+            Prop::new(
+                "color_stops",
+                "Colour stops",
+                PropKind::ColorStops { linear: false },
+            )
+            .section("Colours")
+            .help("Colours along the arc from start to end"),
             Prop::new(
                 "color_transition",
                 "Transition",

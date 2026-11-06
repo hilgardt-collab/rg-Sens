@@ -599,7 +599,7 @@ impl crate::schema::Schema for BarDisplayConfig {
                             value: "gradient",
                             label: "Gradient",
                             props: vec![
-                                Prop::new("stops", "Stops", PropKind::ColorStops),
+                                Prop::new("stops", "Stops", PropKind::ColorStops { linear: true }),
                                 angle("angle"),
                             ],
                             template: fg_gradient,
@@ -630,7 +630,7 @@ impl crate::schema::Schema for BarDisplayConfig {
                             value: "gradient",
                             label: "Gradient",
                             props: vec![
-                                Prop::new("stops", "Stops", PropKind::ColorStops),
+                                Prop::new("stops", "Stops", PropKind::ColorStops { linear: true }),
                                 angle("angle"),
                             ],
                             template: bg_gradient,

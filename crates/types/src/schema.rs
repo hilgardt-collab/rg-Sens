@@ -93,7 +93,11 @@ pub enum PropKind {
     /// A theme-or-custom colour (`ColorSource`).
     Color,
     /// Theme-aware gradient stops (`Vec<ColorStopSource>`), without an angle.
-    ColorStops,
+    /// `linear` picks the preview: a linear ramp (bar fills) or the arc-style
+    /// sweep (arc colour stops).
+    ColorStops {
+        linear: bool,
+    },
 }
 
 /// One alternative of a [`PropKind::Variant`].
@@ -324,7 +328,7 @@ fn check_object(
                     return Err(format!("colour {} has no 'type'", display_path(&here)));
                 }
             }
-            PropKind::ColorStops => {
+            PropKind::ColorStops { .. } => {
                 if !current.is_array() {
                     return Err(format!(
                         "colour stops {} are not an array",

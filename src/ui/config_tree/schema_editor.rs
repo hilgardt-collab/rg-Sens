@@ -69,6 +69,9 @@ pub struct FieldEditor {
     pub refresh: FieldRefresh,
     pub on_theme: Option<ThemeHook>,
     pub cleanup: Option<Box<dyn Fn()>>,
+    /// Lay the control out as a titled block (large editors) instead of
+    /// beside the label.
+    pub block: bool,
 }
 
 impl FieldEditor {
@@ -78,7 +81,13 @@ impl FieldEditor {
             refresh,
             on_theme: None,
             cleanup: None,
+            block: false,
         }
+    }
+
+    pub fn as_block(mut self) -> Self {
+        self.block = true;
+        self
     }
 
     pub fn with_theme(mut self, f: impl Fn(&ComboThemeConfig) + 'static) -> Self {
@@ -889,11 +898,15 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 cleanup: None,
             }
         }
-        PropKind::ColorStops => {
+        PropKind::ColorStops { linear } => {
             let copy_btn = Button::with_label("Copy gradient");
             let paste_btn = Button::with_label("Paste gradient");
             let (outer, body) = titled_block(prop, &[&copy_btn, &paste_btn]);
-            let editor = Rc::new(GradientEditor::new_without_angle());
+            let editor = Rc::new(if *linear {
+                GradientEditor::new_linear_no_angle()
+            } else {
+                GradientEditor::new_without_angle()
+            });
             editor.set_theme_config(ctx.theme.borrow().clone());
             body.append(editor.widget());
             {
@@ -960,12 +973,15 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                     }
                 })
             };
+            let editor_theme = editor.clone();
             Row {
                 prop: prop.clone(),
                 widget: outer,
                 refresh,
-                on_theme: Some(Box::new(move |t| editor.set_theme_config(t.clone()))),
-                cleanup: None,
+                on_theme: Some(Box::new(move |t| editor_theme.set_theme_config(t.clone()))),
+                // The editor's own change closure holds an Rc to the editor
+                // (gotcha 11): drop it when the row goes.
+                cleanup: Some(Box::new(move || editor.set_on_change(|| {}))),
             }
         }
         PropKind::Object { props } => {
@@ -1109,9 +1125,17 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                     FieldEditor::new(label, Box::new(|_: &Map<String, Value>| {}))
                 }
             };
+            let widget = if field.block {
+                let (outer, body) = titled_block(prop, &[]);
+                body.set_margin_start(0);
+                body.append(&field.widget);
+                outer
+            } else {
+                labelled_row(prop, &field.widget)
+            };
             Row {
                 prop: prop.clone(),
-                widget: labelled_row(prop, &field.widget),
+                widget,
                 refresh: field.refresh,
                 on_theme: field.on_theme,
                 cleanup: field.cleanup,
