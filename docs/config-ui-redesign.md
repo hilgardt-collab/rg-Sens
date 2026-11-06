@@ -1207,3 +1207,21 @@ family/size font kind for axis labels), speedometer (zones list with plain
 colour; bezel `BackgroundConfig` as a field editor), core bars, indicator,
 static; then delete the two text widgets; then the themed frames with
 `sections()`.
+
+### 16.1 List items as tree nodes (2026-11-06)
+
+A schema display editor built with `SchemaEditor::for_tree` detaches its
+list items: each becomes an `EditorPage` with a path (`["lines", "0"]` for
+the text displayer, `["Text overlay", "lines", "0"]` inside bar/arc) and the
+tree files it under its nearest ancestor page or Display
+(`state::resolve_page_node`, tested). The list's own row on the parent page is
+one compact line per item (Edit…, move, duplicate, copy, remove) plus
+Add/Paste. `DisplayEditor::set_on_sections_changed` reports structural edits
+with the path to select; `State::refresh_display_pages` evicts the stale
+`sec/…` stack pages, re-reads the pages and rebuilds the tree, or just selects
+when pages and widgets are unchanged (an Edit… jump). Titles are read live
+through `DisplayEditor::page_title` (`PropKind::List.item_summary`:
+"Line 1 · value"), so `refresh_row_texts` after a commit renames the node.
+Inline lists (source editors, combo item pages, whose editors are not
+`DisplayEditor`s) keep frames, now separated by a rule and titled with the
+summary.
