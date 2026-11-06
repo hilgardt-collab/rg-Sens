@@ -197,6 +197,12 @@ impl State {
     /// Current payload of an `Inline` reference: the themed editor's frame
     /// theme for combos, the inline widget for standalone panels.
     pub(super) fn inline_payload(&self) -> Option<ComboThemeConfig> {
+        // The generic theme editor holds the payload whenever it exists
+        // (standalone panels, and combos whose editor has no Theme page);
+        // a widget-based combo editor keeps it in its frame theme.
+        if let Some(w) = self.inline_theme_widget.borrow().as_ref() {
+            return Some(w.get_config());
+        }
         if self.is_combo() {
             self.display_editor
                 .borrow()
@@ -204,10 +210,7 @@ impl State {
                 .and_then(|e| e.store())
                 .and_then(|c| c.theme().cloned())
         } else {
-            self.inline_theme_widget
-                .borrow()
-                .as_ref()
-                .map(|w| w.get_config())
+            None
         }
     }
 
@@ -470,9 +473,11 @@ impl State {
         }));
         self.display_needs_poll.set(!has_signal);
 
-        if let Some(combo) = editor.combo() {
+        let widget_pages = editor.combo().map(|c| c.take_pages()).unwrap_or_default();
+        if !widget_pages.is_empty() {
+            // Widget-based combo editor: its notebook pages, Theme kept apart.
             let mut sections = Vec::new();
-            for (name, page) in combo.take_pages() {
+            for (name, page) in widget_pages {
                 match name.as_str() {
                     "Theme" => *self.theme_page.borrow_mut() = Some(page),
                     _ => sections.push((name, page)),
@@ -480,8 +485,8 @@ impl State {
             }
             *self.display_pages.borrow_mut() = sections;
         } else {
-            // Schema-driven displayers: one child node per section, and one
-            // per detached list item (text lines).
+            // Schema-driven displayers (standalone or combo): one child node
+            // per section, and one per detached list item (text lines).
             self.adopt_editor_pages(&**editor);
             let weak = Rc::downgrade(self);
             editor.set_on_sections_changed(Rc::new(move |select| {

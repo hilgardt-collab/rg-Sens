@@ -14,6 +14,7 @@
 use crate::core::{DisplayerConfig, FieldMetadata, SourceConfig};
 use crate::ui::combo_config_base::{self, TransferableComboConfig};
 use crate::ui::config_tree::field_editors::register_field_editors;
+use crate::ui::config_tree::schema_combo::SchemaComboEditor;
 use crate::ui::config_tree::schema_editor::{
     register_choice_provider, SchemaDisplayEditor, SchemaSourceEditor,
 };
@@ -21,6 +22,7 @@ use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Notebook, Widget};
 use rg_sens_types::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use rg_sens_types::display_configs::synthwave::SynthwaveFrameConfig;
 use rg_sens_types::display_configs::{
     ArcDisplayConfig, BarDisplayConfig, CoreBarsConfig, GraphDisplayConfig, IndicatorConfig,
     SpeedometerConfig,
@@ -435,7 +437,7 @@ macro_rules! combo_editor {
 use rg_sens_types::display_configs::themed_configs::{
     ArtDecoDisplayConfig, ArtNouveauDisplayConfig, CyberpunkDisplayConfig, FighterHudDisplayConfig,
     IndustrialDisplayConfig, LcarsDisplayConfig, MaterialDisplayConfig, RetroTerminalDisplayConfig,
-    SteampunkDisplayConfig, SynthwaveDisplayConfig,
+    SteampunkDisplayConfig,
 };
 
 combo_editor!(
@@ -478,13 +480,6 @@ combo_editor!(
     FighterHudConfigWidget,
     FighterHud,
     FighterHudDisplayConfig,
-    set_by_value
-);
-combo_editor!(
-    SynthwaveEditor,
-    SynthwaveConfigWidget,
-    Synthwave,
-    SynthwaveDisplayConfig,
     set_by_value
 );
 combo_editor!(
@@ -649,8 +644,9 @@ pub fn register_all_editors() {
     register_display_editor("fighter_hud", |_| {
         Box::new(FighterHudEditor(crate::ui::FighterHudConfigWidget::new()))
     });
-    register_display_editor("synthwave", |_| {
-        Box::new(SynthwaveEditor(crate::ui::SynthwaveConfigWidget::new()))
+    // Schema-driven combo frame: sections and item pages from the schema.
+    register_display_editor("synthwave", |fields| {
+        SchemaComboEditor::create("synthwave", SynthwaveFrameConfig::props(), fields)
     });
     register_display_editor("art_deco", |_| {
         Box::new(ArtDecoEditor(crate::ui::ArtDecoConfigWidget::new()))

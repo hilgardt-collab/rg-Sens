@@ -62,7 +62,6 @@ mod material_config_widget;
 pub mod new_panel_dialog;
 mod retro_terminal_config_widget;
 mod steampunk_config_widget;
-mod synthwave_config_widget;
 mod test_source_config_widget;
 mod test_source_dialog;
 pub mod theme;
@@ -190,7 +189,6 @@ pub use steampunk_display::{
     DividerStyle as SteampunkDividerStyle, HeaderStyle as SteampunkHeaderStyle,
     SteampunkFrameConfig, SteampunkRenderer,
 };
-pub use synthwave_config_widget::SynthwaveConfigWidget;
 pub use synthwave_display::{
     calculate_group_layouts as synthwave_calculate_group_layouts,
     draw_group_dividers as synthwave_draw_group_dividers, render_scanline_overlay,
