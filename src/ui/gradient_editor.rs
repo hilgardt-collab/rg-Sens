@@ -209,8 +209,20 @@ impl GradientEditor {
 
                     if !resolved_stops.is_empty() {
                         if use_linear_preview {
-                            // Linear gradient preview (horizontal)
-                            let gradient = cairo::LinearGradient::new(0.0, 0.0, width as f64, 0.0);
+                            // Linear ramp along the configured angle, with the
+                            // renderer's endpoints (`background.rs`: 0° is
+                            // left to right, 90° top to bottom, through the
+                            // centre along the diagonal).
+                            let (w, h) = (width as f64, height as f64);
+                            let rad = angle_val.to_radians();
+                            let diagonal = (w * w + h * h).sqrt();
+                            let (dx, dy) = (diagonal * rad.cos() / 2.0, diagonal * rad.sin() / 2.0);
+                            let gradient = cairo::LinearGradient::new(
+                                w / 2.0 - dx,
+                                h / 2.0 - dy,
+                                w / 2.0 + dx,
+                                h / 2.0 + dy,
+                            );
                             for stop in &resolved_stops {
                                 gradient.add_color_stop_rgba(
                                     stop.position,
@@ -912,6 +924,11 @@ impl GradientEditor {
             .iter()
             .map(|s| s.resolve(theme_ref))
             .collect()
+    }
+
+    /// The ramp angle in degrees (0 when the editor has no angle control).
+    pub fn angle(&self) -> f64 {
+        *self.angle.borrow()
     }
 
     /// Get the current gradient configuration (resolved to concrete colors)

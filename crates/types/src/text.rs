@@ -696,18 +696,6 @@ impl crate::schema::Schema for TextLineConfig {
     fn props() -> Vec<crate::schema::Prop> {
         use crate::schema::{Condition, Prop, PropKind, Variant};
         let combined = Condition::IsTrue { key: "is_combined" };
-        let angle = |key: &'static str| {
-            Prop::new(
-                key,
-                "Angle (°)",
-                PropKind::Float {
-                    min: 0.0,
-                    max: 360.0,
-                    step: 5.0,
-                    digits: 0,
-                },
-            )
-        };
         vec![
             Prop::new("field_id", "Field", PropKind::Field)
                 .help("Which value of the source this line shows"),
@@ -735,17 +723,15 @@ impl crate::schema::Schema for TextLineConfig {
                         Variant {
                             value: "linear_gradient",
                             label: "Gradient",
-                            props: vec![
-                                Prop::new(
-                                    "stops",
-                                    "Stops",
-                                    PropKind::ColorStops {
-                                        linear: true,
-                                        themed: false,
-                                    },
-                                ),
-                                angle("angle"),
-                            ],
+                            props: vec![Prop::new(
+                                "stops",
+                                "Stops",
+                                PropKind::ColorStops {
+                                    linear: true,
+                                    themed: false,
+                                    angle_key: Some("angle"),
+                                },
+                            )],
                             template: text_fill_gradient,
                         },
                     ],
@@ -777,17 +763,15 @@ impl crate::schema::Schema for TextLineConfig {
                                     Variant {
                                         value: "linear_gradient",
                                         label: "Gradient",
-                                        props: vec![
-                                            Prop::new(
-                                                "stops",
-                                                "Stops",
-                                                PropKind::ColorStops {
-                                                    linear: true,
-                                                    themed: true,
-                                                },
-                                            ),
-                                            angle("angle"),
-                                        ],
+                                        props: vec![Prop::new(
+                                            "stops",
+                                            "Stops",
+                                            PropKind::ColorStops {
+                                                linear: true,
+                                                themed: true,
+                                                angle_key: Some("angle"),
+                                            },
+                                        )],
                                         template: text_bg_gradient,
                                     },
                                 ],

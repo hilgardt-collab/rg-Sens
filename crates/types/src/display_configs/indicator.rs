@@ -180,6 +180,7 @@ impl crate::schema::Schema for IndicatorConfig {
                 PropKind::ColorStops {
                     linear: true,
                     themed: false,
+                    angle_key: None,
                 },
             )
             .section("Colours")

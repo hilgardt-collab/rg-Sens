@@ -999,56 +999,89 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 cleanup: None,
             }
         }
-        PropKind::ColorStops { linear, themed } => {
+        PropKind::ColorStops {
+            linear,
+            themed,
+            angle_key,
+        } => {
             let themed = *themed;
+            let angle_key: Option<&'static str> = *angle_key;
             let copy_btn = Button::with_label("Copy gradient");
             let paste_btn = Button::with_label("Paste gradient");
             let (outer, body) = titled_block(prop, &[&copy_btn, &paste_btn]);
-            let editor = Rc::new(if *linear {
-                GradientEditor::new_linear_no_angle()
-            } else {
-                GradientEditor::new_without_angle()
+            // With an angle key the editor carries the angle control and the
+            // row writes both keys, so the preview follows the angle.
+            let editor = Rc::new(match (*linear, angle_key) {
+                (true, Some(_)) => GradientEditor::new(),
+                (true, None) => GradientEditor::new_linear_no_angle(),
+                (false, _) => GradientEditor::new_without_angle(),
             });
             editor.set_theme_config(ctx.theme.borrow().clone());
             body.append(editor.widget());
             // Themed stops keep theme references; plain stops are resolved
-            // colours (`TextFillType` gradients).
-            let current_value = {
+            // colours (`TextFillType` gradients). The entries to write back.
+            let current_entries = {
                 let editor = editor.clone();
-                move || {
-                    if themed {
+                move || -> Vec<(&'static str, Value)> {
+                    let stops = if themed {
                         serde_json::to_value(editor.get_stops_source())
                     } else {
                         serde_json::to_value(editor.get_stops())
+                    };
+                    let mut out = Vec::new();
+                    if let Ok(v) = stops {
+                        out.push((key, v));
                     }
+                    if let Some(ak) = angle_key {
+                        out.push((ak, Value::from(editor.angle())));
+                    }
+                    out
+                }
+            };
+            let write = {
+                let model = model.clone();
+                let fire = fire.clone();
+                move |entries: Vec<(&'static str, Value)>| {
+                    {
+                        let mut m = model.borrow_mut();
+                        for (k, v) in entries {
+                            m.insert(k.to_string(), v);
+                        }
+                    }
+                    fire();
                 }
             };
             let set_value = {
                 let editor = editor.clone();
-                move |v: &Value| {
+                move |m: &Map<String, Value>| {
+                    let Some(v) = m.get(key) else { return };
+                    // Without an angle key the editor's angle is unused.
+                    let angle = angle_key
+                        .and_then(|ak| m.get(ak))
+                        .and_then(|a| a.as_f64())
+                        .unwrap_or_else(|| editor.angle());
                     if themed {
                         if let Ok(stops) = serde_json::from_value::<Vec<ColorStopSource>>(v.clone())
                         {
-                            editor.set_stops_source(stops);
+                            editor.set_gradient_source(angle, stops);
                         }
                     } else if let Ok(stops) = serde_json::from_value::<Vec<ColorStop>>(v.clone()) {
-                        editor.set_stops(stops);
+                        editor.set_gradient(&rg_sens_types::color::LinearGradientConfig {
+                            angle,
+                            stops,
+                        });
                     }
                 }
             };
             {
-                let model = model.clone();
-                let fire = fire.clone();
                 let loading = loading.clone();
-                let current_value = current_value.clone();
+                let current_entries = current_entries.clone();
+                let write = write.clone();
                 editor.set_on_change(move || {
                     if loading.get() {
                         return;
                     }
-                    if let Ok(v) = current_value() {
-                        model.borrow_mut().insert(key.to_string(), v);
-                        fire();
-                    }
+                    write(current_entries());
                 });
             }
             {
@@ -1063,28 +1096,21 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
             }
             {
                 let editor = editor.clone();
-                let model = model.clone();
-                let fire = fire.clone();
-                let current_value = current_value.clone();
+                let current_entries = current_entries.clone();
+                let write = write.clone();
                 paste_btn.connect_clicked(move |_| {
                     let stops = CLIPBOARD
                         .lock()
                         .ok()
                         .and_then(|cb| cb.paste_gradient_stops());
                     let Some(stops) = stops else { return };
+                    // Stops only: the angle keeps its value.
                     editor.set_stops(stops);
-                    if let Ok(v) = current_value() {
-                        model.borrow_mut().insert(key.to_string(), v);
-                        fire();
-                    }
+                    write(current_entries());
                 });
             }
-            let refresh: FieldRefresh = Box::new(move |m| {
-                if let Some(v) = m.get(key) {
-                    // Guarded setters: they do not fire the editor's on_change.
-                    set_value(v);
-                }
-            });
+            // Guarded setters: they do not fire the editor's on_change.
+            let refresh: FieldRefresh = Box::new(move |m| set_value(m));
             let editor_theme = editor.clone();
             Row {
                 prop: prop.clone(),

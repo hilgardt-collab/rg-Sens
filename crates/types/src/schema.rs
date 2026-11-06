@@ -108,12 +108,15 @@ pub enum PropKind {
     },
     /// A theme-or-custom colour (`ColorSource`).
     Color,
-    /// Gradient stops without an angle: `Vec<ColorStopSource>` when `themed`,
-    /// plain `Vec<ColorStop>` otherwise. `linear` picks the preview: a linear
-    /// ramp (bar fills) or the arc-style sweep (arc colour stops).
+    /// Gradient stops: `Vec<ColorStopSource>` when `themed`, plain
+    /// `Vec<ColorStop>` otherwise. `linear` picks the preview: a linear ramp
+    /// (bar fills) or the arc-style sweep (arc colour stops). `angle_key`
+    /// names the sibling key holding the ramp's angle in degrees; the editor
+    /// then carries the angle control and its preview follows it.
     ColorStops {
         linear: bool,
         themed: bool,
+        angle_key: Option<&'static str>,
     },
     /// A theme-or-custom font (`FontSource`, possibly `Option`). When the
     /// value is `null`, `legacy` names the `(family, size)` keys of the same
@@ -361,12 +364,21 @@ fn check_object(
                     return Err(format!("colour {} has no 'type'", display_path(&here)));
                 }
             }
-            PropKind::ColorStops { .. } => {
+            PropKind::ColorStops { angle_key, .. } => {
                 if !current.is_array() {
                     return Err(format!(
                         "colour stops {} are not an array",
                         display_path(&here)
                     ));
+                }
+                if let Some(k) = angle_key {
+                    if !object.get(*k).map(Value::is_number).unwrap_or(false) {
+                        return Err(format!(
+                            "angle key '{}' of {} is not a number field",
+                            k,
+                            display_path(&here)
+                        ));
+                    }
                 }
             }
             PropKind::Font { legacy } => {
@@ -573,6 +585,32 @@ fn check_object(
 
 #[cfg(test)]
 mod tests {
+    #[derive(Default, serde::Serialize, serde::Deserialize)]
+    struct Ramp {
+        stops: Vec<crate::color::ColorStop>,
+        angle: f64,
+    }
+
+    #[test]
+    fn colour_stops_angle_key_must_be_a_number_field() {
+        use super::{check_props_fit, Prop, PropKind};
+        let stops = |angle_key| {
+            vec![Prop::new(
+                "stops",
+                "Stops",
+                PropKind::ColorStops {
+                    linear: true,
+                    themed: false,
+                    angle_key,
+                },
+            )]
+        };
+        check_props_fit::<Ramp>(&stops(Some("angle"))).unwrap();
+        check_props_fit::<Ramp>(&stops(None)).unwrap();
+        assert!(check_props_fit::<Ramp>(&stops(Some("missing"))).is_err());
+        assert!(check_props_fit::<Ramp>(&stops(Some("stops"))).is_err());
+    }
+
     use super::*;
     use serde::Deserialize;
 

@@ -498,6 +498,7 @@ impl crate::schema::Schema for SpeedometerConfig {
                 PropKind::ColorStops {
                     linear: false,
                     themed: true,
+                    angle_key: None,
                 },
             )
             .section("Track")

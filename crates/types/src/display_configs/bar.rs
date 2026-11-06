@@ -397,17 +397,15 @@ pub fn fill_prop(key: &'static str, label: &'static str) -> crate::schema::Prop 
                 Variant {
                     value: "gradient",
                     label: "Gradient",
-                    props: vec![
-                        Prop::new(
-                            "stops",
-                            "Stops",
-                            PropKind::ColorStops {
-                                linear: true,
-                                themed: true,
-                            },
-                        ),
-                        angle_prop("angle"),
-                    ],
+                    props: vec![Prop::new(
+                        "stops",
+                        "Stops",
+                        PropKind::ColorStops {
+                            linear: true,
+                            themed: true,
+                            angle_key: Some("angle"),
+                        },
+                    )],
                     template: fg_gradient,
                 },
             ],
@@ -439,17 +437,15 @@ pub fn background_prop(key: &'static str, label: &'static str) -> crate::schema:
                 Variant {
                     value: "gradient",
                     label: "Gradient",
-                    props: vec![
-                        Prop::new(
-                            "stops",
-                            "Stops",
-                            PropKind::ColorStops {
-                                linear: true,
-                                themed: true,
-                            },
-                        ),
-                        angle_prop("angle"),
-                    ],
+                    props: vec![Prop::new(
+                        "stops",
+                        "Stops",
+                        PropKind::ColorStops {
+                            linear: true,
+                            themed: true,
+                            angle_key: Some("angle"),
+                        },
+                    )],
                     template: bg_gradient,
                 },
             ],
@@ -480,20 +476,6 @@ pub fn border_prop(key: &'static str, label: &'static str) -> crate::schema::Pro
                 )
                 .visible_when(Condition::IsTrue { key: "enabled" }),
             ],
-        },
-    )
-}
-
-fn angle_prop(key: &'static str) -> crate::schema::Prop {
-    use crate::schema::{Prop, PropKind};
-    Prop::new(
-        key,
-        "Angle (°)",
-        PropKind::Float {
-            min: 0.0,
-            max: 360.0,
-            step: 5.0,
-            digits: 0,
         },
     )
 }

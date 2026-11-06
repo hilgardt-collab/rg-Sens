@@ -320,6 +320,7 @@ impl crate::schema::Schema for ArcDisplayConfig {
                 PropKind::ColorStops {
                     linear: false,
                     themed: true,
+                    angle_key: None,
                 },
             )
             .section("Colours")
