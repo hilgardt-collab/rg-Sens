@@ -1110,3 +1110,55 @@ before.
 Next: bar/arc/graph/text/speedometer display configs (preview + theme
 coupling, so `DisplayEditor` adapters stay until a colour-or-theme kind
 exists), then the themed frames with `sections()` as child nodes.
+
+## 15. Phase 3c as shipped (2026-11-06)
+
+The first two display configs, bar and arc, are schema-driven; their
+widgets are deleted and the combo item page edits bar/arc items through the
+same schema editors.
+
+* `crates/types/src/schema.rs`: `PropKind::Object { props }` (nested
+  struct), `PropKind::Variant { tag, variants }` with `Variant { value,
+  label, props, template }` (internally tagged enum with payload; choosing a
+  variant replaces the whole object with the template, so a `gradient`
+  object never keeps a stale `color`), `PropKind::Color` (`ColorSource`),
+  `PropKind::ColorStops` (`Vec<ColorStopSource>`, no angle; a sibling Float
+  carries the angle where one exists), `Condition::IsTrue`. `check_props_fit`
+  is recursive over paths: every template is substituted into the default
+  and the whole type deserialized, nested props are checked against the
+  nested object (or the variant's template / the list's template item).
+* `src/ui/config_tree/schema_editor.rs`: one `Nested` mechanism (rows over a
+  sub-object written back under its key, or into an array slot) serves
+  Object, Variant and List items. `SchemaEditor::set_theme` fans the
+  resolved theme out to Color/ColorStops rows, nested rows and custom
+  editors' theme hooks, and never fires a change. `SchemaEditor::sectioned`
+  splits rows by `Prop.section` into pages; `SchemaDisplayEditor` exposes
+  them through the new `DisplayEditor::sections()`, and the tree shows them
+  as `DisplaySection` child nodes exactly as for combo frames
+  (`ensure_display_editor` fills `display_pages` from either). Field editors
+  now return a `FieldEditor { widget, refresh, on_theme, cleanup }` and get
+  the slot's `fields` and the current theme in their `FieldContext`.
+* `text_overlay` field editor wraps `TextOverlayConfigWidget` over the whole
+  nested object; its writes are suppressed while refreshing because the
+  widget's `set_config` fires its own change signal.
+* `combo_config_base::item_schema_editor` replaces the lazy bar/arc widgets
+  in the item page; the Level Bar item type renders from `bar_config` and so
+  shares the bar editor.
+* Display page: type-tagged "Copy/Paste Display Config" (clipboard
+  `copy_display_config`), replacing the buttons the two widgets had; a paste
+  re-pushes this panel's resolved theme, since the pasted JSON carries the
+  source panel's cached `theme`.
+* Behaviour: a bar switched to a gradient fill starts with theme colours
+  1 → 2 (the old widget left the editor's stop list, often empty); the
+  background gradient template keeps the old two greys; arc's in-widget
+  preview is gone (the live panel is the preview; bar's was already hidden);
+  the old notebook tabs are tree child nodes.
+
+Known limits: a variant's props must not use `Condition::IsFalse` (a key
+absent in another variant's object reads as false, so the row would show);
+the clipboard still stores resolved stops, so theme links are lost on paste,
+as before.
+
+Next: graph, speedometer and text need plain-RGBA colour, font, field-picker
+and text-line kinds (text first, since the three overlays embed it); then the
+themed frames with `sections()`.
