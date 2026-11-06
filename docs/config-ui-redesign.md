@@ -1225,3 +1225,43 @@ through `DisplayEditor::page_title` (`PropKind::List.item_summary`:
 Inline lists (source editors, combo item pages, whose editors are not
 `DisplayEditor`s) keep frames, now separated by a rule and titled with the
 summary.
+
+## 17. Phase 3e as shipped (2026-11-06)
+
+Every non-themed displayer is schema-driven; the hand-written display
+widgets are gone except the two clock widgets and css_template.
+
+* `crates/types/src/schema.rs`: `PropKind::Rgba` (plain `Color`),
+  `PropKind::PlainFont { size_key }` (family string + size number in the same
+  object). `bar.rs` exports `fill_prop`, `background_prop`, `border_prop` so
+  core bars share the bar's variants and templates.
+* Schemas: `GraphDisplayConfig` (axes as nested objects with plain label
+  fonts, margins object, plain background colours), `SpeedometerConfig`
+  (value zones are a list — newly editable, the renderer always drew them;
+  bezel background through the `background` field editor),
+  `CoreBarsConfig` (core range as clamped numbers 0–255 with help text; the
+  old widget clamped the spin to the machine instead), `IndicatorConfig`
+  (`indicator_shape` field editor for the externally tagged shape; text lines
+  nested under Text), `StaticDisplayConfig` (combo items only).
+* `src/ui/config_tree/field_editors.rs`: `background` wraps
+  `BackgroundConfigWidget` as a block (slot fields, theme, writes suppressed
+  while refreshing, change closure dropped on cleanup); `indicator_shape`
+  is a dropdown of the common shapes plus a side count.
+* `combo_config_base`: graph, core bars, speedometer and static items use
+  `item_schema_editor`; a display type switch reloads all seven item
+  editors. The old code saved the Text frame's overlay into
+  `bar_config.text_overlay` for Static items too, but the renderer reads
+  `static_config.text_overlay`, so the static schema edits the overlay that
+  is drawn.
+* Deleted: graph, speedometer, core bars, indicator and static widgets,
+  `TextLineConfigWidget`, `TextOverlayConfigWidget`, and `src/ui/config/`
+  (`LazyConfigWidget`, `ConfigWidget`), their last users.
+* Behaviour: per-widget Copy/Paste of the graph and speedometer configs is
+  the Display page's type-tagged Copy/Paste; the font Copy/Paste buttons of
+  core bars and speedometer tick labels are gone; a family-only pick in the
+  font dialog keeps the current size; the in-widget previews are gone (the
+  live panel is the preview).
+
+Next: the ten themed combo frames (`sections()` from their Frame/Headers/
+Layout/… pages, the Theme page staying as the Theme node's editor), then
+the two clock displayers and css_template.
