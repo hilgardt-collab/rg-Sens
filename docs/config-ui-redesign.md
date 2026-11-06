@@ -1335,3 +1335,38 @@ Next: `clock_analog` and `clock_digital` (polled today; `AnalogClockConfig`
 has 24 `ColorSource`s) and `css_template` (its placeholder mapping needs the
 slot summaries; probably stays a widget), then the `Section` node for
 displayer sub-sections can retire `DisplaySection`.
+
+## 20. Phase 4c as shipped (2026-11-06)
+
+The two clocks are schema-driven; `css_template` is the only hand-written
+display widget left, and the test source widget the only polled editor.
+
+* `AnalogClockConfig::props()` (`display_configs/clock.rs`): Face (the
+  `background` field editor over `face_background`, border), Numbers,
+  Ticks, Hands, Icon (the `text_position` editor for `icon_position`,
+  `PlainFont` for `icon_font`/`icon_size`). All 24 `ColorSource`s are
+  `Color` rows and follow the Theme node. Hand styles are per hand (the old
+  widget's one dropdown wrote all three) and the hand lengths, never
+  editable before, are `Float` fractions. `face_style` lists all five
+  variants (Modern and Numbers draw like Classic) instead of the widget's
+  None/Minimal/Classic/Roman remap; "None" is now the Show numbers box.
+  The deprecated `center_indicator` has no row and survives because the
+  editor loads and stores the whole object (tested).
+* `number_font` is a `FontSource` whose size is a fraction of the radius
+  (0.12). `ThemeFontSelector`'s size spin starts at 6, so a plain `Font`
+  row would have clamped it to 6 and stored 6.0 on the next edit (six
+  times the radius). It goes through the new `radius_font` field editor
+  (`field_editors.rs`), which shows the fraction as a percentage and
+  divides on the way back; the scaling helpers are unit-tested.
+* `DigitalClockConfig::props()` (`display_configs/digital_clock.rs`): Style,
+  Time, Date, Timer & alarm, Icon; the three family+size pairs are
+  `PlainFont`, the four plain colours `Rgba`. `vertical_layout` has no row
+  (neither the widget nor the renderer read it).
+* Deleted `clock_analog_config_widget.rs` and `clock_digital_config_widget.rs`
+  with their registry adapters. The analog `icon_size` is a percentage (5–30)
+  behind a `PlainFont` spin whose tooltip says points; the row's help text
+  says what it is.
+
+Next: a decision on `css_template` (its placeholder mapping needs the slot
+summaries; it may rightly stay a widget), then retire `DisplaySection` /
+`take_pages` in favour of `Section` paths.
