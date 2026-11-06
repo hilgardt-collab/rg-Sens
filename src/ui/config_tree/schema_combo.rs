@@ -189,6 +189,15 @@ impl DisplayEditor for SchemaComboEditor {
 
     fn set_theme(&self, theme: &ComboThemeConfig) {
         *self.theme.borrow_mut() = theme.clone();
+        // The frame's `theme` is the resolved cache (gotcha 20): keep the
+        // model's copy current so the dialog's baseline reads the same value
+        // the panel renders with.
+        if let Ok(v) = serde_json::to_value(theme) {
+            self.editor
+                .model_rc()
+                .borrow_mut()
+                .insert("theme".to_string(), v);
+        }
         self.editor.set_theme(theme);
     }
 
