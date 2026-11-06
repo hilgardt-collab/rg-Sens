@@ -413,9 +413,10 @@ mod theme_tests {
     use crate::ui::theme::ComboThemeConfig;
 
     fn pushed_theme() -> ComboThemeConfig {
-        let mut theme = ComboThemeConfig::default();
-        theme.color1 = rg_sens_types::color::Color::new(0.1, 0.2, 0.3, 1.0);
-        theme
+        ComboThemeConfig {
+            color1: rg_sens_types::color::Color::new(0.1, 0.2, 0.3, 1.0),
+            ..ComboThemeConfig::default()
+        }
     }
 
     fn graph_theme(displayer: &GraphDisplayer) -> ComboThemeConfig {
