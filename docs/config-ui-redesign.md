@@ -1163,3 +1163,47 @@ as before.
 Next: graph, speedometer and text need plain-RGBA colour, font, field-picker
 and text-line kinds (text first, since the three overlays embed it); then the
 themed frames with `sections()`.
+
+## 16. Phase 3d as shipped (2026-11-06)
+
+The text displayer and the text overlays are schema-driven.
+
+* `crates/types/src/schema.rs`: `PropKind::Font { legacy }` (`FontSource`,
+  reading the `(family, size)` keys named in `legacy` when the source is
+  `null`, which is how pre-`font_source` lines are stored; nothing ever
+  called `TextLineConfig::migrate`), `PropKind::Field` (a field id chosen
+  from the fields the editor was given), `ColorStops { themed }` (plain
+  `Vec<ColorStop>` when false — `TextFillType` gradients are not theme-aware).
+* `crates/types/src/text.rs`: `TextLineConfig`, `TextDisplayerConfig` and
+  `TextOverlayConfig` implement `Schema`; the overlay is `enabled` plus an
+  `Object` over the displayer config, whose single prop is the `lines` list.
+  Bar and arc use that object for their Text overlay section instead of the
+  opaque widget.
+* `src/ui/config_tree/field_editors.rs`: `text_position` (the 3×3
+  `PositionGridWidget`) for `position` and `combine_alignment`; the
+  `text_overlay` editor is gone.
+* `src/ui/config_tree/schema_editor.rs`: Font, Field and plain-stops rows;
+  `SchemaDisplayEditor::create` builds a single page when the props have at
+  most one section, so the text displayer's lines sit on the Display page.
+  Lists gain Duplicate (per item), Copy (per item) and Paste (header), with
+  the clipboard item tagged by list key so a text line pastes only into a
+  text-line list.
+* `combo_config_base`: Text items use the overlay schema editor; changing an
+  item's display type reloads the bar, arc and text editors from the item,
+  because bar and text both edit `bar_config` and the hidden one would
+  otherwise write back a stale copy on its next edit (the old widgets had the
+  same hazard, mitigated by saving the text widget only under the Text type).
+* Behaviour: combine direction/alignment rows show on every grouped line
+  (the old widget showed them only on the first line of a group with two or
+  more lines at one position; the renderer still reads the first line's);
+  the group is a free-text name with "Group 1" as placeholder instead of a
+  dropdown of eight presets plus Custom; a new line is the default line
+  (field "value"), ungrouped; the fill gradient template is white → grey.
+* `TextLineConfigWidget` and `TextOverlayConfigWidget` stay for graph,
+  speedometer, core bars, indicator and static.
+
+Next: graph (plain RGBA colour kind for its backgrounds; a plain
+family/size font kind for axis labels), speedometer (zones list with plain
+colour; bezel `BackgroundConfig` as a field editor), core bars, indicator,
+static; then delete the two text widgets; then the themed frames with
+`sections()`.
