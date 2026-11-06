@@ -98,7 +98,7 @@ impl crate::schema::Schema for StaticTextSourceConfig {
                     item_label: "Line",
                     add_label: "Add line",
                     item_summary: Some(|v| {
-                        v.get("label")
+                        v.get("text")
                             .and_then(|l| l.as_str())
                             .unwrap_or("")
                             .to_string()
