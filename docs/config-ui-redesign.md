@@ -1481,3 +1481,125 @@ Content
 
 Remaining as in §21: docs consolidation and the `resolve_missing_named`
 policy.
+
+## 23. Clock items and short field ids (2026-11-07)
+
+User request: "when setting an Item source as clock, the Display as drop
+down should show Text/Analog and then show the appropriate config options",
+and, mid-task, "on all text fields in the combo, when I change the field in
+the field drop down (Group>Item>Line) the panel stops rendering the text".
+
+* **Display types per source.** `combo_items::types_for_source(source_id)`
+  is the "Display as" list: a `clock` slot offers Text and Analog, every
+  other source the eight metric types. Analog is a new
+  `ContentDisplayType::ClockAnalog` (`"clock_analog"`) with
+  `ContentItemConfig::clock_analog_config: AnalogClockConfig`; the tree
+  files its Face, Numbers, Ticks and Hands sections under the item through
+  the usual `Sub` (`clock_item_props` drops the Icon section — only the
+  standalone clock draws the alarm/timer icon and owns the click that opens
+  the alarm dialog). `combo_displayer_base::render_content_clock` draws the
+  face in both content paths (generic and LCARS) from the slot's
+  `hour`/`minute`/`second`/`millisecond` via `combo_utils::clock_hands`,
+  checked headlessly with `art_deco_preview` on a clock slot. The second
+  hand moves at the combo's `update_interval_ms`, so "Sweep the second
+  hand" only sweeps when that interval is short.
+* **The dropdown row always equals the model.** GTK fires nothing when the
+  shown row is re-selected, so a stored type the source does not offer
+  would be unreachable. `coerce_display_as(model, slot, source_id)` writes
+  the first offered type when the stored one is not offered (bar → text on
+  a clock slot, clock_analog → bar on a metric slot); the dialog runs it on
+  load (`State::reset_from` → `coerce_item_displays`, committed like an
+  edit when anything changed), on a source switch (`set_item_source`,
+  before `structure_changed` rebuilds the subtree) and once more as a
+  safety net in `ItemDisplayEditor::new`. The item subtitle shows the
+  dropdown label (`display_type_label`) instead of the enum's debug name.
+* **Blank text after picking a field.** Item editors were handed
+  `slot_fields()` — the combo-wide ids (`group1_1_time`) the frame-level
+  editor uses — but an item renders against `get_slot_values()`, the slot's
+  values with the prefix stripped, so every id the picker wrote was one the
+  renderer never finds. `util::item_fields(source_id)` now gives item
+  editors the renderer's own keys (caption, value, unit, numerical_value)
+  followed by the source's short ids, matching what the classic widget did
+  before Phase 4b. `PanelData::sync_group_structure` additionally runs
+  `DisplayerConfig::strip_item_field_prefixes`
+  (`combo::strip_slot_prefixes`) so a config saved with the long form by
+  v0.9.0–0.9.2 heals at apply and at panel creation.
+
+Remaining as in §21: docs consolidation and the `resolve_missing_named`
+policy.
+
+## 24. Group title bars, Item copy/paste, arc fill (2026-11-07)
+
+User request: "Groups in Combo panels should have an optional, configurable
+title bar. The Copy/Paste style buttons are all broken - may I suggest we
+make it an Item copy/paste button. The Arc Colours section should give arc
+fill options (solid/gradient - and the gradient bar should just show the
+horizontal gradient, not the circle it currently shows."
+
+* **Group title bars.** `GroupTitleConfig` (`crates/types/src/combo.rs`:
+  enabled, text, themed font, bold, themed colour, alignment, height, an
+  optional filled bar) lives in every frame as `group_titles`, parallel to
+  the group's size weight and item orientation (swapped with them by
+  `swap_groups`, carried across frame types by `TransferableComboConfig`).
+  It is display state because its font and colours resolve against the
+  frame's theme; the source's `GroupConfig` stays item count and weight.
+  `render_group_title` (render crate) draws the bar inside the group's
+  rectangle and returns the height used; the generic path and LCARS hand
+  the rest to the items, so `calculate_group_layouts`, dividers and the
+  layout cache are untouched. Material's own `group_headers` turned out to
+  have no caller; left as is. Edited on the Group page: a "Title bar"
+  `SchemaEditor` over `GroupTitleConfig::props()` bound through
+  `ComboDisplayEditor::{group_title, set_group_title}` (the frame's list is
+  padded with defaults), kept in `State::group_editors`, dropped with the
+  Content pages and themed by `propagate_theme`.
+* **Copy Item / Paste Item.** The item page carries the item as a whole:
+  `ComboItemClip` (source id, caption override, flat source config and the
+  `ContentItemConfig` JSON). Paste writes the slot into the working combo
+  source, the item into the frame (`ComboDisplayEditor::set_content_item`),
+  coerces the display type to one the pasted source offers and runs
+  `structure_changed`, which drops the item's editors (they held the old
+  item), reloads the frame with the synced structure, rebuilds the subtree
+  and commits. The item Source node's Copy/Paste Source Config is gone (the
+  item pair subsumes it); the panel-level Source/Display/Style pairs stay.
+  Every pasted displayer config now goes through
+  `State::load_display_config`: group sync and field-prefix strip for a
+  combo, this panel's resolved theme, and the item editors rebuilt (Paste
+  Style used to load another panel's frame without any of that). The JSON
+  forms the buttons exchange are covered by two round-trip tests over every
+  displayer and source id (`panel.rs`).
+* **Arc fill.** `ArcDisplayConfig::fill` (`ArcFill::{Solid, Gradient}`,
+  default Gradient so saved arcs are unchanged) plus `solid_color`; the
+  Colours section shows Fill, then either the colour or the stops with their
+  transition and mode. The stops row is `linear: true` now, so the preview is
+  the horizontal ramp. `render_arc` resolves a solid fill as the same colour
+  at both ends, so every lookup downstream is a constant. The speedometer
+  still uses the sweep preview.
+
+Remaining as in §21: docs consolidation and the `resolve_missing_named`
+policy.
+
+## 25. Analog clock tweaks (2026-11-07)
+
+User request: an outline show/hide on the Face page, the Numerals dropdown
+without the two options that changed nothing, and a radius for where the
+numerals sit. One config (`AnalogClockConfig`) and one renderer
+(`render_analog_clock_with_theme`) serve both the standalone clock and the
+combo item, so the change reaches both:
+
+* `show_border` (default true) gates the outline colour and width rows and
+  the outline stroke.
+* `FaceStyle::{Modern, Numbers}` are gone; `classic` carries them as serde
+  aliases so saved configs load as Classic (tested).
+* `number_radius_percent` (default 75, the old constant) places the numerals
+  as a percentage of the radius, shown under Numbers.
+
+The speedometer's Track section got the arc's treatment the same day:
+`track_fill` (`TrackFill::{Solid, Gradient}`, default Gradient) chooses
+between the track colour and the colour zones, whose stops row is now
+`linear: true` (horizontal preview). A gradient with a single zone still
+draws solid, as before, so no saved speedometer changes.
+Its tick labels take a themed font now (`TickLabelConfig::font_source`,
+`Option<FontSource>` over the legacy `font_family`/`font_size` the way text
+lines do; `resolved_font` falls back to the plain pair, tested), and the one
+Ticks section is three: Major ticks, Minor ticks, Tick labels, so each is
+its own tree node.

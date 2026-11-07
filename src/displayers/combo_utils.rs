@@ -425,3 +425,57 @@ pub fn cleanup_all_animation_state(
             .unwrap_or(false)
     });
 }
+
+/// The hand positions of an analog clock item from the slot's values: the hour
+/// on 0–12 carrying the minutes, the minute on 0–60 carrying the seconds, and
+/// the second carrying its milliseconds when `smooth` (a sweeping hand), else
+/// whole (a ticking one). Missing keys read as zero.
+pub fn clock_hands(values: &HashMap<String, Value>, smooth: bool) -> (f64, f64, f64) {
+    let num = |key: &str| values.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+    let millis = if smooth {
+        num("millisecond") / 1000.0
+    } else {
+        0.0
+    };
+    let second = num("second") + millis;
+    let minute = num("minute") + second / 60.0;
+    let hour = (num("hour") % 12.0) + minute / 60.0;
+    (hour, minute, second)
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn values(h: u32, m: u32, s: u32, ms: u32) -> HashMap<String, Value> {
+        HashMap::from([
+            ("hour".to_string(), json!(h)),
+            ("minute".to_string(), json!(m)),
+            ("second".to_string(), json!(s)),
+            ("millisecond".to_string(), json!(ms)),
+        ])
+    }
+
+    #[test]
+    fn hands_carry_the_smaller_units() {
+        let (hour, minute, second) = clock_hands(&values(15, 30, 45, 500), true);
+        assert!((second - 45.5).abs() < 1e-9);
+        assert!((minute - (30.0 + 45.5 / 60.0)).abs() < 1e-9);
+        assert!(
+            (hour - (3.0 + minute / 60.0)).abs() < 1e-9,
+            "15:30 is half past three"
+        );
+    }
+
+    #[test]
+    fn a_ticking_hand_ignores_milliseconds() {
+        let (_, _, second) = clock_hands(&values(0, 0, 45, 999), false);
+        assert_eq!(second, 45.0);
+    }
+
+    #[test]
+    fn a_slot_without_time_values_reads_midnight() {
+        assert_eq!(clock_hands(&HashMap::new(), true), (0.0, 0.0, 0.0));
+    }
+}

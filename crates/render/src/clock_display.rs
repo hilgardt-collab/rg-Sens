@@ -132,8 +132,8 @@ fn draw_face(
 
     cr.restore()?; // Restores both clip and translation
 
-    // Draw border (outside the clipped region, using original transform)
-    if config.border_width > 0.0 {
+    // Draw the outline (outside the clipped region, using original transform)
+    if config.show_border && config.border_width > 0.0 {
         cr.save()?;
         cr.arc(cx, cy, radius - config.border_width / 2.0, 0.0, 2.0 * PI);
         let default_theme = ComboThemeConfig::default();
@@ -330,7 +330,7 @@ fn draw_numbers(
         cairo::FontWeight::Normal
     };
 
-    let number_radius = radius * 0.75;
+    let number_radius = radius * (config.number_radius_percent / 100.0).clamp(0.0, 1.0);
 
     let numbers: Vec<&str> = match config.face_style {
         FaceStyle::Roman => vec![

@@ -164,6 +164,7 @@ pub fn show_tree_properties_dialog(
         background_editor: RefCell::new(None),
         inline_theme_widget: RefCell::new(None),
         item_editors: RefCell::new(HashMap::new()),
+        group_editors: RefCell::new(HashMap::new()),
         geometry: RefCell::new(None),
         appearance: RefCell::new(None),
         theme_controls: RefCell::new(None),

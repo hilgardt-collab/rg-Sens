@@ -476,6 +476,28 @@ impl DisplayerConfig {
         }
     }
 
+    /// Make every content item's text lines address the slot's own values
+    /// (see [`crate::combo::strip_slot_prefixes`]). No-op for standalone
+    /// displayers; returns whether anything changed.
+    pub fn strip_item_field_prefixes(&mut self) -> bool {
+        use crate::combo::strip_slot_prefixes;
+        match self {
+            DisplayerConfig::Lcars(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::Cyberpunk(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::Material(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::Industrial(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::RetroTerminal(cfg) => {
+                strip_slot_prefixes(&mut cfg.frame.content_items)
+            }
+            DisplayerConfig::FighterHud(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::Synthwave(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::ArtDeco(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::ArtNouveau(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            DisplayerConfig::Steampunk(cfg) => strip_slot_prefixes(&mut cfg.frame.content_items),
+            _ => false,
+        }
+    }
+
     /// Swap two groups of a combo displayer's frame (per-slot display
     /// settings follow their source). No-op for standalone displayers.
     pub fn swap_groups(&mut self, a: usize, b: usize) {
@@ -896,12 +918,15 @@ pub struct PanelData {
 
 impl PanelData {
     /// Make the combo frame's group structure follow the source's groups
-    /// (see [`DisplayerConfig::sync_group_structure`]). Legacy flat combo
+    /// (see [`DisplayerConfig::sync_group_structure`]) and its items' text
+    /// lines address the slot's own values
+    /// ([`DisplayerConfig::strip_item_field_prefixes`]). Legacy flat combo
     /// configs are migrated to groups first. No-op for standalone panels.
     pub fn sync_group_structure(&mut self) {
         if let SourceConfig::Combo(cs) = &mut self.source_config {
             cs.migrate_legacy();
             self.displayer_config.sync_group_structure(&cs.groups);
+            self.displayer_config.strip_item_field_prefixes();
         }
     }
 
@@ -1023,6 +1048,75 @@ mod group_structure_tests {
         assert_eq!(cfg.frame.group_count, 2);
         assert_eq!(cfg.frame.group_item_counts, vec![2u32, 3]);
         assert_eq!(cfg.frame.group_size_weights, vec![1.0, 0.5]);
+    }
+
+    /// What the dialog's Copy/Paste buttons rely on: every displayer type's
+    /// config survives the JSON forms they exchange, both the bare value
+    /// (`to_inner_value` → `from_value_for_type`) and the keyed map
+    /// (`to_hashmap` → `extract_from_hashmap`).
+    #[test]
+    fn every_displayer_config_round_trips_through_the_clipboard_forms() {
+        let ids = [
+            "text",
+            "bar",
+            "arc",
+            "speedometer",
+            "graph",
+            "clock_analog",
+            "clock_digital",
+            "lcars",
+            "cpu_cores",
+            "indicator",
+            "cyberpunk",
+            "material",
+            "industrial",
+            "retro_terminal",
+            "fighter_hud",
+            "synthwave",
+            "art_deco",
+            "art_nouveau",
+            "steampunk",
+            "css_template",
+        ];
+        for id in ids {
+            let cfg = DisplayerConfig::default_for_type(id).unwrap_or_else(|| panic!("{}", id));
+            let inner = cfg
+                .to_inner_value()
+                .unwrap_or_else(|| panic!("{} inner", id));
+            let back = DisplayerConfig::from_value_for_type(id, inner)
+                .unwrap_or_else(|| panic!("{} from inner", id));
+            assert_eq!(back.displayer_type(), id);
+            let map = cfg.to_hashmap();
+            let back = DisplayerConfig::extract_from_hashmap(&map, id)
+                .unwrap_or_else(|| panic!("{} from map {:?}", id, map.keys()));
+            assert_eq!(back.displayer_type(), id);
+        }
+    }
+
+    /// Same for every source type and the keyed map the source editors use.
+    #[test]
+    fn every_source_config_round_trips_through_the_clipboard_forms() {
+        let ids = [
+            "cpu",
+            "gpu",
+            "memory",
+            "disk",
+            "network",
+            "clock",
+            "claude",
+            "combination",
+            "system_temp",
+            "fan_speed",
+            "test",
+            "static_text",
+        ];
+        for id in ids {
+            let cfg = SourceConfig::default_for_type(id).unwrap_or_else(|| panic!("{}", id));
+            let map = cfg.to_hashmap();
+            let back = SourceConfig::extract_from_hashmap(&map, id)
+                .unwrap_or_else(|| panic!("{} from map {:?}", id, map.keys()));
+            assert_eq!(back.source_type(), id);
+        }
     }
 
     /// Standalone displayers are left alone.

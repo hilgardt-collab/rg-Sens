@@ -7,7 +7,8 @@ use rg_sens_types::theme::ComboThemeConfig;
 
 // Re-export arc display config types from rg-sens-types
 pub use rg_sens_types::display_configs::arc::{
-    ArcCapStyle, ArcDisplayConfig, ArcTaperStyle, ColorApplicationMode, ColorTransitionStyle,
+    ArcCapStyle, ArcDisplayConfig, ArcFill, ArcTaperStyle, ColorApplicationMode,
+    ColorTransitionStyle,
 };
 
 /// Internal helper struct with resolved colors for rendering
@@ -66,12 +67,19 @@ pub fn render_arc(
 ) -> Result<(), cairo::Error> {
     let value = value.clamp(0.0, 1.0);
 
-    // Resolve theme colors to concrete colors
-    let resolved_stops: Vec<ColorStop> = config
-        .color_stops
-        .iter()
-        .map(|s| s.resolve(theme))
-        .collect();
+    // Resolve theme colors to concrete colors; a solid fill is the same
+    // colour at both ends, so every lookup below is a constant
+    let resolved_stops: Vec<ColorStop> = match config.fill {
+        ArcFill::Solid => {
+            let color = config.solid_color.resolve(theme);
+            vec![ColorStop::new(0.0, color), ColorStop::new(1.0, color)]
+        }
+        ArcFill::Gradient => config
+            .color_stops
+            .iter()
+            .map(|s| s.resolve(theme))
+            .collect(),
+    };
     let resolved_bg_color = config.background_color.resolve(theme);
 
     // Create a resolved config for internal functions

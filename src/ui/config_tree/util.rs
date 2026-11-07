@@ -1,7 +1,7 @@
 //! Pure helpers for the tree dialog: config flattening, combo slot
 //! summaries and field metadata. No GTK.
 
-use crate::core::{global_registry, FieldMetadata, SourceConfig};
+use crate::core::{global_registry, FieldMetadata, FieldPurpose, FieldType, SourceConfig};
 use crate::sources::ComboSourceConfig;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -77,6 +77,53 @@ pub fn slot_fields(slot: &str, source_id: &str) -> Vec<FieldMetadata> {
     global_registry().get_source_fields_for_combo_slot(slot, source_id)
 }
 
+/// The fields a content item's display editor offers: the generic item keys
+/// the renderer always provides (caption, value, unit, numeric value), then
+/// the slot's source fields by their short ids. An item is rendered against
+/// the slot's values with the `"{slot}_"` prefix stripped, so its field
+/// pickers must write the short id (`time`), never the combo-wide
+/// `group1_1_time` of [`slot_fields`] — a line bound to that renders nothing.
+pub fn item_fields(source_id: &str) -> Vec<FieldMetadata> {
+    let mut fields = vec![
+        FieldMetadata::new(
+            "caption",
+            "Caption",
+            "Label text",
+            FieldType::Text,
+            FieldPurpose::Caption,
+        ),
+        FieldMetadata::new(
+            "value",
+            "Value",
+            "Current value",
+            FieldType::Text,
+            FieldPurpose::Value,
+        ),
+        FieldMetadata::new(
+            "unit",
+            "Unit",
+            "Unit of measurement",
+            FieldType::Text,
+            FieldPurpose::Unit,
+        ),
+        FieldMetadata::new(
+            "numerical_value",
+            "Numeric Value",
+            "Raw numeric value",
+            FieldType::Numerical,
+            FieldPurpose::Value,
+        ),
+    ];
+    if !source_id.is_empty() && source_id != "none" {
+        for field in global_registry().get_source_fields_cached(source_id) {
+            if !fields.iter().any(|f| f.id == field.id) {
+                fields.push(field);
+            }
+        }
+    }
+    fields
+}
+
 /// Prefixed field metadata for every configured slot of a combo source.
 pub fn combo_fields(cfg: &ComboSourceConfig) -> Vec<FieldMetadata> {
     let mut fields = Vec::new();
@@ -116,5 +163,15 @@ mod tests {
     fn empty_flat_map_gives_type_default() {
         let back = source_config_from_flat("memory", &HashMap::new()).unwrap();
         assert_eq!(back.source_type(), "memory");
+    }
+
+    /// The renderer's own keys come first and nothing carries a slot prefix.
+    #[test]
+    fn item_fields_are_short_ids() {
+        let ids: Vec<String> = item_fields("none").into_iter().map(|f| f.id).collect();
+        assert_eq!(ids, vec!["caption", "value", "unit", "numerical_value"]);
+        for f in item_fields("clock") {
+            assert!(!f.id.starts_with("group"), "{} is a combo-wide id", f.id);
+        }
     }
 }

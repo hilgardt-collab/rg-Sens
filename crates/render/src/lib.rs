@@ -9,6 +9,7 @@ pub mod combo_traits;
 pub mod core_bars_display;
 pub mod cyberpunk_display;
 pub mod graph_display;
+pub mod group_title;
 pub mod industrial_display;
 pub mod lcars_display;
 pub mod material_display;

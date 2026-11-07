@@ -1,6 +1,7 @@
 //! Page builders: one editor page per node kind, built on first selection.
 
 use super::node::NodeKind;
+use super::schema_editor::SchemaEditor;
 use super::state::{
     flat_button, theme_choice_index, theme_mode_hint, AppearanceControls, GeometryControls, State,
     ThemeChoice, ThemeControls,
@@ -14,6 +15,8 @@ use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Label, Orientation, ScrolledWindow,
     SpinButton, StringList, Widget,
 };
+use rg_sens_types::combo::GroupTitleConfig;
+use rg_sens_types::schema::Schema;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -532,18 +535,7 @@ impl State {
                 let Some(cfg) = DisplayerConfig::from_value_for_type(&displayer_type, value) else {
                     return;
                 };
-                if let Some(e) = s.display_editor.borrow().as_ref() {
-                    e.load(&cfg);
-                    // The pasted config carries the source panel's cached
-                    // theme; the editor shows this panel's resolved theme.
-                    e.set_theme(&s.resolved_theme());
-                }
-                if s.is_combo() {
-                    // The item editors hold copies of the old content items:
-                    // rebuild them (and the tree) from the pasted frame.
-                    s.drop_item_pages();
-                    s.rebuild_tree(s.selected_node());
-                }
+                s.load_display_config(cfg);
                 s.changed();
             });
         }
@@ -715,6 +707,35 @@ impl State {
                 }
             });
         }
+        // Title bar: stored in the frame (its font and colours resolve
+        // against the frame's theme), edited beside the group's structure.
+        // Only a themed frame draws one (css_template has no frame model).
+        let current = self
+            .display_editor
+            .borrow()
+            .as_ref()
+            .and_then(|e| e.combo().map(|c| c.group_title(group)))
+            .and_then(|v| v.as_object().cloned());
+        if let Some(current) = current {
+            page.append(&heading("Title bar"));
+            let title_editor = Rc::new(SchemaEditor::with_fields(
+                GroupTitleConfig::props(),
+                Vec::new(),
+            ));
+            title_editor.set_theme(&self.resolved_theme());
+            title_editor.load(current);
+            {
+                let weak = Rc::downgrade(self);
+                let editor = title_editor.clone();
+                title_editor.set_on_change(Rc::new(move || {
+                    if let Some(s) = weak.upgrade() {
+                        s.set_group_title(group, serde_json::Value::Object(editor.model()));
+                    }
+                }));
+            }
+            page.append(title_editor.widget());
+            self.group_editors.borrow_mut().insert(group, title_editor);
+        }
         page.append(&hint(
             "Item orientation within each group is under Display › Layout.",
         ));
@@ -733,6 +754,35 @@ impl State {
             item + 1,
             group + 1
         )));
+
+        // The whole item travels: its source (type and settings), caption
+        // and display settings, onto any slot of any combo panel.
+        let btn_row = GtkBox::new(Orientation::Horizontal, 6);
+        let copy_btn = Button::with_label("Copy Item");
+        copy_btn.set_tooltip_text(Some("Copy this item's source and display settings"));
+        let paste_btn = Button::with_label("Paste Item");
+        paste_btn.set_tooltip_text(Some("Replace this item with the copied one"));
+        btn_row.append(&copy_btn);
+        btn_row.append(&paste_btn);
+        page.append(&btn_row);
+        {
+            let weak = Rc::downgrade(self);
+            let slot = slot.to_string();
+            copy_btn.connect_clicked(move |_| {
+                if let Some(s) = weak.upgrade() {
+                    s.copy_item(&slot);
+                }
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            let slot = slot.to_string();
+            paste_btn.connect_clicked(move |_| {
+                if let Some(s) = weak.upgrade() {
+                    s.paste_item(&slot);
+                }
+            });
+        }
 
         let (source_id, caption, item_count) = self
             .combo_source
@@ -853,7 +903,8 @@ impl State {
         page
     }
 
-    /// The source settings of one item: Copy/Paste and the source's editor.
+    /// The source settings of one item: the source's editor (Copy/Paste
+    /// Item on the item page carries these along).
     fn build_item_source_page(self: &Rc<Self>, slot: &str) -> GtkBox {
         let page = page_box();
         let source_id = self
@@ -867,66 +918,6 @@ impl State {
             "{} settings",
             source_display_name(&source_id)
         )));
-
-        let btn_row = GtkBox::new(Orientation::Horizontal, 6);
-        let copy_btn = Button::with_label("Copy Source Config");
-        let paste_btn = Button::with_label("Paste Source Config");
-        btn_row.append(&copy_btn);
-        btn_row.append(&paste_btn);
-        page.append(&btn_row);
-        {
-            let weak = Rc::downgrade(self);
-            let slot = slot.to_string();
-            copy_btn.connect_clicked(move |_| {
-                let Some(s) = weak.upgrade() else { return };
-                let cfg = s
-                    .item_editors
-                    .borrow()
-                    .get(&slot)
-                    .and_then(|i| i.source_editor.borrow().as_ref().and_then(|e| e.store()));
-                if let Some(cfg) = cfg {
-                    if let Ok(mut cb) = CLIPBOARD.lock() {
-                        let json =
-                            serde_json::to_value(flatten_source_config(&cfg)).unwrap_or_default();
-                        cb.copy_source_config(cfg.source_type().to_string(), json);
-                    }
-                }
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            let slot = slot.to_string();
-            let source_id = source_id.clone();
-            paste_btn.connect_clicked(move |_| {
-                let Some(s) = weak.upgrade() else { return };
-                let pasted = CLIPBOARD
-                    .lock()
-                    .ok()
-                    .and_then(|cb| cb.paste_source_config());
-                let Some((source_type, value)) = pasted else {
-                    return;
-                };
-                if source_type != source_id {
-                    log::info!(
-                        "Source config paste skipped: clipboard has '{}'",
-                        source_type
-                    );
-                    return;
-                }
-                let flat: std::collections::HashMap<String, serde_json::Value> = value
-                    .as_object()
-                    .map(|o| o.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-                    .unwrap_or_default();
-                if let Some(cfg) = source_config_from_flat(&source_type, &flat) {
-                    if let Some(item) = s.item_editors.borrow().get(&slot) {
-                        if let Some(e) = item.source_editor.borrow().as_ref() {
-                            e.load(&cfg);
-                        }
-                    }
-                    s.changed();
-                }
-            });
-        }
 
         let editors = self.ensure_item_editor(slot);
         let widget = editors.source_editor.borrow().as_ref().map(|e| e.widget());
@@ -1074,14 +1065,12 @@ impl State {
                 let bg = s.ensure_background_editor();
                 bg.set_config(style.background.clone());
                 let displayer_type = s.displayer_type();
-                if let Some(cfg) =
-                    DisplayerConfig::extract_from_hashmap(&style.displayer_config, &displayer_type)
-                {
-                    if let Some(e) = s.display_editor.borrow().as_ref() {
-                        e.load(&cfg);
-                    }
-                }
+                let pasted =
+                    DisplayerConfig::extract_from_hashmap(&style.displayer_config, &displayer_type);
                 s.loading.set(false);
+                if let Some(cfg) = pasted {
+                    s.load_display_config(cfg);
+                }
                 s.changed();
             });
         }

@@ -26,6 +26,18 @@ pub struct PanelStyle {
     pub displayer_config: HashMap<String, Value>,
 }
 
+/// A whole combo item: the slot's source and the item's display settings,
+/// so one item can be reproduced on any slot of any combo panel.
+#[derive(Debug, Clone)]
+pub struct ComboItemClip {
+    pub source_id: String,
+    pub caption_override: String,
+    /// The slot's flat source config (`SlotConfig::source_config`)
+    pub source_config: HashMap<String, Value>,
+    /// The frame's `ContentItemConfig` for the slot, as JSON
+    pub content_item: Value,
+}
+
 /// Clipboard data structure
 #[derive(Debug, Default, Clone)]
 pub struct Clipboard {
@@ -65,6 +77,8 @@ pub struct Clipboard {
     pub display_config: Option<(String, Value)>,
     /// Copied schema list item as JSON, tagged with its list key
     pub list_item: Option<(String, Value)>,
+    /// Copied combo item (source and display)
+    pub combo_item: Option<ComboItemClip>,
 }
 
 impl Clipboard {
@@ -249,6 +263,16 @@ impl Clipboard {
         self.list_item.clone()
     }
 
+    /// Copy a whole combo item (source and display)
+    pub fn copy_combo_item(&mut self, item: ComboItemClip) {
+        self.combo_item = Some(item);
+    }
+
+    /// Paste a whole combo item
+    pub fn paste_combo_item(&self) -> Option<ComboItemClip> {
+        self.combo_item.clone()
+    }
+
     /// Clear all clipboard data
     pub fn clear(&mut self) {
         self.text = None;
@@ -269,5 +293,6 @@ impl Clipboard {
         self.source_config = None;
         self.display_config = None;
         self.list_item = None;
+        self.combo_item = None;
     }
 }

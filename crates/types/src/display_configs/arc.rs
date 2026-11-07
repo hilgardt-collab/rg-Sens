@@ -55,6 +55,18 @@ pub enum ColorApplicationMode {
     Segments, // Individual segments have fixed colors
 }
 
+/// How the arc is coloured
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum ArcFill {
+    /// One colour along the whole arc
+    #[serde(rename = "solid")]
+    Solid,
+    /// The colour stops along the arc (what a config without a `fill` key is)
+    #[serde(rename = "gradient")]
+    #[default]
+    Gradient,
+}
+
 /// Arc gauge configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ArcDisplayConfig {
@@ -94,6 +106,14 @@ pub struct ArcDisplayConfig {
     pub color_transition: ColorTransitionStyle,
     #[serde(default)]
     pub color_mode: ColorApplicationMode,
+    /// Solid colour or the colour stops; the stops are kept either way
+    #[serde(default)]
+    pub fill: ArcFill,
+    #[serde(
+        default = "default_solid_color",
+        deserialize_with = "deserialize_color_or_source"
+    )]
+    pub solid_color: ColorSource,
 
     // Background arc (unfilled portion)
     #[serde(default = "default_show_background_arc")]
@@ -164,6 +184,10 @@ fn default_color_stops() -> Vec<ColorStopSource> {
     ]
 }
 
+fn default_solid_color() -> ColorSource {
+    ColorSource::custom(Color::new(0.0, 0.8, 0.0, 1.0))
+}
+
 fn default_show_background_arc() -> bool {
     true
 }
@@ -194,6 +218,8 @@ impl Default for ArcDisplayConfig {
             color_stops: default_color_stops(),
             color_transition: ColorTransitionStyle::default(),
             color_mode: ColorApplicationMode::default(),
+            fill: ArcFill::default(),
+            solid_color: default_solid_color(),
             show_background_arc: default_show_background_arc(),
             background_color: default_background_color(),
             overlay_background: default_false(),
@@ -315,16 +341,34 @@ impl crate::schema::Schema for ArcDisplayConfig {
                 values: vec!["start", "end", "both"],
             }),
             Prop::new(
+                "fill",
+                "Fill",
+                PropKind::Enum {
+                    options: vec![("solid", "Solid colour"), ("gradient", "Gradient")],
+                },
+            )
+            .section("Colours"),
+            Prop::new("solid_color", "Colour", PropKind::Color)
+                .section("Colours")
+                .visible_when(Condition::Equals {
+                    key: "fill",
+                    values: vec!["solid"],
+                }),
+            Prop::new(
                 "color_stops",
                 "Colour stops",
                 PropKind::ColorStops {
-                    linear: false,
+                    linear: true,
                     themed: true,
                     angle_key: None,
                 },
             )
             .section("Colours")
-            .help("Colours along the arc from start to end"),
+            .help("Colours along the arc from start (left) to end (right)")
+            .visible_when(Condition::Equals {
+                key: "fill",
+                values: vec!["gradient"],
+            }),
             Prop::new(
                 "color_transition",
                 "Transition",
@@ -332,7 +376,11 @@ impl crate::schema::Schema for ArcDisplayConfig {
                     options: vec![("smooth", "Smooth"), ("abrupt", "Abrupt")],
                 },
             )
-            .section("Colours"),
+            .section("Colours")
+            .visible_when(Condition::Equals {
+                key: "fill",
+                values: vec!["gradient"],
+            }),
             Prop::new(
                 "color_mode",
                 "Colour mode",
@@ -340,7 +388,11 @@ impl crate::schema::Schema for ArcDisplayConfig {
                     options: vec![("progressive", "Progressive"), ("segments", "Per segment")],
                 },
             )
-            .section("Colours"),
+            .section("Colours")
+            .visible_when(Condition::Equals {
+                key: "fill",
+                values: vec!["gradient"],
+            }),
             Prop::new("show_background_arc", "Show background arc", PropKind::Bool)
                 .section("Colours"),
             Prop::new("background_color", "Background colour", PropKind::Color)
@@ -399,5 +451,15 @@ mod schema_tests {
         let value = serde_json::to_value(&default).unwrap();
         let back: ArcDisplayConfig = serde_json::from_value(value).unwrap();
         assert_eq!(back, default);
+    }
+
+    /// Arcs saved before the fill switch existed are gradients.
+    #[test]
+    fn a_config_without_a_fill_key_is_a_gradient() {
+        let cfg: ArcDisplayConfig = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(cfg.fill, ArcFill::Gradient);
+        let cfg: ArcDisplayConfig =
+            serde_json::from_value(serde_json::json!({ "fill": "solid" })).unwrap();
+        assert_eq!(cfg.fill, ArcFill::Solid);
     }
 }

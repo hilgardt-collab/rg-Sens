@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::color::Color;
-use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use crate::combo::{ComboFrameConfig, GroupTitleConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::ContentItemConfig;
 use crate::theme::ComboThemeConfig;
 
@@ -407,6 +407,9 @@ pub struct SynthwaveFrameConfig {
     /// Item orientation within each group - defaults to same as split_orientation
     #[serde(default)]
     pub group_item_orientations: Vec<SplitOrientation>,
+    /// Title bar of each group (see `GroupTitleConfig`)
+    #[serde(default)]
+    pub group_titles: Vec<GroupTitleConfig>,
     #[serde(default)]
     pub item_spacing: f64,
 
@@ -466,6 +469,7 @@ impl Default for SynthwaveFrameConfig {
             group_size_weights: vec![1.0],
             split_orientation: SplitOrientation::Vertical,
             group_item_orientations: Vec::new(),
+            group_titles: Vec::new(),
             item_spacing: 8.0,
 
             divider_style: SynthwaveDividerStyle::NeonLine,
@@ -501,6 +505,14 @@ impl LayoutFrameConfig for SynthwaveFrameConfig {
 
     fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
         &mut self.group_item_orientations
+    }
+
+    fn group_titles(&self) -> &[GroupTitleConfig] {
+        &self.group_titles
+    }
+
+    fn group_titles_mut(&mut self) -> &mut Vec<GroupTitleConfig> {
+        &mut self.group_titles
     }
 
     fn split_orientation(&self) -> SplitOrientation {

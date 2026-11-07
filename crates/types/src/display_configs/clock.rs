@@ -22,20 +22,17 @@ pub enum HandStyle {
     Fancy,
 }
 
-/// Clock face style
+/// Clock numerals. `modern` and `numbers` were variants that drew exactly
+/// like Classic; saved configs carrying them load as Classic.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum FaceStyle {
     #[serde(rename = "minimal")]
     Minimal,
-    #[serde(rename = "classic")]
+    #[serde(rename = "classic", alias = "modern", alias = "numbers")]
     #[default]
     Classic,
-    #[serde(rename = "modern")]
-    Modern,
     #[serde(rename = "roman")]
     Roman,
-    #[serde(rename = "numbers")]
-    Numbers,
 }
 
 /// Clock tick mark style
@@ -62,6 +59,9 @@ pub struct AnalogClockConfig {
     pub face_background: BackgroundConfig,
     #[serde(default)]
     pub face_style: FaceStyle,
+    /// The outline around the face
+    #[serde(default = "default_true")]
+    pub show_border: bool,
     #[serde(default = "default_border_color")]
     pub border_color: ColorSource,
     #[serde(default = "default_border_width")]
@@ -94,6 +94,9 @@ pub struct AnalogClockConfig {
     pub number_color: ColorSource,
     #[serde(default = "default_number_font")]
     pub number_font: FontSource,
+    /// Distance of the numerals from the centre, as a percentage of the radius
+    #[serde(default = "default_number_radius_percent")]
+    pub number_radius_percent: f64,
     #[serde(default)]
     pub number_bold: bool,
     #[serde(default)]
@@ -214,6 +217,10 @@ fn default_number_font() -> FontSource {
     FontSource::custom("Sans".to_string(), 0.12) // Size as fraction of radius
 }
 
+fn default_number_radius_percent() -> f64 {
+    75.0
+}
+
 fn default_hour_hand_color() -> ColorSource {
     ColorSource::custom(Color::new(0.9, 0.9, 0.9, 1.0))
 }
@@ -286,6 +293,7 @@ impl Default for AnalogClockConfig {
         Self {
             face_background,
             face_style: FaceStyle::default(),
+            show_border: true,
             border_color: default_border_color(),
             border_width: default_border_width(),
             hour_tick_style: TickStyle::default(),
@@ -299,6 +307,7 @@ impl Default for AnalogClockConfig {
             show_numbers: true,
             number_color: default_number_color(),
             number_font: default_number_font(),
+            number_radius_percent: default_number_radius_percent(),
             number_bold: true,
             number_italic: false,
             hour_hand_style: HandStyle::default(),
@@ -423,6 +432,7 @@ impl crate::schema::Schema for AnalogClockConfig {
             key: "show_center_hub",
         };
         let icon = Condition::IsTrue { key: "show_icon" };
+        let border = Condition::IsTrue { key: "show_border" };
 
         vec![
             // Face
@@ -434,8 +444,13 @@ impl crate::schema::Schema for AnalogClockConfig {
                 },
             )
             .section("Face"),
-            Prop::new("border_color", "Border colour", PropKind::Color).section("Face"),
-            px("border_width", "Border width (px)", 0.0, 20.0).section("Face"),
+            Prop::new("show_border", "Show outline", PropKind::Bool).section("Face"),
+            Prop::new("border_color", "Outline colour", PropKind::Color)
+                .section("Face")
+                .visible_when(border.clone()),
+            px("border_width", "Outline width (px)", 0.0, 20.0)
+                .section("Face")
+                .visible_when(border),
             // Numbers
             Prop::new("show_numbers", "Show numbers", PropKind::Bool).section("Numbers"),
             Prop::new(
@@ -446,13 +461,22 @@ impl crate::schema::Schema for AnalogClockConfig {
                         ("classic", "Classic (1–12)"),
                         ("minimal", "Minimal (12, 3, 6, 9)"),
                         ("roman", "Roman"),
-                        ("modern", "Modern"),
-                        ("numbers", "Numbers"),
                     ],
                 },
             )
             .section("Numbers")
-            .help("Modern and Numbers draw like Classic")
+            .visible_when(numbers.clone()),
+            Prop::new(
+                "number_radius_percent",
+                "Distance from centre (% of radius)",
+                PropKind::Float {
+                    min: 30.0,
+                    max: 100.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .section("Numbers")
             .visible_when(numbers.clone()),
             Prop::new(
                 "number_font",
@@ -600,6 +624,21 @@ mod schema_tests {
         let value = serde_json::to_value(AnalogClockConfig::default()).unwrap();
         let back: AnalogClockConfig = serde_json::from_value(value.clone()).unwrap();
         assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+
+    /// Two numeral styles that drew like Classic were dropped from the
+    /// dropdown; configs saved with them load as Classic, and a config saved
+    /// before the outline toggle existed keeps its outline.
+    #[test]
+    fn retired_numeral_styles_load_as_classic() {
+        for old in ["modern", "numbers"] {
+            let cfg: AnalogClockConfig =
+                serde_json::from_value(serde_json::json!({ "face_style": old })).unwrap();
+            assert_eq!(cfg.face_style, FaceStyle::Classic, "{}", old);
+        }
+        let cfg: AnalogClockConfig = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(cfg.show_border);
+        assert_eq!(cfg.number_radius_percent, 75.0);
     }
 
     /// The deprecated `center_indicator` has no row; it must still survive

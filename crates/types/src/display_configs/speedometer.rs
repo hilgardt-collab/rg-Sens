@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::background::BackgroundConfig;
 use crate::color::Color;
 use crate::text::TextOverlayConfig;
-use crate::theme::{deserialize_color_or_source, ColorSource, ColorStopSource};
+use crate::theme::{
+    deserialize_color_or_source, ColorSource, ColorStopSource, ComboThemeConfig, FontSource,
+};
 
 /// Needle style
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
@@ -46,6 +48,19 @@ pub enum TickStyle {
 }
 
 /// Bezel style
+/// How the track is coloured
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum TrackFill {
+    /// The track colour along the whole track
+    #[serde(rename = "solid")]
+    Solid,
+    /// The colour zones along the track (what a config without a
+    /// `track_fill` key is; one with a single zone still draws solid)
+    #[serde(rename = "gradient")]
+    #[default]
+    Gradient,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum BezelStyle {
     #[serde(rename = "none")]
@@ -62,8 +77,12 @@ pub enum BezelStyle {
 /// Tick label configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TickLabelConfig {
+    /// Used when `font_source` is `None` (configs saved before theme fonts)
     pub font_family: String,
     pub font_size: f64,
+    /// Theme or custom font; overrides `font_family`/`font_size` when set
+    #[serde(default)]
+    pub font_source: Option<FontSource>,
     #[serde(deserialize_with = "deserialize_color_or_source")]
     pub color: ColorSource,
     pub bold: bool,
@@ -76,6 +95,7 @@ impl Default for TickLabelConfig {
         Self {
             font_family: "Sans".to_string(),
             font_size: 12.0,
+            font_source: None,
             color: ColorSource::Custom {
                 color: Color {
                     r: 0.9,
@@ -87,6 +107,17 @@ impl Default for TickLabelConfig {
             bold: false,
             italic: false,
             use_percentage: false,
+        }
+    }
+}
+
+impl TickLabelConfig {
+    /// The label font against a theme: the themed source when set, else the
+    /// plain family and size older configs carry.
+    pub fn resolved_font(&self, theme: &ComboThemeConfig) -> (String, f64) {
+        match &self.font_source {
+            Some(source) => source.resolve(theme),
+            None => (self.font_family.clone(), self.font_size),
         }
     }
 }
@@ -107,6 +138,8 @@ pub struct SpeedometerConfig {
     // Arc/Track display
     #[serde(default = "default_true")]
     pub show_track: bool,
+    #[serde(default)]
+    pub track_fill: TrackFill,
     #[serde(default = "default_track_color_source")]
     pub track_color: ColorSource,
     #[serde(default = "default_color_stops")]
@@ -375,6 +408,7 @@ impl Default for SpeedometerConfig {
             arc_width: default_arc_width(),
             radius_percent: default_radius_percent(),
             show_track: default_true(),
+            track_fill: TrackFill::default(),
             track_color: default_track_color_source(),
             track_color_stops: default_color_stops(),
             show_major_ticks: default_true(),
@@ -489,22 +523,37 @@ impl crate::schema::Schema for SpeedometerConfig {
             fraction("arc_width", "Arc width (fraction of radius)").section("Geometry"),
             fraction("radius_percent", "Radius (fraction of space)").section("Geometry"),
             Prop::new("show_track", "Show track", PropKind::Bool).section("Track"),
+            Prop::new(
+                "track_fill",
+                "Fill",
+                PropKind::Enum {
+                    options: vec![("solid", "Solid colour"), ("gradient", "Gradient")],
+                },
+            )
+            .section("Track")
+            .visible_when(Condition::IsTrue { key: "show_track" }),
             Prop::new("track_color", "Track colour", PropKind::Color)
                 .section("Track")
-                .visible_when(Condition::IsTrue { key: "show_track" }),
+                .visible_when(Condition::Equals {
+                    key: "track_fill",
+                    values: vec!["solid"],
+                }),
             Prop::new(
                 "track_color_stops",
                 "Track colour zones",
                 PropKind::ColorStops {
-                    linear: false,
+                    linear: true,
                     themed: true,
                     angle_key: None,
                 },
             )
             .section("Track")
-            .help("Colours along the track from start to end")
-            .visible_when(Condition::IsTrue { key: "show_track" }),
-            Prop::new("show_major_ticks", "Major ticks", PropKind::Bool).section("Ticks"),
+            .help("Colours along the track from start (left) to end (right)")
+            .visible_when(Condition::Equals {
+                key: "track_fill",
+                values: vec!["gradient"],
+            }),
+            Prop::new("show_major_ticks", "Major ticks", PropKind::Bool).section("Major ticks"),
             Prop::new(
                 "major_tick_count",
                 "Major tick count",
@@ -514,7 +563,7 @@ impl crate::schema::Schema for SpeedometerConfig {
                     step: 1,
                 },
             )
-            .section("Ticks")
+            .section("Major ticks")
             .visible_when(Condition::IsTrue {
                 key: "show_major_ticks",
             }),
@@ -522,26 +571,26 @@ impl crate::schema::Schema for SpeedometerConfig {
                 "major_tick_length",
                 "Major tick length (fraction of arc width)",
             )
-            .section("Ticks")
+            .section("Major ticks")
             .visible_when(Condition::IsTrue {
                 key: "show_major_ticks",
             }),
             px("major_tick_width", "Major tick width (px)")
-                .section("Ticks")
+                .section("Major ticks")
                 .visible_when(Condition::IsTrue {
                     key: "show_major_ticks",
                 }),
             Prop::new("major_tick_color", "Major tick colour", PropKind::Color)
-                .section("Ticks")
+                .section("Major ticks")
                 .visible_when(Condition::IsTrue {
                     key: "show_major_ticks",
                 }),
             tick_style("major_tick_style")
-                .section("Ticks")
+                .section("Major ticks")
                 .visible_when(Condition::IsTrue {
                     key: "show_major_ticks",
                 }),
-            Prop::new("show_minor_ticks", "Minor ticks", PropKind::Bool).section("Ticks"),
+            Prop::new("show_minor_ticks", "Minor ticks", PropKind::Bool).section("Minor ticks"),
             Prop::new(
                 "minor_ticks_per_major",
                 "Minor ticks per major",
@@ -551,7 +600,7 @@ impl crate::schema::Schema for SpeedometerConfig {
                     step: 1,
                 },
             )
-            .section("Ticks")
+            .section("Minor ticks")
             .visible_when(Condition::IsTrue {
                 key: "show_minor_ticks",
             }),
@@ -559,36 +608,36 @@ impl crate::schema::Schema for SpeedometerConfig {
                 "minor_tick_length",
                 "Minor tick length (fraction of arc width)",
             )
-            .section("Ticks")
+            .section("Minor ticks")
             .visible_when(Condition::IsTrue {
                 key: "show_minor_ticks",
             }),
             px("minor_tick_width", "Minor tick width (px)")
-                .section("Ticks")
+                .section("Minor ticks")
                 .visible_when(Condition::IsTrue {
                     key: "show_minor_ticks",
                 }),
             Prop::new("minor_tick_color", "Minor tick colour", PropKind::Color)
-                .section("Ticks")
+                .section("Minor ticks")
                 .visible_when(Condition::IsTrue {
                     key: "show_minor_ticks",
                 }),
             tick_style("minor_tick_style")
-                .section("Ticks")
+                .section("Minor ticks")
                 .visible_when(Condition::IsTrue {
                     key: "show_minor_ticks",
                 }),
-            Prop::new("show_tick_labels", "Tick labels", PropKind::Bool).section("Ticks"),
+            Prop::new("show_tick_labels", "Tick labels", PropKind::Bool).section("Tick labels"),
             Prop::new(
                 "tick_label_config",
                 "Tick labels",
                 PropKind::Object {
                     props: vec![
                         Prop::new(
-                            "font_family",
+                            "font_source",
                             "Font",
-                            PropKind::PlainFont {
-                                size_key: "font_size",
+                            PropKind::Font {
+                                legacy: Some(("font_family", "font_size")),
                             },
                         ),
                         Prop::new("color", "Colour", PropKind::Color),
@@ -598,7 +647,7 @@ impl crate::schema::Schema for SpeedometerConfig {
                     ],
                 },
             )
-            .section("Ticks")
+            .section("Tick labels")
             .visible_when(Condition::IsTrue {
                 key: "show_tick_labels",
             }),
@@ -732,6 +781,37 @@ mod schema_tests {
     #[test]
     fn props_fit_the_type() {
         check_props_fit::<SpeedometerConfig>(&SpeedometerConfig::props()).unwrap();
+    }
+
+    /// Tick labels saved before theme fonts existed keep their plain font;
+    /// a themed source wins once set.
+    #[test]
+    fn tick_labels_fall_back_to_the_legacy_font() {
+        let theme = ComboThemeConfig::default();
+        let labels: TickLabelConfig = serde_json::from_value(serde_json::json!({
+            "font_family": "Monospace", "font_size": 9.0,
+            "color": {"type": "Theme", "index": 1},
+            "bold": false, "italic": false, "use_percentage": false
+        }))
+        .unwrap();
+        assert_eq!(labels.resolved_font(&theme), ("Monospace".to_string(), 9.0));
+        let themed = TickLabelConfig {
+            font_source: Some(FontSource::theme(1, 11.0)),
+            ..labels
+        };
+        let (family, size) = themed.resolved_font(&theme);
+        assert_eq!(size, 11.0);
+        assert_eq!(family, theme.get_font(1).0);
+    }
+
+    /// Speedometers saved before the fill switch existed are gradients.
+    #[test]
+    fn a_config_without_a_track_fill_key_is_a_gradient() {
+        let cfg: SpeedometerConfig = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(cfg.track_fill, TrackFill::Gradient);
+        let cfg: SpeedometerConfig =
+            serde_json::from_value(serde_json::json!({ "track_fill": "solid" })).unwrap();
+        assert_eq!(cfg.track_fill, TrackFill::Solid);
     }
 
     #[test]

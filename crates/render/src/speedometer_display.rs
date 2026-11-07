@@ -11,7 +11,7 @@ use rg_sens_types::theme::ComboThemeConfig;
 // Re-export speedometer config types from rg-sens-types
 pub use rg_sens_types::display_configs::speedometer::{
     BezelStyle, NeedleStyle, NeedleTailStyle, SpeedometerConfig, TickLabelConfig, TickStyle,
-    ValueZone,
+    TrackFill, ValueZone,
 };
 
 /// Render a speedometer gauge
@@ -227,8 +227,9 @@ fn draw_track(
 
     let arc_width_pixels = radius * config.arc_width;
 
-    // If we have color stops, create gradient
-    if config.track_color_stops.len() > 1 {
+    // A gradient needs two zones; a solid fill (or a single zone) is the
+    // track colour along the whole track
+    if config.track_fill == TrackFill::Gradient && config.track_color_stops.len() > 1 {
         // Resolve theme-aware color stops to concrete colors
         let resolved_stops: Vec<ColorStop> = config
             .track_color_stops
@@ -291,6 +292,7 @@ fn draw_ticks(
     let major_tick_color = config.major_tick_color.resolve(theme);
     let minor_tick_color = config.minor_tick_color.resolve(theme);
     let tick_label_color = config.tick_label_config.color.resolve(theme);
+    let tick_label_font = config.tick_label_config.resolved_font(theme);
 
     // Get min/max for label calculation
     let min_val = values
@@ -350,6 +352,7 @@ fn draw_ticks(
                 angle,
                 &label_text,
                 &config.tick_label_config,
+                &tick_label_font,
                 &tick_label_color,
             )?;
         }
@@ -440,6 +443,7 @@ fn draw_tick_label(
     angle: f64,
     text: &str,
     label_config: &TickLabelConfig,
+    (font_family, font_size): &(String, f64),
     resolved_color: &Color,
 ) -> Result<(), Box<dyn std::error::Error>> {
     cr.save()?;
@@ -462,26 +466,12 @@ fn draw_tick_label(
         resolved_color.a,
     );
 
-    let extents = pango_text_extents(
-        cr,
-        text,
-        &label_config.font_family,
-        font_slant,
-        font_weight,
-        label_config.font_size,
-    );
+    let extents = pango_text_extents(cr, text, font_family, font_slant, font_weight, *font_size);
     let x = center_x + label_radius * angle.cos() - extents.width() / 2.0;
     let y = center_y + label_radius * angle.sin() + extents.height() / 2.0;
 
     cr.move_to(x, y);
-    pango_show_text(
-        cr,
-        text,
-        &label_config.font_family,
-        font_slant,
-        font_weight,
-        label_config.font_size,
-    );
+    pango_show_text(cr, text, font_family, font_slant, font_weight, *font_size);
 
     cr.restore()?;
     Ok(())

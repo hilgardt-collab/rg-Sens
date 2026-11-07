@@ -34,6 +34,7 @@ impl Drop for CairoGuard<'_> {
 use crate::core::{register_animation, PanelTransform, ANIMATION_SNAP_THRESHOLD};
 use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::arc_display::render_arc;
+use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     calculate_item_layouts_with_orientation, render_content_bar, render_content_core_bars,
@@ -57,6 +58,30 @@ pub struct ContentDrawParams<'a> {
     pub group_item_orientations: &'a [SplitOrientation],
     pub split_orientation: SplitOrientation,
     pub theme: &'a ComboThemeConfig,
+}
+
+/// Draw an analog clock face in an item's box from the slot's time values
+/// (`hour`, `minute`, `second`, `millisecond` of a clock child source).
+/// Shared by the generic and the LCARS content paths.
+#[allow(clippy::too_many_arguments)]
+pub fn render_content_clock(
+    cr: &Context,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    config: &AnalogClockConfig,
+    theme: &ComboThemeConfig,
+    slot_values: &HashMap<String, Value>,
+) -> Result<(), cairo::Error> {
+    if !(x.is_finite() && y.is_finite() && w > 0.0 && h > 0.0) {
+        return Ok(());
+    }
+    let (hour, minute, second) = combo_utils::clock_hands(slot_values, config.smooth_seconds);
+    // Restore even if the renderer errors out part-way
+    let _guard = CairoGuard::new(cr)?;
+    cr.translate(x, y);
+    render_analog_clock_with_theme(cr, config, hour, minute, second, w, h, Some(theme))
 }
 
 /// Draw content items in a given area.
@@ -306,6 +331,18 @@ where
                     item_h,
                 )?;
                 // _guard drops here, calling restore()
+            }
+            ContentDisplayType::ClockAnalog => {
+                render_content_clock(
+                    cr,
+                    item_x,
+                    item_y,
+                    item_w,
+                    item_h,
+                    &item_config.clock_analog_config,
+                    params.theme,
+                    &slot_values,
+                )?;
             }
             ContentDisplayType::Speedometer => {
                 // Use CairoGuard to ensure restore() even if render panics

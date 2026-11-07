@@ -9,7 +9,7 @@
 //! animation_speed }`; the editor works on the frame object with the two
 //! animation keys copied in (what `to_frame`/`from_frame` do).
 
-use super::combo_items::{item_tree_pages, ItemDisplayEditor};
+use super::combo_items::{coerce_display_as, item_tree_pages, ItemDisplayEditor};
 use super::schema_editor::SchemaEditor;
 use crate::core::{DisplayerConfig, FieldMetadata};
 use crate::ui::editor_registry::{
@@ -18,7 +18,7 @@ use crate::ui::editor_registry::{
 use crate::ui::theme::ComboThemeConfig;
 use gtk4::prelude::*;
 use gtk4::Widget;
-use rg_sens_types::combo::TransferableComboConfig;
+use rg_sens_types::combo::{GroupTitleConfig, TransferableComboConfig};
 use rg_sens_types::schema::{Prop, TreePage};
 use serde_json::{Map, Value};
 use std::cell::RefCell;
@@ -77,6 +77,7 @@ pub fn transferable_from_frame(frame: &Map<String, Value>) -> TransferableComboC
         group_item_counts: get(frame, "group_item_counts"),
         group_size_weights: get(frame, "group_size_weights"),
         group_item_orientations: get(frame, "group_item_orientations"),
+        group_titles: get(frame, "group_titles"),
         layout_orientation: get(frame, orientation_key(frame)),
         content_items: get(frame, "content_items"),
         content_padding: get(frame, "content_padding"),
@@ -108,6 +109,7 @@ pub fn apply_transferable_to_frame(frame: &mut Map<String, Value>, t: &Transfera
         "group_item_orientations",
         serde_json::to_value(&t.group_item_orientations),
     );
+    put(frame, "group_titles", serde_json::to_value(&t.group_titles));
     let ok = orientation_key(frame);
     put(frame, ok, serde_json::to_value(t.layout_orientation));
     put(
@@ -131,6 +133,40 @@ pub fn apply_transferable_to_frame(frame: &mut Map<String, Value>, t: &Transfera
         "animation_speed",
         serde_json::to_value(t.animation_speed),
     );
+}
+
+/// The JSON of a group without a title bar.
+fn default_group_title() -> Value {
+    serde_json::to_value(GroupTitleConfig::default()).unwrap_or_else(|_| Value::Object(Map::new()))
+}
+
+/// The group's title bar from the frame, or the default when the frame's
+/// list does not reach the group.
+pub fn group_title_of(frame: &Map<String, Value>, group: usize) -> Value {
+    frame
+        .get("group_titles")
+        .and_then(|v| v.as_array())
+        .and_then(|titles| titles.get(group))
+        .filter(|v| v.is_object())
+        .cloned()
+        .unwrap_or_else(default_group_title)
+}
+
+/// Write the group's title bar, padding the frame's list with defaults up
+/// to the group (the list is parallel to the group weights).
+pub fn set_group_title_in(frame: &mut Map<String, Value>, group: usize, title: Value) {
+    let titles = frame
+        .entry("group_titles".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    if !titles.is_array() {
+        *titles = Value::Array(Vec::new());
+    }
+    if let Some(titles) = titles.as_array_mut() {
+        while titles.len() <= group {
+            titles.push(default_group_title());
+        }
+        titles[group] = title;
+    }
 }
 
 pub struct SchemaComboEditor {
@@ -287,22 +323,64 @@ impl ComboDisplayEditor for SchemaComboEditor {
     fn item_editor(
         &self,
         slot: &str,
+        source_id: &str,
         fields: &[FieldMetadata],
         on_change: ChangeCallback,
     ) -> Rc<ItemDisplayEditor> {
         ItemDisplayEditor::new(
             self.editor.model_rc(),
             slot,
+            source_id,
             fields.to_vec(),
             self.theme.clone(),
             on_change,
         )
     }
 
+    fn coerce_item_display(&self, slot: &str, source_id: &str) -> bool {
+        coerce_display_as(&self.editor.model_rc(), slot, source_id)
+    }
+
     fn item_pages(&self, slot: &str) -> Vec<TreePage> {
         let model = self.editor.model_rc();
         let frame = model.borrow();
         item_tree_pages(&frame, slot)
+    }
+
+    fn content_item(&self, slot: &str) -> Option<Value> {
+        let model = self.editor.model_rc();
+        let frame = model.borrow();
+        frame
+            .get("content_items")
+            .and_then(|items| items.get(slot))
+            .filter(|v| v.is_object())
+            .cloned()
+    }
+
+    fn set_content_item(&self, slot: &str, item: Value) {
+        let model = self.editor.model_rc();
+        let mut frame = model.borrow_mut();
+        let items = frame
+            .entry("content_items".to_string())
+            .or_insert_with(|| Value::Object(Map::new()));
+        if !items.is_object() {
+            *items = Value::Object(Map::new());
+        }
+        if let Some(items) = items.as_object_mut() {
+            items.insert(slot.to_string(), item);
+        }
+    }
+
+    fn group_title(&self, group: usize) -> Value {
+        let model = self.editor.model_rc();
+        let frame = model.borrow();
+        group_title_of(&frame, group)
+    }
+
+    fn set_group_title(&self, group: usize, title: Value) {
+        let model = self.editor.model_rc();
+        let mut frame = model.borrow_mut();
+        set_group_title_in(&mut frame, group, title);
     }
 
     fn refresh_theme_refs(&self) {
@@ -327,6 +405,28 @@ mod tests {
         assert_eq!(
             serde_json::to_value(parsed).unwrap(),
             serde_json::to_value(SynthwaveDisplayConfig::default()).unwrap()
+        );
+    }
+
+    #[test]
+    fn group_titles_are_padded_to_the_group() {
+        let mut frame = Map::new();
+        assert_eq!(group_title_of(&frame, 2)["enabled"], Value::Bool(false));
+        let mut title = group_title_of(&frame, 2);
+        title["enabled"] = Value::Bool(true);
+        title["text"] = Value::String("Disks".to_string());
+        set_group_title_in(&mut frame, 2, title);
+        let titles = transferable_from_frame(&frame).group_titles;
+        assert_eq!(titles.len(), 3);
+        assert!(!titles[0].enabled && !titles[1].enabled);
+        assert!(titles[2].enabled);
+        assert_eq!(titles[2].text, "Disks");
+        // The transfer carries the titles to another frame type.
+        let mut target = Map::new();
+        apply_transferable_to_frame(&mut target, &transferable_from_frame(&frame));
+        assert_eq!(
+            group_title_of(&target, 2)["text"],
+            Value::String("Disks".to_string())
         );
     }
 

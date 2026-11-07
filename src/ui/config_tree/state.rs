@@ -8,6 +8,7 @@
 
 use super::combo_items::ItemDisplayEditor;
 use super::node::NodeKind;
+use super::schema_editor::SchemaEditor;
 use super::util::*;
 use crate::config::AppConfig;
 use crate::core::{
@@ -154,6 +155,9 @@ pub struct State {
     pub(super) inline_theme_widget: RefCell<Option<Rc<GlobalThemeWidget>>>,
     /// Item editors by slot, built on first use by any page of the item.
     pub(super) item_editors: RefCell<HashMap<String, Rc<ItemEditor>>>,
+    /// Title-bar editors by group, built with the group's page (over the
+    /// frame's `group_titles`, so dropped with the Content pages).
+    pub(super) group_editors: RefCell<HashMap<usize, Rc<SchemaEditor>>>,
     pub(super) geometry: RefCell<Option<GeometryControls>>,
     pub(super) appearance: RefCell<Option<AppearanceControls>>,
     pub(super) theme_controls: RefCell<Option<ThemeControls>>,
@@ -415,13 +419,22 @@ impl State {
         *self.applied.borrow_mut() = data;
 
         self.ensure_display_editor();
+        // Every item shows as a type its source offers (see
+        // `coerce_item_displays`); a change here is committed like an edit.
+        let coerced = self.coerce_item_displays();
         self.loading.set(false);
         self.rebuild_tree(Some(NodeKind::Root));
+        if coerced {
+            self.changed();
+        }
     }
 
     pub(super) fn cleanup_editors(&self) {
         for (_, item) in self.item_editors.borrow_mut().drain() {
             item.cleanup();
+        }
+        for (_, editor) in self.group_editors.borrow_mut().drain() {
+            editor.cleanup();
         }
         if let Some(e) = self.source_editor.borrow_mut().take() {
             e.cleanup();
@@ -643,12 +656,15 @@ impl State {
             }));
             needs_poll.set(!has_signal);
         }
-        let fields = slot_fields(slot, &source_id);
+        // Items render against the slot's own values (short keys), so their
+        // field pickers get the short ids, never the combo-wide prefixed ones.
+        let fields = item_fields(&source_id);
         let display = self.display_editor.borrow().as_ref().and_then(|e| {
             let weak = Rc::downgrade(self);
             e.combo().map(|c| {
                 c.item_editor(
                     slot,
+                    &source_id,
                     &fields,
                     Rc::new(move || {
                         if let Some(s) = weak.upgrade() {
@@ -793,6 +809,9 @@ impl State {
             if let Some(d) = item.display.as_ref() {
                 d.set_theme(&resolved);
             }
+        }
+        for editor in self.group_editors.borrow().values() {
+            editor.set_theme(&resolved);
         }
         *self.theme_baseline.borrow_mut() = self.inline_payload();
     }
@@ -1002,6 +1021,9 @@ impl State {
         for (_, item) in self.item_editors.borrow_mut().drain() {
             item.cleanup();
         }
+        for (_, editor) in self.group_editors.borrow_mut().drain() {
+            editor.cleanup();
+        }
     }
 
     /// Remove built pages from the stack by id.
@@ -1071,6 +1093,101 @@ impl State {
         self.changed();
     }
 
+    /// Write a group's title bar into the frame and commit.
+    pub(super) fn set_group_title(self: &Rc<Self>, group: usize, title: serde_json::Value) {
+        if let Some(e) = self.display_editor.borrow().as_ref() {
+            if let Some(c) = e.combo() {
+                c.set_group_title(group, title);
+            }
+        }
+        self.changed();
+    }
+
+    /// Copy the slot's source and display settings to the clipboard.
+    pub(super) fn copy_item(&self, slot: &str) {
+        let mut slot_cfg = self
+            .combo_source
+            .borrow()
+            .as_ref()
+            .and_then(|cs| cs.slots.get(slot).cloned())
+            .unwrap_or_default();
+        // The live source editor may hold edits the working copy has not
+        // received yet (`build_data` reads it the same way).
+        if let Some(item) = self.item_editors.borrow().get(slot) {
+            if let Some(cfg) = item.source_editor.borrow().as_ref().and_then(|e| e.store()) {
+                if cfg.source_type() == slot_cfg.source_id {
+                    slot_cfg.source_config = flatten_source_config(&cfg);
+                }
+            }
+        }
+        let content_item = self
+            .display_editor
+            .borrow()
+            .as_ref()
+            .and_then(|e| e.combo().and_then(|c| c.content_item(slot)))
+            .unwrap_or_else(|| {
+                serde_json::to_value(rg_sens_types::display_configs::ContentItemConfig::default())
+                    .unwrap_or_default()
+            });
+        if let Ok(mut cb) = crate::ui::CLIPBOARD.lock() {
+            cb.copy_combo_item(crate::ui::ComboItemClip {
+                source_id: slot_cfg.source_id,
+                caption_override: slot_cfg.caption_override,
+                source_config: slot_cfg.source_config,
+                content_item,
+            });
+        }
+    }
+
+    /// Replace the slot's source and display settings with the clipboard's
+    /// item, then rebuild the item's subtree and commit (`structure_changed`
+    /// drops the item's editors, which held the old item).
+    pub(super) fn paste_item(self: &Rc<Self>, slot: &str) {
+        let pasted = crate::ui::CLIPBOARD
+            .lock()
+            .ok()
+            .and_then(|cb| cb.paste_combo_item());
+        let Some(clip) = pasted else { return };
+        self.with_combo(|cs| {
+            cs.slots.insert(
+                slot.to_string(),
+                rg_sens_types::source_configs::combo::SlotConfig {
+                    source_id: clip.source_id.clone(),
+                    caption_override: clip.caption_override.clone(),
+                    source_config: clip.source_config.clone(),
+                },
+            );
+        });
+        if let Some(e) = self.display_editor.borrow().as_ref() {
+            if let Some(c) = e.combo() {
+                c.set_content_item(slot, clip.content_item.clone());
+                c.coerce_item_display(slot, &clip.source_id);
+            }
+        }
+        let slot = slot.to_string();
+        self.defer(move |state| state.structure_changed(NodeKind::ContentItem(slot)));
+    }
+
+    /// Load a pasted displayer config into the display editor: a combo's
+    /// frame first follows this panel's source structure and addresses its
+    /// item lines by short key, the theme is this panel's resolved one, and
+    /// the item editors (copies of the old items) are rebuilt.
+    pub(super) fn load_display_config(self: &Rc<Self>, mut cfg: crate::core::DisplayerConfig) {
+        if let Some(cs) = self.combo_source.borrow().as_ref() {
+            cfg.sync_group_structure(&cs.groups);
+            cfg.strip_item_field_prefixes();
+        }
+        if let Some(e) = self.display_editor.borrow().as_ref() {
+            e.load(&cfg);
+            e.set_theme(&self.resolved_theme());
+        }
+        if self.is_combo() {
+            self.drop_item_pages();
+            self.coerce_item_displays();
+            self.rebuild_tree(self.selected_node());
+        }
+    }
+
     pub(super) fn set_update_interval(self: &Rc<Self>, ms: u64) {
         self.with_combo(|cs| cs.update_interval_ms = ms);
         self.changed();
@@ -1108,10 +1225,47 @@ impl State {
             })
             .unwrap_or(false);
         if changed {
+            // The new source may not offer the item's display type (a clock
+            // shows as text or a face; a metric never as a face).
+            if let Some(e) = self.display_editor.borrow().as_ref() {
+                if let Some(c) = e.combo() {
+                    c.coerce_item_display(slot, source_id);
+                }
+            }
             let slot = slot.to_string();
             self.defer(move |state| state.structure_changed(NodeKind::ContentItem(slot)));
         }
     }
+
+    /// Make every item's display type one its source offers; returns whether
+    /// any changed (a config saved before the clock face existed may show a
+    /// clock slot as a bar).
+    pub(super) fn coerce_item_displays(&self) -> bool {
+        let slots: Vec<(String, String)> = match self.combo_source.borrow().as_ref() {
+            Some(cs) => rg_sens_sources::slot_names_for(cs)
+                .into_iter()
+                .map(|slot| {
+                    let id = cs
+                        .slots
+                        .get(&slot)
+                        .map(|s| s.source_id.clone())
+                        .unwrap_or_default();
+                    (slot, id)
+                })
+                .collect(),
+            None => return false,
+        };
+        let editor = self.display_editor.borrow();
+        let Some(combo) = editor.as_ref().and_then(|e| e.combo()) else {
+            return false;
+        };
+        let mut changed = false;
+        for (slot, id) in &slots {
+            changed |= combo.coerce_item_display(slot, id);
+        }
+        changed
+    }
+
     pub(super) fn set_item_caption(self: &Rc<Self>, slot: &str, caption: String) {
         self.with_combo(|cs| {
             cs.slots
@@ -1540,7 +1694,7 @@ impl State {
                     .displayer_config
                     .content_items()
                     .and_then(|items| items.get(slot))
-                    .map(|i| format!("{:?}", i.display_as))
+                    .map(|i| super::combo_items::display_type_label(i.display_as))
                     .unwrap_or_default();
                 (
                     format!("Item {}", m + 1),

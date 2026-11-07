@@ -12,6 +12,7 @@ pub use rg_sens_render::core_bars_display;
 pub use rg_sens_render::cyberpunk_display;
 pub use rg_sens_render::fighter_hud_display;
 pub use rg_sens_render::graph_display;
+pub use rg_sens_render::group_title;
 pub use rg_sens_render::industrial_display;
 pub use rg_sens_render::lcars_display;
 pub use rg_sens_render::material_display;
@@ -88,7 +89,7 @@ pub use bar_display::{
     render_bar, BarBackgroundType, BarDisplayConfig, BarFillDirection, BarFillType, BarOrientation,
     BarStyle, BorderConfig,
 };
-pub use clipboard::{PanelStyle, CLIPBOARD};
+pub use clipboard::{ComboItemClip, PanelStyle, CLIPBOARD};
 pub use clock_display::{
     render_analog_clock, AnalogClockConfig, FaceStyle, HandStyle, TickStyle as ClockTickStyle,
 };

@@ -21,9 +21,11 @@ use crate::core::{
     register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
     ANIMATION_SNAP_THRESHOLD,
 };
+use crate::displayers::combo_displayer_base::render_content_clock;
 use crate::displayers::combo_utils::{self, AnimatedValue};
 use crate::ui::arc_display::render_arc;
 use crate::ui::graph_display::DataPoint;
+use crate::ui::group_title::render_group_title;
 use crate::ui::lcars_display::{
     calculate_item_layouts_with_orientation, get_content_bounds, render_content_background,
     render_content_bar, render_content_core_bars, render_content_graph, render_content_static,
@@ -346,6 +348,18 @@ impl LcarsComboDisplayer {
                     )?;
                     cr.restore()?;
                 }
+                ContentDisplayType::ClockAnalog => {
+                    render_content_clock(
+                        cr,
+                        item_x,
+                        item_y,
+                        item_w,
+                        item_h,
+                        &item_config.clock_analog_config,
+                        &config.frame.theme,
+                        &slot_values,
+                    )?;
+                }
                 ContentDisplayType::Speedometer => {
                     cr.save()?;
                     cr.translate(item_x, item_y);
@@ -537,6 +551,17 @@ impl LcarsComboDisplayer {
                 .get(group_idx)
                 .map(|v| v.as_slice())
                 .unwrap_or(&[]);
+            // An enabled title takes a band at the top of the group's
+            // rectangle; the items get the rest (as the generic path does).
+            let (gy, gh) = match data.config.frame.group_titles.get(group_idx) {
+                Some(title) if title.enabled => {
+                    let used =
+                        render_group_title(cr, gx, gy, gw, gh, title, &data.config.frame.theme)
+                            .unwrap_or(0.0);
+                    (gy + used, gh - used)
+                }
+                _ => (gy, gh),
+            };
             let _ = Self::draw_content_items(
                 cr,
                 gx,

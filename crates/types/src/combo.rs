@@ -5,11 +5,146 @@
 //! layout/grouping, and animation.
 
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::display_configs::lcars::{ContentItemConfig, SplitOrientation};
-use crate::theme::ComboThemeConfig;
+use crate::theme::{ColorSource, ComboThemeConfig, FontSource};
+
+/// Where a group title sits in its bar
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub enum TitleAlign {
+    #[serde(rename = "left")]
+    Left,
+    #[serde(rename = "center")]
+    #[default]
+    Center,
+    #[serde(rename = "right")]
+    Right,
+}
+
+/// An optional title bar drawn across the top of a group's area, above its
+/// items, by every combo frame (`render_group_title` in the render crate).
+/// Stored per group in the frame config (`group_titles`), parallel to the
+/// group's size weight and item orientation, because its font and colours
+/// resolve against the frame's theme.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GroupTitleConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub text: String,
+    #[serde(default)]
+    pub font: FontSource,
+    #[serde(default = "default_true")]
+    pub bold: bool,
+    #[serde(default)]
+    pub color: ColorSource,
+    #[serde(default)]
+    pub align: TitleAlign,
+    /// Height of the bar in pixels (clamped to half the group)
+    #[serde(default = "default_title_height")]
+    pub height: f64,
+    #[serde(default)]
+    pub show_background: bool,
+    #[serde(default = "default_title_background")]
+    pub background: ColorSource,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_title_height() -> f64 {
+    24.0
+}
+
+fn default_title_background() -> ColorSource {
+    ColorSource::custom(crate::color::Color::new(0.0, 0.0, 0.0, 0.35))
+}
+
+impl Default for GroupTitleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            text: String::new(),
+            font: FontSource::default(),
+            bold: true,
+            color: ColorSource::default(),
+            align: TitleAlign::default(),
+            height: default_title_height(),
+            show_background: false,
+            background: default_title_background(),
+        }
+    }
+}
+
+impl crate::schema::Schema for GroupTitleConfig {
+    fn props() -> Vec<crate::schema::Prop> {
+        use crate::schema::{Condition, Prop, PropKind};
+        let on = Condition::IsTrue { key: "enabled" };
+        vec![
+            Prop::new("enabled", "Show title bar", PropKind::Bool),
+            Prop::new(
+                "text",
+                "Title",
+                PropKind::Text {
+                    placeholder: "Group title",
+                },
+            )
+            .visible_when(on.clone()),
+            Prop::new("font", "Font", PropKind::Font { legacy: None }).visible_when(on.clone()),
+            Prop::new("bold", "Bold", PropKind::Bool).visible_when(on.clone()),
+            Prop::new("color", "Colour", PropKind::Color).visible_when(on.clone()),
+            Prop::new(
+                "align",
+                "Alignment",
+                PropKind::Enum {
+                    options: vec![("left", "Left"), ("center", "Centre"), ("right", "Right")],
+                },
+            )
+            .visible_when(on.clone()),
+            Prop::new(
+                "height",
+                "Bar height (px)",
+                PropKind::Float {
+                    min: 12.0,
+                    max: 80.0,
+                    step: 1.0,
+                    digits: 0,
+                },
+            )
+            .visible_when(on.clone()),
+            Prop::new("show_background", "Fill the bar", PropKind::Bool).visible_when(on.clone()),
+            Prop::new("background", "Bar colour", PropKind::Color)
+                .visible_when(Condition::IsTrue {
+                    key: "show_background",
+                })
+                .help("Shown while the title bar is enabled"),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod group_title_tests {
+    use super::*;
+    use crate::schema::{check_props_fit, Schema};
+
+    #[test]
+    fn props_fit_the_type() {
+        check_props_fit::<GroupTitleConfig>(&GroupTitleConfig::props()).unwrap();
+    }
+
+    #[test]
+    fn default_round_trips_and_an_empty_object_is_the_default() {
+        let value = serde_json::to_value(GroupTitleConfig::default()).unwrap();
+        let back: GroupTitleConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(back, GroupTitleConfig::default());
+        let empty: GroupTitleConfig = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(empty, GroupTitleConfig::default());
+        assert!(!empty.enabled);
+    }
+}
 
 /// Reorder helpers for slot/content maps keyed by `"group{N}_{M}"` (1-based).
 ///
@@ -108,6 +243,69 @@ pub mod reorder {
     }
 }
 
+/// Make every content item's text lines address the slot's own values.
+///
+/// A combo item is rendered against the slot's values with the slot prefix
+/// stripped (`time`, not `group1_1_time`), so a line's `field_id` must be the
+/// short key. A field picker that was fed the prefixed combo fields wrote the
+/// long form (v0.9.0–0.9.2 Panel Properties); this strips it from every text
+/// overlay the item has. Returns whether anything changed.
+pub fn strip_slot_prefixes(items: &mut HashMap<String, ContentItemConfig>) -> bool {
+    let mut changed = false;
+    for (slot, item) in items.iter_mut() {
+        let prefix = format!("{}_", slot);
+        let overlays = [
+            &mut item.bar_config.text_overlay,
+            &mut item.graph_config.text_overlay,
+            &mut item.core_bars_config.text_overlay,
+            &mut item.arc_config.text_overlay,
+            &mut item.speedometer_config.text_overlay,
+        ];
+        for overlay in overlays {
+            for line in &mut overlay.text_config.lines {
+                if let Some(short) = line.field_id.strip_prefix(&prefix) {
+                    line.field_id = short.to_string();
+                    changed = true;
+                }
+            }
+        }
+    }
+    changed
+}
+
+#[cfg(test)]
+mod strip_tests {
+    use super::*;
+
+    #[test]
+    fn prefixed_line_fields_become_short_keys() {
+        let mut item = ContentItemConfig::default();
+        item.bar_config.text_overlay.text_config.lines[0].field_id = "group1_2_time".to_string();
+        item.arc_config.text_overlay.text_config.lines[0].field_id = "group1_2_usage".to_string();
+        let mut other = ContentItemConfig::default();
+        other.bar_config.text_overlay.text_config.lines[0].field_id = "group1_2_time".to_string();
+        let mut items = HashMap::new();
+        items.insert("group1_2".to_string(), item);
+        items.insert("group2_1".to_string(), other);
+        assert!(strip_slot_prefixes(&mut items));
+        let fixed = &items["group1_2"];
+        assert_eq!(
+            fixed.bar_config.text_overlay.text_config.lines[0].field_id,
+            "time"
+        );
+        assert_eq!(
+            fixed.arc_config.text_overlay.text_config.lines[0].field_id,
+            "usage"
+        );
+        // Another slot's prefix is not this slot's: left alone.
+        assert_eq!(
+            items["group2_1"].bar_config.text_overlay.text_config.lines[0].field_id,
+            "group1_2_time"
+        );
+        assert!(!strip_slot_prefixes(&mut items), "second pass is a no-op");
+    }
+}
+
 /// Trait for combo panel frame configurations that support theming
 pub trait ThemedFrameConfig {
     /// Get reference to the theme configuration
@@ -134,6 +332,10 @@ pub trait LayoutFrameConfig {
     fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation>;
     /// Get the split orientation (used as default for item orientations)
     fn split_orientation(&self) -> SplitOrientation;
+    /// Per-group title bars (a group past the end has none)
+    fn group_titles(&self) -> &[GroupTitleConfig];
+    /// Get mutable reference to the per-group title bars
+    fn group_titles_mut(&mut self) -> &mut Vec<GroupTitleConfig>;
 }
 
 /// Trait for combo panel frame configurations with animation support.
@@ -194,6 +396,10 @@ pub trait ComboFrameConfig:
         if group_a < orientations.len() && group_b < orientations.len() {
             orientations.swap(group_a, group_b);
         }
+        let titles = self.group_titles_mut();
+        if group_a < titles.len() && group_b < titles.len() {
+            titles.swap(group_a, group_b);
+        }
         let counts = self.group_item_counts_mut();
         if group_a < counts.len() && group_b < counts.len() {
             counts.swap(group_a, group_b);
@@ -223,6 +429,8 @@ pub struct TransferableComboConfig {
     pub group_size_weights: Vec<f64>,
     /// Item orientation within each group
     pub group_item_orientations: Vec<SplitOrientation>,
+    /// Title bar of each group
+    pub group_titles: Vec<GroupTitleConfig>,
     /// Layout orientation (how groups are arranged)
     pub layout_orientation: SplitOrientation,
     /// Content items configuration (keyed by slot name like "group1_1")

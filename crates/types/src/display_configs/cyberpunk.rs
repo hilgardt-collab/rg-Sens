@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::color::Color;
-use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use crate::combo::{ComboFrameConfig, GroupTitleConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::{ContentItemConfig, SplitOrientation};
 use crate::theme::{
     deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
@@ -221,6 +221,9 @@ pub struct CyberpunkFrameConfig {
     /// Item orientation within each group - defaults to same as split_orientation
     #[serde(default)]
     pub group_item_orientations: Vec<SplitOrientation>,
+    /// Title bar of each group (see `GroupTitleConfig`)
+    #[serde(default)]
+    pub group_titles: Vec<GroupTitleConfig>,
 
     // Dividers
     #[serde(default)]
@@ -293,6 +296,7 @@ impl Default for CyberpunkFrameConfig {
             group_size_weights: vec![1.0, 1.0],
             split_orientation: SplitOrientation::default(),
             group_item_orientations: Vec::new(),
+            group_titles: Vec::new(),
             divider_style: DividerStyle::default(),
             divider_color: default_divider_color_source(),
             divider_width: default_divider_width(),
@@ -331,6 +335,14 @@ impl LayoutFrameConfig for CyberpunkFrameConfig {
 
     fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
         &mut self.group_item_orientations
+    }
+
+    fn group_titles(&self) -> &[GroupTitleConfig] {
+        &self.group_titles
+    }
+
+    fn group_titles_mut(&mut self) -> &mut Vec<GroupTitleConfig> {
+        &mut self.group_titles
     }
 
     fn split_orientation(&self) -> SplitOrientation {

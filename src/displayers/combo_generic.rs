@@ -18,6 +18,7 @@ use crate::displayers::combo_displayer_base::{
     setup_combo_animation_timer_ext, ComboDisplayData, ComboFrameConfig, ContentDrawParams,
     FrameRenderer, LayoutFrameConfig, ThemedFrameConfig,
 };
+use crate::ui::group_title::render_group_title;
 
 /// Cached frame layout data to avoid re-computing group layouts every frame.
 /// Only stores computed geometry — frame rendering is done directly to the
@@ -183,6 +184,17 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
         for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
             let item_count = group_item_counts.get(group_idx).copied().unwrap_or(1);
             let base_prefix = format!("group{}_", group_idx + 1);
+
+            // An enabled title takes a band at the top of the group's
+            // rectangle; the items get the rest.
+            let (gy, gh) = match data.config.group_titles().get(group_idx) {
+                Some(title) if title.enabled => {
+                    let used = render_group_title(cr, gx, gy, gw, gh, title, data.config.theme())
+                        .unwrap_or(0.0);
+                    (gy + used, gh - used)
+                }
+                _ => (gy, gh),
+            };
 
             let config_ref = &data.config;
             let _ = draw_content_items_generic(

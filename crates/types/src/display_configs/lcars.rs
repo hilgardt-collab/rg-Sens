@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::background::BackgroundConfig;
 use crate::color::Color;
-use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use crate::combo::{ComboFrameConfig, GroupTitleConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::field::{FieldMetadata, FieldPurpose, FieldType};
 use crate::text::TextOverlayConfig;
 use crate::theme::{
@@ -15,6 +15,7 @@ use crate::theme::{
 // Re-export sub-display types for convenience
 pub use crate::display_configs::arc::ArcDisplayConfig;
 pub use crate::display_configs::bar::BarDisplayConfig;
+pub use crate::display_configs::clock::AnalogClockConfig;
 pub use crate::display_configs::core_bars::CoreBarsConfig;
 pub use crate::display_configs::graph::{DataPoint, GraphDisplayConfig};
 pub use crate::display_configs::speedometer::SpeedometerConfig;
@@ -144,6 +145,9 @@ pub enum ContentDisplayType {
     Arc,
     #[serde(rename = "speedometer")]
     Speedometer,
+    /// An analog clock face; offered when the item's source is the clock
+    #[serde(rename = "clock_analog")]
+    ClockAnalog,
 }
 
 impl ContentDisplayType {
@@ -539,6 +543,9 @@ pub struct ContentItemConfig {
     pub arc_config: ArcDisplayConfig,
     #[serde(default)]
     pub speedometer_config: SpeedometerConfig,
+    /// The face drawn when `display_as` is [`ContentDisplayType::ClockAnalog`]
+    #[serde(default)]
+    pub clock_analog_config: AnalogClockConfig,
 }
 
 fn default_true() -> bool {
@@ -561,7 +568,35 @@ impl Default for ContentItemConfig {
             static_config: StaticDisplayConfig::default(),
             arc_config: ArcDisplayConfig::default(),
             speedometer_config: SpeedometerConfig::default(),
+            clock_analog_config: AnalogClockConfig::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod content_item_tests {
+    use super::*;
+
+    /// Items saved before the clock face existed have no
+    /// `clock_analog_config`; they load with the default face.
+    #[test]
+    fn an_item_without_a_clock_config_loads() {
+        let item: ContentItemConfig =
+            serde_json::from_value(serde_json::json!({ "display_as": "text" })).unwrap();
+        assert_eq!(item.display_as, ContentDisplayType::Text);
+        assert!(item.clock_analog_config.show_second_hand);
+    }
+
+    #[test]
+    fn the_clock_type_round_trips() {
+        let item = ContentItemConfig {
+            display_as: ContentDisplayType::ClockAnalog,
+            ..ContentItemConfig::default()
+        };
+        let value = serde_json::to_value(&item).unwrap();
+        assert_eq!(value["display_as"], "clock_analog");
+        let back: ContentItemConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(back.display_as, ContentDisplayType::ClockAnalog);
     }
 }
 
@@ -653,6 +688,9 @@ pub struct LcarsFrameConfig {
     /// Vertical = items stacked top to bottom, Horizontal = items side by side
     #[serde(default)]
     pub group_item_orientations: Vec<SplitOrientation>,
+    /// Title bar of each group (see `GroupTitleConfig`)
+    #[serde(default)]
+    pub group_titles: Vec<GroupTitleConfig>,
 
     // Divider settings - dividers between groups
     #[serde(default)]
@@ -794,6 +832,7 @@ impl Default for LcarsFrameConfig {
             content_items: HashMap::new(),
             layout_orientation: SplitOrientation::default(),
             group_item_orientations: Vec::new(), // Empty = use layout_orientation for all
+            group_titles: Vec::new(),
             divider_config: DividerConfig::default(),
             item_spacing: default_item_spacing(),
             sync_segments_to_groups: false,
@@ -828,6 +867,14 @@ impl LayoutFrameConfig for LcarsFrameConfig {
 
     fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
         &mut self.group_item_orientations
+    }
+
+    fn group_titles(&self) -> &[GroupTitleConfig] {
+        &self.group_titles
+    }
+
+    fn group_titles_mut(&mut self) -> &mut Vec<GroupTitleConfig> {
+        &mut self.group_titles
     }
 
     fn split_orientation(&self) -> SplitOrientation {

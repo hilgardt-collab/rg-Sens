@@ -43,6 +43,7 @@ use rg_sens_types::source_configs::static_text::StaticTextSourceConfig;
 use rg_sens_types::source_configs::system_temp::SystemTempConfig;
 use rg_sens_types::source_configs::{DiskSourceConfig, MemorySourceConfig, NetworkSourceConfig};
 use rg_sens_types::text::TextDisplayerConfig;
+use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -142,13 +143,29 @@ pub trait ComboDisplayEditor {
     fn item_editor(
         &self,
         slot: &str,
+        source_id: &str,
         fields: &[FieldMetadata],
         on_change: ChangeCallback,
     ) -> Rc<ItemDisplayEditor>;
+    /// Make the slot's item use a display type its source offers (a clock is
+    /// shown as text or as an analog face, a metric never as a face); returns
+    /// whether the frame changed. Silent: the caller commits.
+    fn coerce_item_display(&self, slot: &str, source_id: &str) -> bool;
     /// The pages an item's display editor has (or would have), derived from
     /// the config alone, so the tree lists every item's child nodes without
     /// building the editors.
     fn item_pages(&self, slot: &str) -> Vec<TreePage>;
+    /// The slot's `ContentItemConfig` as JSON, if the frame has one.
+    fn content_item(&self, slot: &str) -> Option<Value>;
+    /// Replace the slot's `ContentItemConfig` (silent: the caller rebuilds
+    /// the item's editors and commits).
+    fn set_content_item(&self, slot: &str, item: Value);
+    /// The group's title bar (`GroupTitleConfig` as JSON; the default when
+    /// the frame has none for it).
+    fn group_title(&self, group: usize) -> Value;
+    /// Write the group's title bar, padding the frame's list with defaults
+    /// up to the group (silent: the caller commits).
+    fn set_group_title(&self, group: usize, title: Value);
     /// Trigger the editor's own theme-reference refreshers after
     /// `set_theme` (page colour pickers show the resolved theme).
     fn refresh_theme_refs(&self);

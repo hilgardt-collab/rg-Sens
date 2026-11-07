@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::color::Color;
-use crate::combo::{ComboFrameConfig, LayoutFrameConfig, ThemedFrameConfig};
+use crate::combo::{ComboFrameConfig, GroupTitleConfig, LayoutFrameConfig, ThemedFrameConfig};
 use crate::display_configs::lcars::{ContentItemConfig, SplitOrientation};
 use crate::theme::{
     deserialize_color_or_source, deserialize_font_or_source, ColorSource, ComboThemeConfig,
@@ -290,6 +290,9 @@ pub struct MaterialFrameConfig {
     /// Item orientation within each group - defaults to same as split_orientation
     #[serde(default)]
     pub group_item_orientations: Vec<SplitOrientation>,
+    /// Title bar of each group (see `GroupTitleConfig`)
+    #[serde(default)]
+    pub group_titles: Vec<GroupTitleConfig>,
 
     /// Per-group accent colors for headers
     #[serde(default)]
@@ -359,6 +362,7 @@ impl Default for MaterialFrameConfig {
             group_size_weights: vec![1.0, 1.0],
             split_orientation: SplitOrientation::default(),
             group_item_orientations: Vec::new(),
+            group_titles: Vec::new(),
             group_accent_colors: Vec::new(),
             group_headers: Vec::new(),
             divider_style: DividerStyle::default(),
@@ -395,6 +399,14 @@ impl LayoutFrameConfig for MaterialFrameConfig {
 
     fn group_item_orientations_mut(&mut self) -> &mut Vec<SplitOrientation> {
         &mut self.group_item_orientations
+    }
+
+    fn group_titles(&self) -> &[GroupTitleConfig] {
+        &self.group_titles
+    }
+
+    fn group_titles_mut(&mut self) -> &mut Vec<GroupTitleConfig> {
+        &mut self.group_titles
     }
 
     fn split_orientation(&self) -> SplitOrientation {
