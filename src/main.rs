@@ -1307,9 +1307,9 @@ fn build_ui(app: &Application) {
             }
 
             // Run update loop (base interval for checking, each panel updates at its own configured interval)
-            // 250ms check interval reduces CPU from 10 wakeups/sec to 4/sec while still being responsive
+            // 100 ms is the fastest interval the dialogs offer; a tick with nothing due only scans the panel list
             info!("Starting update loop");
-            update_manager_clone.run(Duration::from_millis(250)).await;
+            update_manager_clone.run(Duration::from_millis(100)).await;
         });
     });
 

@@ -166,6 +166,12 @@ pub trait ComboDisplayEditor {
     /// Write the group's title bar, padding the frame's list with defaults
     /// up to the group (silent: the caller commits).
     fn set_group_title(&self, group: usize, title: Value);
+    /// How the group lays out its items (`"vertical"` / `"horizontal"`): its
+    /// own entry, else the frame's group layout.
+    fn group_orientation(&self, group: usize) -> String;
+    /// Write the group's item orientation, padding the frame's list with the
+    /// group layout up to the group (silent: the caller commits).
+    fn set_group_orientation(&self, group: usize, orientation: &str);
     /// Trigger the editor's own theme-reference refreshers after
     /// `set_theme` (page colour pickers show the resolved theme).
     fn refresh_theme_refs(&self);

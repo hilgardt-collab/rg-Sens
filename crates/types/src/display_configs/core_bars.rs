@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::text::TextOverlayConfig;
-use crate::theme::{deserialize_color_or_source, ColorSource};
+use crate::theme::{deserialize_color_or_source, ColorSource, ComboThemeConfig, FontSource};
 
 use super::bar::{
     BarBackgroundType, BarFillDirection, BarFillType, BarOrientation, BarStyle, BorderConfig,
@@ -77,6 +77,9 @@ pub struct CoreBarsConfig {
     pub label_font: String,
     #[serde(default = "default_label_size")]
     pub label_size: f64,
+    /// Theme or custom font; overrides `label_font`/`label_size` when set
+    #[serde(default)]
+    pub label_font_source: Option<FontSource>,
     #[serde(
         default = "default_label_color",
         deserialize_with = "deserialize_color_or_source"
@@ -170,6 +173,7 @@ impl Default for CoreBarsConfig {
             label_position: LabelPosition::default(),
             label_font: default_label_font(),
             label_size: default_label_size(),
+            label_font_source: None,
             label_color: default_label_color(),
             label_bold: false,
             animate: default_true(),
@@ -187,6 +191,15 @@ impl CoreBarsConfig {
             self.end_core - self.start_core + 1
         } else {
             0
+        }
+    }
+
+    /// The label font as (family, size): the theme or custom source when one
+    /// is set, else the plain family and size older configs carry.
+    pub fn resolved_label_font(&self, theme: &ComboThemeConfig) -> (String, f64) {
+        match &self.label_font_source {
+            Some(source) => source.resolve(theme),
+            None => (self.label_font.clone(), self.label_size),
         }
     }
 }
@@ -341,10 +354,10 @@ impl crate::schema::Schema for CoreBarsConfig {
             .section("Labels")
             .visible_when(Condition::IsTrue { key: "show_labels" }),
             Prop::new(
-                "label_font",
+                "label_font_source",
                 "Label font",
-                PropKind::PlainFont {
-                    size_key: "label_size",
+                PropKind::Font {
+                    legacy: Some(("label_font", "label_size")),
                 },
             )
             .section("Labels")
@@ -360,13 +373,14 @@ impl crate::schema::Schema for CoreBarsConfig {
                 "animation_speed",
                 "Animation speed",
                 PropKind::Float {
-                    min: 0.01,
-                    max: 1.0,
-                    step: 0.05,
-                    digits: 2,
+                    min: 0.5,
+                    max: 30.0,
+                    step: 0.5,
+                    digits: 1,
                 },
             )
             .section("Animation")
+            .help("Per second; the default 8 settles a change well within a second")
             .visible_when(Condition::IsTrue { key: "animate" }),
             Prop::new(
                 "text_overlay",
@@ -395,5 +409,26 @@ mod schema_tests {
         let value = serde_json::to_value(CoreBarsConfig::default()).unwrap();
         let back: CoreBarsConfig = serde_json::from_value(value.clone()).unwrap();
         assert_eq!(serde_json::to_value(back).unwrap(), value);
+    }
+
+    #[test]
+    fn labels_fall_back_to_the_legacy_font() {
+        let theme = ComboThemeConfig::default();
+        let plain = CoreBarsConfig {
+            label_font: "Monospace".to_string(),
+            label_size: 9.0,
+            ..Default::default()
+        };
+        assert_eq!(
+            plain.resolved_label_font(&theme),
+            ("Monospace".to_string(), 9.0)
+        );
+        let themed = CoreBarsConfig {
+            label_font_source: Some(FontSource::theme(1, 11.0)),
+            ..plain
+        };
+        let (family, size) = themed.resolved_label_font(&theme);
+        assert_eq!(size, 11.0);
+        assert_eq!(family, theme.get_font(1).0);
     }
 }

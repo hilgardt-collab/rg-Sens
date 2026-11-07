@@ -9,10 +9,15 @@ use rg_sens_core::{
 };
 use serde_json::Value;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // Re-export combo source config types from rg-sens-types
 pub use rg_sens_types::source_configs::combo::{ComboSourceConfig, GroupConfig, SlotConfig};
+
+/// Slack on a slot's own interval: the scheduler polls the combo a few
+/// milliseconds either side of the nominal time, and without it a slot whose
+/// interval is a multiple of the poll would skip every other poll.
+const CHILD_INTERVAL_TOLERANCE: Duration = Duration::from_millis(10);
 
 /// Combo data source that aggregates multiple child sources
 ///
@@ -26,6 +31,10 @@ pub struct ComboSource {
     /// The (source_id, source_config) each child was last configured with,
     /// so a reconcile can tell "unchanged" from "needs configure()".
     child_configs: HashMap<String, (String, HashMap<String, Value>)>,
+    /// When each child last refreshed. A slot with its own `update_interval_ms`
+    /// is refreshed once that much time has passed; the combo itself is polled
+    /// at the fastest interval any slot asks for (`poll_interval_ms`).
+    child_last_update: HashMap<String, Instant>,
     /// Aggregated values from all children
     values: HashMap<String, Value>,
 }
@@ -53,6 +62,7 @@ impl ComboSource {
             config: ComboSourceConfig::default(),
             child_sources: HashMap::new(),
             child_configs: HashMap::new(),
+            child_last_update: HashMap::new(),
             values: HashMap::new(),
         }
     }
@@ -408,12 +418,32 @@ impl DataSource for ComboSource {
     }
 
     fn update(&mut self) -> Result<()> {
-        // Update all child sources
+        // Refresh the children that are due: a slot with its own interval
+        // waits it out, every other slot follows each poll
+        let now = Instant::now();
         for (slot_name, source) in self.child_sources.iter_mut() {
+            let own_interval = self
+                .config
+                .slots
+                .get(slot_name)
+                .and_then(SlotConfig::update_interval_ms);
+            let due = match (own_interval, self.child_last_update.get(slot_name)) {
+                (Some(ms), Some(last)) => {
+                    now.duration_since(*last) + CHILD_INTERVAL_TOLERANCE
+                        >= Duration::from_millis(ms)
+                }
+                _ => true,
+            };
+            if !due {
+                continue;
+            }
             if let Err(e) = source.update() {
                 log::warn!("ComboSource: Failed to update slot '{}': {}", slot_name, e);
             }
+            self.child_last_update.insert(slot_name.clone(), now);
         }
+        self.child_last_update
+            .retain(|slot_name, _| self.child_sources.contains_key(slot_name));
 
         // Aggregate values
         self.aggregate_values();
@@ -509,6 +539,30 @@ mod reconcile_tests {
             cfg.slots.insert(name.to_string(), slot(source_id, caption));
         }
         cfg
+    }
+
+    #[test]
+    fn a_slot_with_its_own_interval_waits_it_out() {
+        registry_ready();
+        let mut cfg = config(&[
+            ("group1_1", "static_text", "slow"),
+            ("group1_2", "static_text", "every poll"),
+        ]);
+        cfg.slots
+            .get_mut("group1_1")
+            .unwrap()
+            .source_config
+            .insert("update_interval_ms".to_string(), Value::from(60_000u64));
+        assert_eq!(cfg.poll_interval_ms(), cfg.update_interval_ms());
+        let mut src = ComboSource::new();
+        src.apply_config(cfg);
+        src.update().unwrap();
+        let slow = src.child_last_update["group1_1"];
+        let fast = src.child_last_update["group1_2"];
+        std::thread::sleep(Duration::from_millis(15));
+        src.update().unwrap();
+        assert_eq!(src.child_last_update["group1_1"], slow);
+        assert!(src.child_last_update["group1_2"] > fast);
     }
 
     fn child_ptr(src: &ComboSource, slot: &str) -> *const () {

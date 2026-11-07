@@ -591,17 +591,6 @@ impl crate::schema::Schema for SteampunkFrameConfig {
             )
             .section("Layout"),
             Prop::new(
-                "group_item_orientations",
-                "Items within group",
-                PropKind::EnumList {
-                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
-                    count_key: "group_count",
-                    default_key: Some("split_orientation"),
-                    item_label: "Group",
-                },
-            )
-            .section("Layout"),
-            Prop::new(
                 "content_padding",
                 "Content padding (px)",
                 PropKind::Float {

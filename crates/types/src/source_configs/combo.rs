@@ -19,6 +19,16 @@ pub struct SlotConfig {
     pub source_config: HashMap<String, Value>,
 }
 
+impl SlotConfig {
+    /// The slot's own update interval, when its source config carries one.
+    pub fn update_interval_ms(&self) -> Option<u64> {
+        self.source_config
+            .get("update_interval_ms")
+            .and_then(Value::as_u64)
+            .filter(|&ms| ms > 0)
+    }
+}
+
 /// Configuration for a group of content items
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupConfig {
@@ -169,5 +179,48 @@ impl ComboSourceConfig {
     /// Get the update interval in milliseconds
     pub fn update_interval_ms(&self) -> u64 {
         self.update_interval_ms
+    }
+
+    /// The cadence the combo is polled at: its own interval, or a slot's when
+    /// one asks for something faster. The combo source refreshes each slot on
+    /// its own interval and skips it on the polls in between, so every item
+    /// sees the interval it was given.
+    pub fn poll_interval_ms(&self) -> u64 {
+        self.slots
+            .values()
+            .filter_map(SlotConfig::update_interval_ms)
+            .fold(self.update_interval_ms, u64::min)
+    }
+}
+
+#[cfg(test)]
+mod interval_tests {
+    use super::*;
+
+    fn slot(ms: Option<u64>) -> SlotConfig {
+        let mut slot = SlotConfig {
+            source_id: "cpu".to_string(),
+            ..Default::default()
+        };
+        if let Some(ms) = ms {
+            slot.source_config
+                .insert("update_interval_ms".to_string(), Value::from(ms));
+        }
+        slot
+    }
+
+    #[test]
+    fn the_poll_interval_is_the_fastest_configured() {
+        let mut cfg = ComboSourceConfig {
+            update_interval_ms: 1000,
+            ..Default::default()
+        };
+        cfg.slots.insert("group1_1".to_string(), slot(None));
+        assert_eq!(cfg.poll_interval_ms(), 1000);
+        cfg.slots.insert("group1_2".to_string(), slot(Some(5000)));
+        assert_eq!(cfg.poll_interval_ms(), 1000);
+        cfg.slots.insert("group1_3".to_string(), slot(Some(100)));
+        assert_eq!(cfg.poll_interval_ms(), 100);
+        assert_eq!(slot(Some(0)).update_interval_ms(), None);
     }
 }

@@ -102,7 +102,7 @@ const SUBS: [Sub; 8] = [
     Sub {
         path: &["core_bars_config"],
         shown_for: &["core_bars"],
-        props: CoreBarsConfig::props,
+        props: core_bars_item_props,
     },
     Sub {
         path: &["arc_config"],
@@ -135,6 +135,31 @@ fn clock_item_props() -> Vec<Prop> {
         .into_iter()
         .filter(|p| p.section != Some("Icon"))
         .collect()
+}
+
+/// The core bars' rows without the animation speed: a combo animates every
+/// item at the frame's speed (the item's own on/off switch is honoured), so
+/// the row would do nothing here.
+fn core_bars_item_props() -> Vec<Prop> {
+    CoreBarsConfig::props()
+        .into_iter()
+        .filter(|p| p.key != "animation_speed")
+        .collect()
+}
+
+/// Write `tag` into the item. A switch to the level bar also makes its bar
+/// segmented, the look of the original gSens level bar; the user can pick
+/// another style on the item's Bar page.
+fn write_display_as(item: &mut Map<String, Value>, tag: &str) {
+    item.insert("display_as".to_string(), Value::String(tag.to_string()));
+    if tag == "level_bar" {
+        let bar = item.entry("bar_config".to_string()).or_insert_with(|| {
+            serde_json::to_value(BarDisplayConfig::default()).unwrap_or_default()
+        });
+        if let Some(bar) = bar.as_object_mut() {
+            bar.insert("style".to_string(), Value::String("segmented".to_string()));
+        }
+    }
 }
 
 /// The item a slot has before it is configured.
@@ -506,10 +531,7 @@ impl ItemDisplayEditor {
         if same {
             return;
         }
-        let tag = tag.to_string();
-        with_item_mut(&self.model, &self.slot, |item| {
-            item.insert("display_as".to_string(), Value::String(tag));
-        });
+        with_item_mut(&self.model, &self.slot, |item| write_display_as(item, tag));
         self.build_sub();
         (self.on_change)();
         self.notify_pages(None);
@@ -519,6 +541,28 @@ impl ItemDisplayEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn switching_to_the_level_bar_makes_the_bar_segmented() {
+        use rg_sens_types::display_configs::bar::BarStyle;
+        let mut item = DEFAULT_ITEM.as_object().cloned().unwrap();
+        write_display_as(&mut item, "level_bar");
+        let cfg: ContentItemConfig = serde_json::from_value(Value::Object(item.clone())).unwrap();
+        assert_eq!(cfg.display_as, ContentDisplayType::LevelBar);
+        assert_eq!(cfg.bar_config.style, BarStyle::Segmented);
+        // Switching back leaves the style the user may have chosen alone
+        write_display_as(&mut item, "bar");
+        let cfg: ContentItemConfig = serde_json::from_value(Value::Object(item)).unwrap();
+        assert_eq!(cfg.bar_config.style, BarStyle::Segmented);
+    }
+
+    #[test]
+    fn core_bars_items_have_no_speed_row() {
+        assert!(core_bars_item_props()
+            .iter()
+            .all(|p| p.key != "animation_speed"));
+        assert!(core_bars_item_props().iter().any(|p| p.key == "animate"));
+    }
 
     fn frame_with(slot: &str, item: Value) -> Map<String, Value> {
         let mut items = Map::new();

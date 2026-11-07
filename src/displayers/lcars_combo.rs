@@ -254,8 +254,9 @@ impl LcarsComboDisplayer {
                     }
                 }
                 ContentDisplayType::LevelBar => {
-                    // For now, render as text (level bar can be added later)
-                    render_content_text(
+                    // A bar at the item's fixed height (sized like a graph
+                    // above); the item page shares the bar editor
+                    render_content_bar(
                         cr,
                         item_x,
                         item_y,
@@ -264,6 +265,7 @@ impl LcarsComboDisplayer {
                         &item_config.bar_config,
                         &config.frame.theme,
                         &item_data,
+                        animated_percent,
                         Some(&slot_values),
                     )?;
                 }

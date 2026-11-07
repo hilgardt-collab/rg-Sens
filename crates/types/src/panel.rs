@@ -129,7 +129,7 @@ impl SourceConfig {
             SourceConfig::Network(cfg) => cfg.update_interval_ms,
             SourceConfig::Clock(cfg) => cfg.update_interval_ms,
             SourceConfig::Claude(cfg) => cfg.update_interval_ms,
-            SourceConfig::Combo(cfg) => cfg.update_interval_ms,
+            SourceConfig::Combo(cfg) => cfg.poll_interval_ms(),
             SourceConfig::SystemTemp(cfg) => cfg.update_interval_ms,
             SourceConfig::FanSpeed(cfg) => cfg.update_interval_ms,
             SourceConfig::Test(cfg) => cfg.update_interval_ms,

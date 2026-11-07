@@ -627,7 +627,9 @@ impl State {
         }
         page.append(&hint(
             "Each group is a child node; each item is a node under its group, with \
-             its source settings and display sections as child nodes of its own.",
+             its source settings and display sections as child nodes of its own. \
+             An item whose Source page sets its own update interval keeps it; the \
+             panel polls at the fastest interval any item asks for.",
         ));
         page
     }
@@ -658,6 +660,56 @@ impl State {
                     }
                 }
             });
+        }
+        // How the group lays out its items: stored in the frame beside the
+        // group's weight, so only a themed frame has it.
+        let orientation = self
+            .display_editor
+            .borrow()
+            .as_ref()
+            .and_then(|e| e.combo().map(|c| c.group_orientation(group)));
+        if let Some(orientation) = orientation {
+            let names = ["Vertical".to_string(), "Horizontal".to_string()];
+            let selected = usize::from(orientation == "horizontal");
+            let dropdown = dropdown_row(&page, "Item layout:", &names, selected);
+            dropdown.set_tooltip_text(Some(
+                "Stack this group's items vertically or place them side by side",
+            ));
+            {
+                let weak = Rc::downgrade(self);
+                dropdown.connect_selected_notify(move |d| {
+                    if let Some(s) = weak.upgrade() {
+                        if !s.loading.get() {
+                            let tag = if d.selected() == 1 {
+                                "horizontal"
+                            } else {
+                                "vertical"
+                            };
+                            s.set_group_orientation(group, tag);
+                        }
+                    }
+                });
+            }
+            {
+                // A group without its own entry follows the group layout
+                // under Display › Layout, which may change while this page
+                // is hidden: re-read whenever the page is shown.
+                let weak = Rc::downgrade(self);
+                dropdown.connect_map(move |d| {
+                    if let Some(s) = weak.upgrade() {
+                        let current = s
+                            .display_editor
+                            .borrow()
+                            .as_ref()
+                            .and_then(|e| e.combo().map(|c| c.group_orientation(group)));
+                        if let Some(current) = current {
+                            let was = s.loading.replace(true);
+                            d.set_selected(u32::from(current == "horizontal"));
+                            s.loading.set(was);
+                        }
+                    }
+                });
+            }
         }
         let weight_spin = spin_row(&page, "Size weight:", 0.1, 10.0, 0.1, weight);
         weight_spin.set_digits(1);
@@ -736,9 +788,6 @@ impl State {
             page.append(title_editor.widget());
             self.group_editors.borrow_mut().insert(group, title_editor);
         }
-        page.append(&hint(
-            "Item orientation within each group is under Display › Layout.",
-        ));
         page
     }
 

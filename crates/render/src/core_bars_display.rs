@@ -80,9 +80,11 @@ pub fn render_core_bars_with_values(
     cr.save()?;
     cr.translate(padded_x, padded_y);
 
-    // Calculate label space if labels are shown
+    // Resolve the label font once (theme or legacy family/size) and size the
+    // label band from it
+    let label_font = config.resolved_label_font(theme);
     let label_space = if config.show_labels {
-        calculate_label_space(cr, config, num_bars)
+        calculate_label_space(cr, config, &label_font, num_bars)
     } else {
         0.0
     };
@@ -99,6 +101,7 @@ pub fn render_core_bars_with_values(
                 padded_width,
                 padded_height,
                 label_space,
+                &label_font,
             )?;
         }
         BarOrientation::Vertical => {
@@ -110,6 +113,7 @@ pub fn render_core_bars_with_values(
                 padded_width,
                 padded_height,
                 label_space,
+                &label_font,
             )?;
         }
     }
@@ -132,7 +136,12 @@ pub fn render_core_bars_with_values(
 }
 
 /// Calculate space needed for labels
-fn calculate_label_space(cr: &cairo::Context, config: &CoreBarsConfig, num_bars: usize) -> f64 {
+fn calculate_label_space(
+    cr: &cairo::Context,
+    config: &CoreBarsConfig,
+    (font_family, font_size): &(String, f64),
+    num_bars: usize,
+) -> f64 {
     let font_weight = if config.label_bold {
         cairo::FontWeight::Bold
     } else {
@@ -146,10 +155,10 @@ fn calculate_label_space(cr: &cairo::Context, config: &CoreBarsConfig, num_bars:
     let extents = pango_text_extents(
         cr,
         &test_label,
-        &config.label_font,
+        font_family,
         cairo::FontSlant::Normal,
         font_weight,
-        config.label_size,
+        *font_size,
     );
     match config.orientation {
         BarOrientation::Horizontal => extents.width() + 8.0,
@@ -166,6 +175,7 @@ fn render_horizontal_bars(
     width: f64,
     height: f64,
     label_space: f64,
+    label_font: &(String, f64),
 ) -> Result<(), cairo::Error> {
     let num_bars = core_values.len();
     let total_spacing = config.bar_spacing * (num_bars - 1) as f64;
@@ -202,6 +212,7 @@ fn render_horizontal_bars(
                 width,
                 height,
                 label_space,
+                label_font,
                 true, // horizontal
             )?;
         }
@@ -219,6 +230,7 @@ fn render_vertical_bars(
     width: f64,
     height: f64,
     label_space: f64,
+    label_font: &(String, f64),
 ) -> Result<(), cairo::Error> {
     let num_bars = core_values.len();
     let total_spacing = config.bar_spacing * (num_bars - 1) as f64;
@@ -255,6 +267,7 @@ fn render_vertical_bars(
                 width,
                 height,
                 label_space,
+                label_font,
                 false, // vertical
             )?;
         }
@@ -552,6 +565,7 @@ fn render_label(
     _width: f64,
     height: f64,
     label_space: f64,
+    (font_family, font_size): &(String, f64),
     horizontal: bool,
 ) -> Result<(), cairo::Error> {
     let label = format!("{}{}", config.label_prefix, core_index);
@@ -568,10 +582,10 @@ fn render_label(
     let extents = pango_text_extents(
         cr,
         &label,
-        &config.label_font,
+        font_family,
         cairo::FontSlant::Normal,
         font_weight,
-        config.label_size,
+        *font_size,
     );
     let text_width = extents.width();
     let text_height = extents.height();
@@ -599,10 +613,10 @@ fn render_label(
     pango_show_text(
         cr,
         &label,
-        &config.label_font,
+        font_family,
         cairo::FontSlant::Normal,
         font_weight,
-        config.label_size,
+        *font_size,
     );
 
     Ok(())

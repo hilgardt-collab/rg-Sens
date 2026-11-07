@@ -726,17 +726,6 @@ impl crate::schema::Schema for SynthwaveFrameConfig {
                 },
             )
             .section("Layout"),
-            Prop::new(
-                "group_item_orientations",
-                "Items within group",
-                PropKind::EnumList {
-                    options: vec![("vertical", "Vertical"), ("horizontal", "Horizontal")],
-                    count_key: "group_count",
-                    default_key: Some("split_orientation"),
-                    item_label: "Group",
-                },
-            )
-            .section("Layout"),
             px("content_padding", "Content padding (px)", 100.0).section("Layout"),
             px("item_spacing", "Item spacing (px)", 50.0).section("Layout"),
             Prop::new(

@@ -169,6 +169,45 @@ pub fn set_group_title_in(frame: &mut Map<String, Value>, group: usize, title: V
     }
 }
 
+/// The frame's group layout (`"vertical"` unless set).
+fn layout_orientation_of(frame: &Map<String, Value>) -> String {
+    frame
+        .get(orientation_key(frame))
+        .and_then(|v| v.as_str())
+        .unwrap_or("vertical")
+        .to_string()
+}
+
+/// How the group lays out its items: its own entry in the frame's list, else
+/// the frame's group layout (the list may stop short of the group).
+pub fn group_orientation_of(frame: &Map<String, Value>, group: usize) -> String {
+    frame
+        .get("group_item_orientations")
+        .and_then(|v| v.as_array())
+        .and_then(|list| list.get(group))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| layout_orientation_of(frame))
+}
+
+/// Write the group's item orientation, padding the frame's list with the
+/// group layout up to the group (the list is parallel to the group weights).
+pub fn set_group_orientation_in(frame: &mut Map<String, Value>, group: usize, orientation: &str) {
+    let default = layout_orientation_of(frame);
+    let list = frame
+        .entry("group_item_orientations".to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    if !list.is_array() {
+        *list = Value::Array(Vec::new());
+    }
+    if let Some(list) = list.as_array_mut() {
+        while list.len() <= group {
+            list.push(Value::String(default.clone()));
+        }
+        list[group] = Value::String(orientation.to_string());
+    }
+}
+
 pub struct SchemaComboEditor {
     displayer_id: String,
     editor: SchemaEditor,
@@ -383,6 +422,18 @@ impl ComboDisplayEditor for SchemaComboEditor {
         set_group_title_in(&mut frame, group, title);
     }
 
+    fn group_orientation(&self, group: usize) -> String {
+        let model = self.editor.model_rc();
+        let frame = model.borrow();
+        group_orientation_of(&frame, group)
+    }
+
+    fn set_group_orientation(&self, group: usize, orientation: &str) {
+        let model = self.editor.model_rc();
+        let mut frame = model.borrow_mut();
+        set_group_orientation_in(&mut frame, group, orientation);
+    }
+
     fn refresh_theme_refs(&self) {
         // `set_theme` reaches every row; the dialog pushes the theme to the
         // item editors it built.
@@ -428,6 +479,23 @@ mod tests {
             group_title_of(&target, 2)["text"],
             Value::String("Disks".to_string())
         );
+    }
+
+    #[test]
+    fn group_orientations_are_padded_with_the_layout() {
+        let mut frame = Map::new();
+        frame.insert(
+            "split_orientation".to_string(),
+            Value::String("horizontal".to_string()),
+        );
+        assert_eq!(group_orientation_of(&frame, 1), "horizontal");
+        set_group_orientation_in(&mut frame, 1, "vertical");
+        assert_eq!(group_orientation_of(&frame, 0), "horizontal");
+        assert_eq!(group_orientation_of(&frame, 1), "vertical");
+        // Beyond the list the group layout still decides
+        assert_eq!(group_orientation_of(&frame, 2), "horizontal");
+        let list = transferable_from_frame(&frame).group_item_orientations;
+        assert_eq!(list.len(), 2);
     }
 
     #[test]

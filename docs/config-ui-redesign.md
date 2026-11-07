@@ -1603,3 +1603,62 @@ Its tick labels take a themed font now (`TickLabelConfig::font_source`,
 lines do; `resolved_font` falls back to the plain pair, tested), and the one
 Ticks section is three: Major ticks, Minor ticks, Tick labels, so each is
 its own tree node.
+
+## 26. Combo item intervals, level bars, core bars labels (2026-11-07)
+
+User report, three parts: the Level Bar item type drew nothing in combo
+panels; the Core Bars Labels page offered a plain font where the text
+overlay offers theme fonts; and core bars items ignored the update interval
+set on their Source page. Only the Content page's interval changed anything,
+and it overrode every item's.
+
+* **Item intervals.** Each slot's source config carries an
+  `update_interval_ms` (its Source page shows the row), but
+  `ComboSource::update` refreshed every child on every poll and the scheduler
+  polled the combo at the Content interval alone. Now
+  `ComboSourceConfig::poll_interval_ms()` is the fastest of the Content
+  interval and every slot's own interval, and `SourceConfig::update_interval_ms()`
+  returns it for combos, so the scheduler, the shared-source manager and the
+  config hash all see it; `ComboSource::update` keeps `child_last_update` and
+  skips a child whose own interval has not passed (10 ms tolerance for poll
+  jitter), so a slot with no interval follows every poll, a slower one waits,
+  a faster one speeds the poll up. The update loop's base tick dropped from
+  250 ms to 100 ms, the dialogs' minimum; sysinfo's 200 ms CPU floor
+  (`MINIMUM_CPU_UPDATE_INTERVAL`) remains. The Content page hint says so.
+* **Level Bar.** Both content paths had a stub ("render as text, level bar
+  can be added later"), so an item showed only its text overlay. It now goes
+  through `render_content_bar` at the item's fixed height (the layout already
+  sized it like a graph); picking Level Bar in the dropdown sets the bar's
+  style to segmented, the look of gSens's level bar, and the Bar page can
+  change it (`write_display_as`, tested).
+* **Core Bars.** `label_font_source: Option<FontSource>` over the legacy
+  `label_font`/`label_size` (themed Font row with legacy fallback, like tick
+  labels; `resolved_label_font`, tested), resolved once per draw in
+  `render_core_bars_with_values` and threaded to the label calls. The item's
+  `animate` switch is honoured on both combo paths (`update_core_bars` ANDs it
+  with the frame's), its speed row is hidden for combo items
+  (`core_bars_item_props`) because the shared tick runs at the frame's speed,
+  and the standalone's speed range is 0.5–30 per second like the frames' (it
+  was 0.01–1.0 around a default of 8, so opening the page clamped the default
+  and the bars crawled). Two pipeline tests in `combo_displayer_base.rs` pin
+  that a core bars item's targets follow each reading and snap when its
+  animation is off.
+
+## 27. Item orientation on the Group page (2026-11-07)
+
+User request: the per-group item orientation (vertical/horizontal) sat
+under Display › Layout as an `EnumList` row per group; it belongs on each
+Group page under the item count. The frame's `group_item_orientations` list
+is unchanged (parallel to the weights, swapped by `swap_groups`, carried by
+the transfer); the Group page now shows an "Item layout" dropdown fed by
+`ComboDisplayEditor::{group_orientation,set_group_orientation}`
+(`schema_combo::group_orientation_of` / `set_group_orientation_in`: the
+group's own entry, else the frame's group layout; a write pads the list with
+the layout orientation up to the group, as the old row did; tested). The
+dropdown re-reads the value on `map`, so a "Group layout" change made while
+the page was hidden shows when it is next selected (Revert and structure
+changes rebuild the page outright). The
+`EnumList` rows are gone from all ten frame files' Layout sections; "Group
+layout" (`split_orientation`, LCARS `layout_orientation`) stays there as the
+default for groups without an entry. `PropKind::EnumList` itself remains
+for any future list.

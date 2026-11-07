@@ -1103,6 +1103,16 @@ impl State {
         self.changed();
     }
 
+    /// Write the group's item orientation into the frame and commit.
+    pub(super) fn set_group_orientation(self: &Rc<Self>, group: usize, orientation: &str) {
+        if let Some(e) = self.display_editor.borrow().as_ref() {
+            if let Some(c) = e.combo() {
+                c.set_group_orientation(group, orientation);
+            }
+        }
+        self.changed();
+    }
+
     /// Copy the slot's source and display settings to the clipboard.
     pub(super) fn copy_item(&self, slot: &str) {
         let mut slot_cfg = self

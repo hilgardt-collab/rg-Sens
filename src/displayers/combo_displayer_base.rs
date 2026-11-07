@@ -244,7 +244,9 @@ where
                 }
             }
             ContentDisplayType::LevelBar => {
-                render_content_text(
+                // A bar at the item's fixed height (sized like a graph above);
+                // the item page shares the bar editor
+                render_content_bar(
                     cr,
                     item_x,
                     item_y,
@@ -253,6 +255,7 @@ where
                     &item_config.bar_config,
                     params.theme,
                     &item_data,
+                    animated_percent,
                     Some(&slot_values),
                 )?;
             }
@@ -698,3 +701,79 @@ pub fn apply_combo_update(
 //
 // Re-export FrameRenderer from the render crate
 pub use rg_sens_render::combo_traits::FrameRenderer;
+
+#[cfg(test)]
+mod core_bars_tests {
+    use super::*;
+    use rg_sens_types::display_configs::core_bars::CoreBarsConfig;
+
+    fn core_item(animate: bool) -> HashMap<String, ContentItemConfig> {
+        let item = ContentItemConfig {
+            display_as: ContentDisplayType::CoreBars,
+            core_bars_config: CoreBarsConfig {
+                start_core: 0,
+                end_core: 3,
+                animate,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        HashMap::from([("group1_1".to_string(), item)])
+    }
+
+    fn reading(first: f64) -> HashMap<String, Value> {
+        (0..4)
+            .map(|i| {
+                (
+                    format!("group1_1_core{}_usage", i),
+                    Value::from(first + 10.0 * i as f64),
+                )
+            })
+            .collect()
+    }
+
+    fn push(
+        data: &mut ComboDisplayData,
+        items: &HashMap<String, ContentItemConfig>,
+        values: &HashMap<String, Value>,
+    ) {
+        let prep = prepare_combo_update(values, vec![1], items, true, 0.0);
+        apply_combo_update(data, prep, values);
+    }
+
+    fn currents(data: &ComboDisplayData) -> Vec<f64> {
+        data.core_bar_values["group1_1"]
+            .iter()
+            .map(|a| a.current)
+            .collect()
+    }
+
+    fn targets(data: &ComboDisplayData) -> Vec<f64> {
+        data.core_bar_values["group1_1"]
+            .iter()
+            .map(|a| a.target)
+            .collect()
+    }
+
+    #[test]
+    fn core_bars_follow_each_reading() {
+        let items = core_item(true);
+        let mut data = ComboDisplayData::default();
+        push(&mut data, &items, &reading(10.0));
+        assert_eq!(currents(&data), vec![0.1, 0.2, 0.3, 0.4]);
+        // The next reading moves the targets; the animation tick carries
+        // `current` towards them
+        push(&mut data, &items, &reading(50.0));
+        assert_eq!(targets(&data), vec![0.5, 0.6, 0.7, 0.8]);
+        assert_eq!(currents(&data), vec![0.1, 0.2, 0.3, 0.4]);
+    }
+
+    #[test]
+    fn an_item_with_animation_off_steps_to_each_reading() {
+        let items = core_item(false);
+        let mut data = ComboDisplayData::default();
+        push(&mut data, &items, &reading(10.0));
+        push(&mut data, &items, &reading(50.0));
+        assert_eq!(currents(&data), vec![0.5, 0.6, 0.7, 0.8]);
+    }
+}

@@ -334,6 +334,9 @@ pub fn update_core_bars(
     config: &crate::ui::core_bars_display::CoreBarsConfig,
     animation_enabled: bool,
 ) {
+    // The item's own switch: off, its bars step to each reading even while
+    // the frame animates the other items
+    let animation_enabled = animation_enabled && config.animate;
     let capacity = config.end_core.saturating_sub(config.start_core) + 1;
     let mut core_targets: Vec<f64> = Vec::with_capacity(capacity);
     let mut any_key_found = false;
