@@ -49,13 +49,6 @@ impl Displayer for RetroTerminalDisplayer {
         ConfigSchema {
             options: vec![
                 ConfigOption {
-                    key: "phosphor_color".to_string(),
-                    name: "Phosphor Color".to_string(),
-                    description: "Terminal phosphor color preset".to_string(),
-                    value_type: "string".to_string(),
-                    default: serde_json::json!("green"),
-                },
-                ConfigOption {
                     key: "scanline_intensity".to_string(),
                     name: "Scanline Intensity".to_string(),
                     description: "Intensity of CRT scanline effect".to_string(),

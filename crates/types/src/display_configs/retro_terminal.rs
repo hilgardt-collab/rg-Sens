@@ -15,7 +15,11 @@ use crate::combo::{ComboFrameConfig, GroupTitleConfig, LayoutFrameConfig, Themed
 use crate::display_configs::lcars::{ContentItemConfig, SplitOrientation};
 use crate::theme::{deserialize_font_or_source, ComboThemeConfig, FontSource};
 
-/// Phosphor color presets (classic CRT colors)
+/// Phosphor color presets (classic CRT colors).
+///
+/// Legacy: the frame renders from `theme.color1`, and these presets live on
+/// as the Theme node's "… phosphor" palettes (`palette`). The loader folds a
+/// saved non-default value into the panel's theme once.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PhosphorColor {
@@ -72,6 +76,68 @@ impl PhosphorColor {
             g: c.g * 0.5,
             b: c.b * 0.5,
             a: c.a * 0.7,
+        }
+    }
+
+    /// Whether this is the default (`Green`): the value a frame saved by this
+    /// version carries implicitly.
+    pub fn is_default(&self) -> bool {
+        matches!(self, PhosphorColor::Green)
+    }
+
+    /// The theme a terminal of this phosphor renders with: the retro default
+    /// theme (near-black gradient, monospace fonts) with its four colours set
+    /// to the palette the pre-schema widget wrote when this preset was
+    /// picked (primary, dark, medium, light); a custom colour gets the same
+    /// variations derived from it.
+    pub fn palette(&self) -> ComboThemeConfig {
+        let [color1, color2, color3, color4] = self.palette_colors();
+        ComboThemeConfig {
+            color1,
+            color2,
+            color3,
+            color4,
+            ..ComboThemeConfig::default_for_retro_terminal()
+        }
+    }
+
+    fn palette_colors(&self) -> [Color; 4] {
+        match self {
+            PhosphorColor::Green => [
+                Color::new(0.2, 1.0, 0.2, 1.0),
+                Color::new(0.1, 0.6, 0.1, 1.0),
+                Color::new(0.3, 0.8, 0.3, 1.0),
+                Color::new(0.5, 1.0, 0.5, 1.0),
+            ],
+            PhosphorColor::Amber => [
+                Color::new(1.0, 0.69, 0.0, 1.0),
+                Color::new(0.6, 0.4, 0.0, 1.0),
+                Color::new(0.8, 0.55, 0.0, 1.0),
+                Color::new(1.0, 0.8, 0.3, 1.0),
+            ],
+            PhosphorColor::White => [
+                Color::new(0.9, 0.9, 0.85, 1.0),
+                Color::new(0.5, 0.5, 0.48, 1.0),
+                Color::new(0.7, 0.7, 0.67, 1.0),
+                Color::new(1.0, 1.0, 0.95, 1.0),
+            ],
+            PhosphorColor::Blue => [
+                Color::new(0.4, 0.6, 1.0, 1.0),
+                Color::new(0.2, 0.3, 0.6, 1.0),
+                Color::new(0.3, 0.5, 0.8, 1.0),
+                Color::new(0.6, 0.8, 1.0, 1.0),
+            ],
+            PhosphorColor::Custom(c) => [
+                *c,
+                Color::new(c.r * 0.6, c.g * 0.6, c.b * 0.6, c.a),
+                Color::new(c.r * 0.8, c.g * 0.8, c.b * 0.8, c.a),
+                Color::new(
+                    (c.r * 1.2).min(1.0),
+                    (c.g * 1.2).min(1.0),
+                    (c.b * 1.2).min(1.0),
+                    c.a,
+                ),
+            ],
         }
     }
 }
@@ -206,7 +272,11 @@ fn default_animation_speed() -> f64 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetroTerminalFrameConfig {
     // Color scheme
-    #[serde(default)]
+    /// Legacy phosphor preset. The frame renders from `theme.color1`; the
+    /// loader folds a non-default value into the panel's theme once
+    /// (`config::settings::adopt_frame_color_preset`), so this is never shown
+    /// in the editor and is not written when it is the default.
+    #[serde(default, skip_serializing_if = "PhosphorColor::is_default")]
     pub phosphor_color: PhosphorColor,
     #[serde(default = "default_background_color")]
     pub background_color: Color,
@@ -429,14 +499,6 @@ impl crate::schema::Schema for RetroTerminalFrameConfig {
         #[allow(unused_imports)]
         use crate::schema::{Condition, Prop, PropKind};
         vec![
-            Prop::new(
-                "phosphor_color",
-                "Phosphor",
-                PropKind::Custom {
-                    editor: "phosphor_color",
-                },
-            )
-            .section("Screen"),
             Prop::new("background_color", "Background colour", PropKind::Rgba).section("Screen"),
             Prop::new(
                 "text_brightness",
@@ -668,11 +730,41 @@ mod schema_tests {
 }
 
 #[cfg(test)]
-mod phosphor_editor_tests {
+mod phosphor_legacy_tests {
     use super::*;
 
     #[test]
-    fn every_value_the_editor_writes_deserializes() {
+    fn palette_leads_with_the_phosphor_colour() {
+        for p in [
+            PhosphorColor::Green,
+            PhosphorColor::Amber,
+            PhosphorColor::White,
+            PhosphorColor::Blue,
+            PhosphorColor::Custom(Color::new(0.5, 0.2, 0.9, 1.0)),
+        ] {
+            let palette = p.palette();
+            assert_eq!(palette.color1, p.to_color());
+            assert_eq!(palette.font1_family, "monospace");
+        }
+    }
+
+    #[test]
+    fn default_phosphor_is_not_written_but_a_legacy_value_is() {
+        let value = serde_json::to_value(RetroTerminalFrameConfig::default()).unwrap();
+        assert!(value.get("phosphor_color").is_none());
+        let amber = RetroTerminalFrameConfig {
+            phosphor_color: PhosphorColor::Amber,
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_value(amber).unwrap()["phosphor_color"],
+            serde_json::json!("amber")
+        );
+    }
+
+    /// Values the pre-schema widget and the Phase-4b editor saved.
+    #[test]
+    fn every_saved_value_deserializes() {
         for v in [
             serde_json::json!("green"),
             serde_json::json!("amber"),

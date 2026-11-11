@@ -10,8 +10,8 @@
 use anyhow::Result;
 use cairo::Context;
 
-use crate::combo_traits::FrameRenderer;
 use crate::background::Color;
+use crate::combo_traits::FrameRenderer;
 use crate::lcars_display::SplitOrientation;
 use crate::pango_text::{pango_show_text, pango_text_extents};
 
@@ -76,7 +76,7 @@ fn draw_frame_corners(
     w: f64,
     h: f64,
 ) {
-    let color = config.hud_color.to_color();
+    let color = hud_color(config);
     let bracket_size = config.bracket_size;
     let thickness = config.bracket_thickness;
 
@@ -112,7 +112,7 @@ fn draw_frame_corners(
             cr.stroke().ok();
 
             // Optional tick marks along edges
-            let dim_color = config.hud_color.to_dim_color();
+            let dim_color = dim_hud_color(config);
             cr.set_source_rgba(dim_color.r, dim_color.g, dim_color.b, dim_color.a);
             cr.set_line_width(1.0);
 
@@ -208,7 +208,7 @@ fn draw_frame_corners(
         }
         HudFrameStyle::TacticalBox => {
             // Full box with corner accents
-            let dim_color = config.hud_color.to_dim_color();
+            let dim_color = dim_hud_color(config);
             cr.set_source_rgba(dim_color.r, dim_color.g, dim_color.b, dim_color.a * 0.5);
             cr.set_line_width(1.0);
             cr.rectangle(x, y, w, h);
@@ -366,8 +366,8 @@ fn draw_header(cr: &Context, config: &FighterHudFrameConfig, x: f64, y: f64, w: 
     }
 
     let header_h = config.header_height;
-    let color = config.hud_color.to_color();
-    let dim_color = config.hud_color.to_dim_color();
+    let color = hud_color(config);
+    let dim_color = dim_hud_color(config);
 
     cr.save().ok();
 
@@ -546,7 +546,7 @@ fn draw_divider(
         return;
     }
 
-    let color = config.hud_color.to_dim_color();
+    let color = dim_hud_color(config);
 
     cr.save().ok();
     cr.set_source_rgba(color.r, color.g, color.b, color.a);
@@ -666,9 +666,28 @@ fn draw_divider(
     cr.restore().ok();
 }
 
+/// The HUD colour: theme colour 1. The frame has no colour of its own
+/// (`hud_color` is a legacy input the loader folds into the theme), so the
+/// brackets, header and dividers always match the content items and follow
+/// a group or global theme like they do.
+fn hud_color(config: &FighterHudFrameConfig) -> Color {
+    config.theme.color1
+}
+
+/// Dimmed HUD colour for secondary elements (edge ticks, box, dividers).
+fn dim_hud_color(config: &FighterHudFrameConfig) -> Color {
+    let c = hud_color(config);
+    Color {
+        r: c.r * 0.5,
+        g: c.g * 0.5,
+        b: c.b * 0.5,
+        a: c.a * 0.6,
+    }
+}
+
 /// Get the HUD color for content rendering
 pub fn get_hud_color(config: &FighterHudFrameConfig) -> Color {
-    config.hud_color.to_color()
+    hud_color(config)
 }
 
 /// Render the complete Fighter HUD frame

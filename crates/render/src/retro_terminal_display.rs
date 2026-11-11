@@ -10,8 +10,8 @@
 use anyhow::Result;
 use cairo::Context;
 
-use crate::combo_traits::FrameRenderer;
 use crate::background::Color;
+use crate::combo_traits::FrameRenderer;
 use crate::lcars_display::SplitOrientation;
 use crate::pango_text::{pango_show_text, pango_text_extents};
 
@@ -311,7 +311,7 @@ fn draw_screen_background(
 
     // Subtle phosphor glow from text area (simulates screen persistence)
     if config.screen_glow > 0.0 {
-        let phosphor = config.phosphor_color.to_color();
+        let phosphor = phosphor_color(config);
         let glow_alpha = config.screen_glow * 0.05;
 
         // Radial gradient for screen glow
@@ -406,8 +406,8 @@ fn draw_header(cr: &Context, config: &RetroTerminalFrameConfig, x: f64, y: f64, 
     }
 
     let header_h = config.header_height;
-    let phosphor = config.phosphor_color.to_color();
-    let dim_phosphor = config.phosphor_color.to_dim_color();
+    let phosphor = phosphor_color(config);
+    let dim_phosphor = dim_phosphor_color(config);
 
     cr.save().ok();
 
@@ -579,7 +579,7 @@ fn draw_divider(
         return;
     }
 
-    let phosphor = config.phosphor_color.to_dim_color();
+    let phosphor = dim_phosphor_color(config);
 
     cr.save().ok();
 
@@ -678,9 +678,28 @@ fn draw_divider(
     cr.restore().ok();
 }
 
+/// The phosphor colour: theme colour 1. The frame has no colour of its own
+/// (`phosphor_color` is a legacy input the loader folds into the theme), so
+/// the header, dividers and glow always match the content items and follow
+/// a group or global theme like they do.
+fn phosphor_color(config: &RetroTerminalFrameConfig) -> Color {
+    config.theme.color1
+}
+
+/// Dimmed phosphor for secondary elements (title-bar fill, dividers).
+fn dim_phosphor_color(config: &RetroTerminalFrameConfig) -> Color {
+    let c = phosphor_color(config);
+    Color {
+        r: c.r * 0.5,
+        g: c.g * 0.5,
+        b: c.b * 0.5,
+        a: c.a * 0.7,
+    }
+}
+
 /// Get the phosphor color for content rendering
 pub fn get_phosphor_color(config: &RetroTerminalFrameConfig) -> Color {
-    let base = config.phosphor_color.to_color();
+    let base = phosphor_color(config);
     Color {
         r: base.r * config.text_brightness,
         g: base.g * config.text_brightness,

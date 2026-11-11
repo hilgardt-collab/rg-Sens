@@ -925,10 +925,13 @@ impl ComboThemeConfig {
     }
 
     /// Named palettes a themed frame offers in its Theme page ("Gold &
-    /// Black" for Art Deco, …), on top of [`Self::builtin_presets`]. Moved
-    /// here from the frame widgets so the generic Theme editor can offer
-    /// them. Empty for displayers without palettes.
+    /// Black" for Art Deco, "Amber phosphor" for Retro Terminal, …), on top
+    /// of [`Self::builtin_presets`]. Moved here from the frame widgets so the
+    /// generic Theme editor can offer them. Empty for displayers without
+    /// palettes.
     pub fn palette_presets(displayer_type: &str) -> Vec<(&'static str, ComboThemeConfig)> {
+        use crate::display_configs::fighter_hud::HudColorPreset;
+        use crate::display_configs::retro_terminal::PhosphorColor;
         fn palette(
             c1: (f64, f64, f64),
             c2: (f64, f64, f64),
@@ -1139,6 +1142,19 @@ impl ComboThemeConfig {
                         "Sans",
                     ),
                 ),
+            ],
+            // The frame renders from colour 1, so a phosphor is a palette.
+            "retro_terminal" => vec![
+                ("Green phosphor", PhosphorColor::Green.palette()),
+                ("Amber phosphor", PhosphorColor::Amber.palette()),
+                ("White phosphor", PhosphorColor::White.palette()),
+                ("Blue phosphor", PhosphorColor::Blue.palette()),
+            ],
+            "fighter_hud" => vec![
+                ("Military green", HudColorPreset::MilitaryGreen.palette()),
+                ("Amber", HudColorPreset::Amber.palette()),
+                ("Cyan", HudColorPreset::Cyan.palette()),
+                ("White", HudColorPreset::White.palette()),
             ],
             _ => Vec::new(),
         }
@@ -1383,6 +1399,29 @@ mod theme_ref_tests {
         let themes = BTreeMap::new();
         let lib = library(&global, &themes, &[]);
         assert_eq!(lib.resolve(&ThemeRef::named("gone"), None), global);
+    }
+
+    #[test]
+    fn phosphor_and_hud_palettes_lead_with_their_preset_colour() {
+        use crate::display_configs::fighter_hud::HudColorPreset;
+        use crate::display_configs::retro_terminal::PhosphorColor;
+        let retro = ComboThemeConfig::palette_presets("retro_terminal");
+        assert_eq!(
+            retro.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+            [
+                "Green phosphor",
+                "Amber phosphor",
+                "White phosphor",
+                "Blue phosphor"
+            ]
+        );
+        assert_eq!(retro[1].1.color1, PhosphorColor::Amber.to_color());
+        let hud = ComboThemeConfig::palette_presets("fighter_hud");
+        assert_eq!(
+            hud.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+            ["Military green", "Amber", "Cyan", "White"]
+        );
+        assert_eq!(hud[2].1.color1, HudColorPreset::Cyan.to_color());
     }
 
     #[test]

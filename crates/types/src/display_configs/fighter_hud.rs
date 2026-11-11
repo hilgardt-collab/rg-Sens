@@ -15,7 +15,11 @@ use crate::combo::{ComboFrameConfig, GroupTitleConfig, LayoutFrameConfig, Themed
 use crate::display_configs::lcars::{ContentItemConfig, SplitOrientation};
 use crate::theme::{deserialize_font_or_source, ColorSource, ComboThemeConfig, FontSource};
 
-/// HUD color presets (military display colors)
+/// HUD color presets (military display colors).
+///
+/// Legacy: the frame renders from `theme.color1`, and these presets live on
+/// as the Theme node's HUD palettes (`palette`). The loader folds a saved
+/// non-default value into the panel's theme once.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum HudColorPreset {
@@ -83,6 +87,27 @@ impl HudColorPreset {
             g: (c.g * 1.2).min(1.0),
             b: (c.b * 1.2).min(1.0),
             a: c.a,
+        }
+    }
+
+    /// Whether this is the default (`MilitaryGreen`): the value a frame saved
+    /// by this version carries implicitly.
+    pub fn is_default(&self) -> bool {
+        matches!(self, HudColorPreset::MilitaryGreen)
+    }
+
+    /// The theme a HUD of this colour renders with: the HUD default theme
+    /// (dark gradient, monospace fonts) with its four colours set to what the
+    /// pre-schema widget wrote when this preset was picked
+    /// (`to_theme_colors`).
+    pub fn palette(&self) -> ComboThemeConfig {
+        let (color1, color2, color3, color4) = self.to_theme_colors();
+        ComboThemeConfig {
+            color1,
+            color2,
+            color3,
+            color4,
+            ..ComboThemeConfig::default_for_fighter_hud()
         }
     }
 
@@ -215,7 +240,11 @@ fn default_animation_speed() -> f64 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FighterHudFrameConfig {
     // Color scheme
-    #[serde(default)]
+    /// Legacy HUD colour preset. The frame renders from `theme.color1`; the
+    /// loader folds a non-default value into the panel's theme once
+    /// (`config::settings::adopt_frame_color_preset`), so this is never shown
+    /// in the editor and is not written when it is the default.
+    #[serde(default, skip_serializing_if = "HudColorPreset::is_default")]
     pub hud_color: HudColorPreset,
     #[serde(default = "default_background_color")]
     pub background_color: Color,
@@ -426,14 +455,6 @@ impl crate::schema::Schema for FighterHudFrameConfig {
         #[allow(unused_imports)]
         use crate::schema::{Condition, Prop, PropKind};
         vec![
-            Prop::new(
-                "hud_color",
-                "HUD colour",
-                PropKind::Custom {
-                    editor: "hud_color",
-                },
-            )
-            .section("HUD"),
             Prop::new("background_color", "Background colour", PropKind::Rgba).section("HUD"),
             Prop::new(
                 "glow_intensity",
@@ -658,11 +679,41 @@ mod schema_tests {
 }
 
 #[cfg(test)]
-mod hud_color_editor_tests {
+mod hud_color_legacy_tests {
     use super::*;
 
     #[test]
-    fn every_value_the_editor_writes_deserializes() {
+    fn palette_leads_with_the_preset_colour() {
+        for p in [
+            HudColorPreset::MilitaryGreen,
+            HudColorPreset::Amber,
+            HudColorPreset::Cyan,
+            HudColorPreset::White,
+            HudColorPreset::Custom(Color::new(0.5, 0.2, 0.9, 1.0)),
+        ] {
+            let palette = p.palette();
+            assert_eq!(palette.color1, p.to_color());
+            assert_eq!(palette.font1_family, "monospace");
+        }
+    }
+
+    #[test]
+    fn default_preset_is_not_written_but_a_legacy_value_is() {
+        let value = serde_json::to_value(FighterHudFrameConfig::default()).unwrap();
+        assert!(value.get("hud_color").is_none());
+        let amber = FighterHudFrameConfig {
+            hud_color: HudColorPreset::Amber,
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_value(amber).unwrap()["hud_color"],
+            serde_json::json!("amber")
+        );
+    }
+
+    /// Values the pre-schema widget and the Phase-4b editor saved.
+    #[test]
+    fn every_saved_value_deserializes() {
         for v in [
             serde_json::json!("military_green"),
             serde_json::json!("amber"),

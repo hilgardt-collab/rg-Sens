@@ -8,11 +8,17 @@
 //! ```text
 //! cargo run --example art_deco_preview -- <out_dir> [panel.json]
 //! ```
+//!
+//! A saved Retro Terminal or Fighter HUD panel (`examples/RetroTerminal.json`,
+//! `examples/HUD.json`) renders too, as `current_full.png` only: enough to
+//! compare a drawing change before and after.
 
 use anyhow::{Context as _, Result};
 use rg_sens::core::{global_registry, Displayer, DisplayerConfig, PanelData};
-use rg_sens::displayers::GenericComboDisplayerShared;
+use rg_sens::displayers::{FrameRenderer, GenericComboDisplayerShared};
 use rg_sens::ui::art_deco_display::ArtDecoRenderer;
+use rg_sens::ui::fighter_hud_display::FighterHudRenderer;
+use rg_sens::ui::retro_terminal_display::RetroTerminalRenderer;
 use rg_sens_types::display_configs::art_deco::{
     ArtDecoFrameConfig, BackgroundPattern, BorderStyle, CornerStyle, DividerStyle, GroupFrameStyle,
     HeaderStyle,
@@ -38,29 +44,26 @@ fn main() -> Result<()> {
 
     let text = std::fs::read_to_string(&json_path).with_context(|| json_path.clone())?;
     let data: PanelData = serde_json::from_str(&text)?;
+    let values = sample_values(&data)?;
     let frame = match &data.displayer_config {
         DisplayerConfig::ArtDeco(c) => c.to_frame(),
-        other => anyhow::bail!("panel is not Art Deco: {}", other.displayer_type()),
-    };
-
-    // Real values where the sources work headlessly (clock, cpu, memory),
-    // plausible fakes for everything else so every item renders something.
-    let mut source = global_registry().create_source(data.source_config.source_type())?;
-    source.configure_typed(&data.source_config)?;
-    let _ = source.update();
-    let mut values = source.get_values();
-    let mut seed = 0x9E37_79B9u64;
-    for field in source.fields() {
-        let usable = match values.get(&field.id) {
-            Some(Value::Number(n)) => n.as_f64().map(|v| v != 0.0).unwrap_or(false),
-            Some(Value::String(s)) => !s.is_empty() && s != "N/A",
-            Some(v) => !v.is_null(),
-            None => false,
-        };
-        if !usable {
-            values.insert(field.id.clone(), fake_value(&field.field_type, &mut seed));
+        DisplayerConfig::RetroTerminal(c) => {
+            let surface = render_surface(RetroTerminalRenderer, &c.to_frame(), &values, 480, 1920)?;
+            write_png(&surface, &format!("{}/current_full.png", out))?;
+            println!("wrote preview to {}", out);
+            return Ok(());
         }
-    }
+        DisplayerConfig::FighterHud(c) => {
+            let surface = render_surface(FighterHudRenderer, &c.to_frame(), &values, 480, 1920)?;
+            write_png(&surface, &format!("{}/current_full.png", out))?;
+            println!("wrote preview to {}", out);
+            return Ok(());
+        }
+        other => anyhow::bail!(
+            "panel is not Art Deco, Retro Terminal or Fighter HUD: {}",
+            other.displayer_type()
+        ),
+    };
 
     // The panel as configured, at the user's size (30 x 120 cells of 16 px).
     render_png(
@@ -238,6 +241,28 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Real values where the sources work headlessly (clock, cpu, memory),
+/// plausible fakes for everything else so every item renders something.
+fn sample_values(data: &PanelData) -> Result<HashMap<String, Value>> {
+    let mut source = global_registry().create_source(data.source_config.source_type())?;
+    source.configure_typed(&data.source_config)?;
+    let _ = source.update();
+    let mut values = source.get_values();
+    let mut seed = 0x9E37_79B9u64;
+    for field in source.fields() {
+        let usable = match values.get(&field.id) {
+            Some(Value::Number(n)) => n.as_f64().map(|v| v != 0.0).unwrap_or(false),
+            Some(Value::String(s)) => !s.is_empty() && s != "N/A",
+            Some(v) => !v.is_null(),
+            None => false,
+        };
+        if !usable {
+            values.insert(field.id.clone(), fake_value(&field.field_type, &mut seed));
+        }
+    }
+    Ok(values)
+}
+
 fn fake_value(field_type: &FieldType, seed: &mut u64) -> Value {
     *seed ^= *seed << 13;
     *seed ^= *seed >> 7;
@@ -250,8 +275,9 @@ fn fake_value(field_type: &FieldType, seed: &mut u64) -> Value {
     }
 }
 
-fn render_surface(
-    frame: &ArtDecoFrameConfig,
+fn render_surface<R: FrameRenderer>(
+    renderer: R,
+    frame: &R::Config,
     values: &HashMap<String, Value>,
     w: i32,
     h: i32,
@@ -262,12 +288,18 @@ fn render_surface(
         // Window background behind the panel.
         cr.set_source_rgb(0.05, 0.05, 0.06);
         cr.paint()?;
-        let mut displayer = GenericComboDisplayerShared::new(ArtDecoRenderer);
+        let mut displayer = GenericComboDisplayerShared::new(renderer);
         displayer.set_config(frame.clone());
         displayer.update_data(values);
         displayer.render_to_context(&cr, w, h);
     }
     Ok(surface)
+}
+
+fn write_png(surface: &cairo::ImageSurface, path: &str) -> Result<()> {
+    let mut file = std::fs::File::create(path)?;
+    surface.write_to_png(&mut file)?;
+    Ok(())
 }
 
 fn render_png(
@@ -277,10 +309,8 @@ fn render_png(
     h: i32,
     path: &str,
 ) -> Result<()> {
-    let surface = render_surface(frame, values, w, h)?;
-    let mut file = std::fs::File::create(path)?;
-    surface.write_to_png(&mut file)?;
-    Ok(())
+    let surface = render_surface(ArtDecoRenderer, frame, values, w, h)?;
+    write_png(&surface, path)
 }
 
 /// One PNG with a labelled tile per variant.
@@ -313,7 +343,7 @@ fn sheet(
             cr.set_source_rgb(0.9, 0.9, 0.9);
             cr.move_to(x as f64 + 4.0, y as f64 + 19.0);
             cr.show_text(label)?;
-            let tile = render_surface(frame, values, TILE_W, TILE_H)?;
+            let tile = render_surface(ArtDecoRenderer, frame, values, TILE_W, TILE_H)?;
             cr.set_source_surface(&tile, x as f64, (y + LABEL_H) as f64)?;
             cr.paint()?;
         }

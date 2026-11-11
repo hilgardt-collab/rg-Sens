@@ -98,6 +98,7 @@ impl AppConfig {
                     migrate_inline_theme(panel);
                 }
                 adopt_frame_group_weights(panel);
+                adopt_frame_color_preset(panel);
             }
             AppConfig {
                 version: loaded.version,
@@ -479,6 +480,49 @@ fn adopt_frame_group_weights(panel: &mut PanelConfigV2) {
     }
 }
 
+/// Phase-4b repair: the hand-written Retro Terminal and Fighter HUD widgets
+/// wrote the four theme colours whenever their colour preset changed, and the
+/// schema editor that replaced them wrote only the preset, so the frame
+/// (header, dividers, glow) and the content items drifted apart. Both frames
+/// now render from the theme and the preset is a legacy input: fold a
+/// non-default one into the panel's theme once and reset it, so this never
+/// fires again. An Inline theme whose primary colour already is the preset
+/// colour was synced by the old widget and is left alone (later colour tweaks
+/// survive); anything else becomes Inline with the preset's palette, since
+/// the preset was always private to the panel.
+fn adopt_frame_color_preset(panel: &mut PanelConfigV2) {
+    let (preset_color, palette) = match &mut panel.displayer_config {
+        DisplayerConfig::RetroTerminal(cfg) => {
+            let preset = std::mem::take(&mut cfg.frame.phosphor_color);
+            if preset.is_default() {
+                return;
+            }
+            (preset.to_color(), preset.palette())
+        }
+        DisplayerConfig::FighterHud(cfg) => {
+            let preset = std::mem::take(&mut cfg.frame.hud_color);
+            if preset.is_default() {
+                return;
+            }
+            (preset.to_color(), preset.palette())
+        }
+        _ => return,
+    };
+    let already_synced =
+        matches!(&panel.theme, ThemeRef::Inline { theme } if theme.color1 == preset_color);
+    if already_synced {
+        return;
+    }
+    if let Some(frame_theme) = panel.displayer_config.theme_mut() {
+        *frame_theme = palette.clone();
+    }
+    panel.theme = ThemeRef::inline(palette);
+    log::info!(
+        "Panel {}: folded the frame colour preset into an inline theme",
+        panel.id
+    );
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
@@ -522,6 +566,7 @@ impl AppConfigV1 {
                     // V1 never had a theme key: same migration as v2 key-absence
                     migrate_inline_theme(&mut panel);
                     adopt_frame_group_weights(&mut panel);
+                    adopt_frame_color_preset(&mut panel);
                     panel
                 })
                 .collect(),
@@ -1222,7 +1267,11 @@ impl PanelConfig {
 #[cfg(test)]
 mod theme_library_tests {
     use super::*;
-    use rg_sens_types::display_configs::themed_configs::LcarsDisplayConfig;
+    use rg_sens_types::display_configs::fighter_hud::HudColorPreset;
+    use rg_sens_types::display_configs::retro_terminal::PhosphorColor;
+    use rg_sens_types::display_configs::themed_configs::{
+        FighterHudDisplayConfig, LcarsDisplayConfig, RetroTerminalDisplayConfig,
+    };
     use rg_sens_types::display_configs::BarDisplayConfig;
     use rg_sens_types::source_configs::cpu::CpuSourceConfig;
     use rg_sens_types::Color;
@@ -1278,6 +1327,74 @@ mod theme_library_tests {
             }
         }
         serde_json::to_string(&raw).unwrap()
+    }
+
+    fn retro_panel(id: &str, phosphor: PhosphorColor, theme: ThemeRef) -> PanelConfigV2 {
+        let mut cfg = RetroTerminalDisplayConfig::default();
+        cfg.frame.phosphor_color = phosphor;
+        PanelConfigV2 {
+            displayer_config: DisplayerConfig::RetroTerminal(cfg),
+            theme,
+            ..combo_panel(id, ComboThemeConfig::default())
+        }
+    }
+
+    #[test]
+    fn legacy_phosphor_is_folded_into_an_inline_theme_once() {
+        // "drifted": amber picked in the Phase-4b editor, theme left alone.
+        // "synced": the pre-schema widget wrote the palette, the user then
+        // tweaked a colour. "green": the default, nothing to do.
+        let drifted = retro_panel("drifted", PhosphorColor::Amber, ThemeRef::Inherit);
+        let mut tweaked = PhosphorColor::Amber.palette();
+        tweaked.color2 = Color::new(0.3, 0.3, 0.3, 1.0);
+        let synced = retro_panel(
+            "synced",
+            PhosphorColor::Amber,
+            ThemeRef::inline(tweaked.clone()),
+        );
+        let green = retro_panel("green", PhosphorColor::Green, ThemeRef::Inherit);
+        let json =
+            serde_json::to_string(&config_with(vec![drifted, synced, green]).as_v2()).unwrap();
+        assert_eq!(json.matches("\"phosphor_color\":\"amber\"").count(), 2);
+
+        let loaded = AppConfig::load_from_string(&json).unwrap();
+        let by_id = |id: &str| loaded.panels_v2.iter().find(|p| p.id == id).unwrap();
+        let amber = PhosphorColor::Amber.palette();
+        assert_eq!(by_id("drifted").theme, ThemeRef::inline(amber.clone()));
+        assert_eq!(
+            by_id("drifted").displayer_config.theme(),
+            Some(&amber),
+            "the frame's resolved-theme cache is written too"
+        );
+        assert_eq!(
+            by_id("synced").theme,
+            ThemeRef::inline(tweaked),
+            "a theme the old widget synced keeps the user's later tweak"
+        );
+        assert_eq!(by_id("green").theme, ThemeRef::Inherit);
+
+        // The preset is consumed: the next save no longer carries it.
+        let again = serde_json::to_string(&loaded.as_v2()).unwrap();
+        assert!(!again.contains("phosphor_color"), "{}", again);
+    }
+
+    #[test]
+    fn legacy_hud_colour_is_folded_the_same_way() {
+        let mut cfg = FighterHudDisplayConfig::default();
+        cfg.frame.hud_color = HudColorPreset::Cyan;
+        let hud = PanelConfigV2 {
+            displayer_config: DisplayerConfig::FighterHud(cfg),
+            theme: ThemeRef::Global,
+            ..combo_panel("hud", ComboThemeConfig::default())
+        };
+        let json = serde_json::to_string(&config_with(vec![hud]).as_v2()).unwrap();
+        let loaded = AppConfig::load_from_string(&json).unwrap();
+        assert_eq!(
+            loaded.panels_v2[0].theme,
+            ThemeRef::inline(HudColorPreset::Cyan.palette())
+        );
+        let again = serde_json::to_string(&loaded.as_v2()).unwrap();
+        assert!(!again.contains("hud_color"), "{}", again);
     }
 
     #[test]

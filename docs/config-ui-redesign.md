@@ -1297,6 +1297,20 @@ The combo frame editors start moving to schemas; synthwave is the first.
   colours (the old Theme tab did; the renderer reads the scheme itself and
   the Theme node's presets cover palettes); the per-group orientation
   switches became rows in the Layout section; the widget's preview is gone.
+* Retro Terminal and Fighter HUD (2026-11-11): the Screen › Phosphor and
+  HUD › HUD colour rows are gone. Their pre-schema widgets wrote the four
+  theme colours whenever the preset changed (2993d0b, `to_theme_colors`) and
+  Phase 4b kept only the preset write, so the header, dividers and glow
+  followed the preset while every content item followed the theme. Both
+  frames now render their chrome from `theme.color1` (dim variants derived
+  in the renderer), so they match the items and follow a group or global
+  theme; the presets became Theme-node palettes
+  (`ComboThemeConfig::palette_presets`, from `PhosphorColor::palette` /
+  `HudColorPreset::palette`); a saved non-default `phosphor_color` /
+  `hud_color` is folded into an Inline theme once on load
+  (`settings::adopt_frame_color_preset`, skipped when the old widget already
+  synced the colours) and is not written when default. Synthwave is
+  untouched: its scheme carries more colours than the theme does.
 
 Next: the other nine frames (same recipe; LCARS adds a segments list with
 `count_key`, header and divider objects; `hud_color` and `phosphor_color`
@@ -1317,8 +1331,10 @@ widgets left are the two clocks and css_template.
   family + size). LCARS: `segments` is a `List` with `count_key:
   "segment_count"`, `top_header`/`bottom_header` and `divider_config` are
   nested objects, `layout_orientation` is its orientation key.
-* Field editors: `hud_color` and `phosphor_color` share
-  `tagged_color_editor` (unit presets plus `{"custom": Color}`).
+* Field editors: `hud_color` and `phosphor_color` shared a
+  `tagged_color_editor` (unit presets plus `{"custom": Color}`) until both
+  rows were removed (2026-11-11, see below); `synthwave_scheme_editor` is
+  the surviving editor of that shape.
 * Deleted: the nine widgets, `src/ui/combo_config_base.rs` (the typed item
   page, layout/theme/animation page helpers), and `ConfigWidgetBuilder` with
   its two extension traits in `widget_builder.rs` (only the themed widgets

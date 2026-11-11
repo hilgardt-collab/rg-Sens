@@ -46,13 +46,6 @@ impl Displayer for FighterHudDisplayer {
         ConfigSchema {
             options: vec![
                 ConfigOption {
-                    key: "hud_color".to_string(),
-                    name: "HUD Color".to_string(),
-                    description: "HUD color preset".to_string(),
-                    value_type: "string".to_string(),
-                    default: serde_json::json!("military_green"),
-                },
-                ConfigOption {
                     key: "frame_style".to_string(),
                     name: "Frame Style".to_string(),
                     description: "Style of the HUD frame corners".to_string(),
