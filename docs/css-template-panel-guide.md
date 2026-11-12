@@ -345,19 +345,35 @@ function updateGauge(percent) {
 
 ### Memory Usage
 
-CSS Template panels use WebKitGTK to render HTML content. **Complex JavaScript in templates can cause gradual memory accumulation** due to WebKitGTK's internal handling of JavaScript execution.
+CSS Template panels render in a separate WebKitGTK web process. Measured with
+`cargo run --example webkit_leak` (see the file's header), the growth people saw
+is in that process, follows how much the page **repaints**, and is memory WebKit
+releases once it considers itself under memory pressure. By default that
+threshold is a fraction of system RAM, so on a desktop it never triggered.
 
-**To minimize memory usage:**
-- Keep JavaScript simple and avoid storing persistent DOM references
-- Use the provided `rg-sens-gauges.js` library (v2.0+) which is optimized for low memory usage
-- Avoid using `document.createTreeWalker` or storing element references in arrays/maps
-- Prefer querying the DOM fresh on each update rather than caching references
-- Use `{ once: true }` option for event listeners when possible
+rg-Sens now gives the web process a memory limit (192 MB; WebKit starts
+releasing caches at a third of it), which keeps a template updating once a
+second flat. The periodic WebView reset (every 300 value updates) is still in
+place as a safety net.
 
-**If you notice increasing memory usage:**
-- The application periodically resets WebViews every 5 minutes to release accumulated memory
-- Consider simplifying your template's JavaScript
-- Templates without JavaScript have minimal memory overhead
+**What costs memory in a template:**
+- Infinite CSS animations of paint-heavy properties, above all an animated
+  `text-shadow` or `box-shadow` blur: the example Art Deco panel's glowing clock
+  was the whole of its growth. Animating `opacity` or `transform` is cheap.
+- Transitions that are restarted faster than they finish.
+- JavaScript that keeps references to DOM nodes between updates (the bundled
+  `rg-sens-gauges.js` does not).
+
+**What a panel costs:** the first CSS Template panel starts WebKit's web and
+network processes, about 300 MB in total across the three processes on the
+test machine; nothing is started while no CSS Template panel exists. A template
+with a continuously running animation also repaints every frame, which costs
+CPU in both rg-Sens and the web process (tens of percent of one core for the
+Art Deco example); a template that only changes when values change does not
+repaint in between.
+
+CSS Template panels are enabled by default; start rg-Sens with
+`--webkit-disable` to turn them off.
 
 ### WebView Limitations
 

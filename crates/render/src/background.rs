@@ -181,38 +181,6 @@ pub fn linear_gradient_endpoints(
     )
 }
 
-#[cfg(test)]
-mod gradient_endpoint_tests {
-    use super::linear_gradient_endpoints;
-
-    fn close(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> bool {
-        [(a.0, b.0), (a.1, b.1), (a.2, b.2), (a.3, b.3)]
-            .iter()
-            .all(|(p, q)| (p - q).abs() < 1e-9)
-    }
-
-    #[test]
-    fn ramp_spans_exactly_the_rectangle() {
-        // A wide, flat bar: 0° runs edge to edge horizontally, 90° top to
-        // bottom, 180° and 270° the same reversed.
-        let at = |angle| linear_gradient_endpoints(angle, 10.0, 20.0, 200.0, 30.0);
-        assert!(close(at(0.0), (10.0, 35.0, 210.0, 35.0)));
-        assert!(close(at(90.0), (110.0, 20.0, 110.0, 50.0)));
-        assert!(close(at(180.0), (210.0, 35.0, 10.0, 35.0)));
-        assert!(close(at(270.0), (110.0, 50.0, 110.0, 20.0)));
-    }
-
-    #[test]
-    fn diagonal_ramp_reaches_the_corners() {
-        // At 45° the corners project onto the two ends of the line.
-        let (x1, y1, x2, y2) = linear_gradient_endpoints(45.0, 0.0, 0.0, 100.0, 40.0);
-        let (dx, dy) = (x2 - x1, y2 - y1);
-        let t = |px: f64, py: f64| ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
-        assert!(t(0.0, 0.0).abs() < 1e-9);
-        assert!((t(100.0, 40.0) - 1.0).abs() < 1e-9);
-    }
-}
-
 /// Render a radial gradient
 fn render_radial_gradient(
     cr: &cairo::Context,
@@ -634,4 +602,36 @@ fn interpolate_indicator_gradient(stops: &[ColorStop], value: f64, min: f64, max
     // Use cached LUT for fast color lookup
     // The LUT handles unsorted stops internally (sorts once during construction)
     get_cached_color_at(stops, normalized)
+}
+
+#[cfg(test)]
+mod gradient_endpoint_tests {
+    use super::linear_gradient_endpoints;
+
+    fn close(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> bool {
+        [(a.0, b.0), (a.1, b.1), (a.2, b.2), (a.3, b.3)]
+            .iter()
+            .all(|(p, q)| (p - q).abs() < 1e-9)
+    }
+
+    #[test]
+    fn ramp_spans_exactly_the_rectangle() {
+        // A wide, flat bar: 0° runs edge to edge horizontally, 90° top to
+        // bottom, 180° and 270° the same reversed.
+        let at = |angle| linear_gradient_endpoints(angle, 10.0, 20.0, 200.0, 30.0);
+        assert!(close(at(0.0), (10.0, 35.0, 210.0, 35.0)));
+        assert!(close(at(90.0), (110.0, 20.0, 110.0, 50.0)));
+        assert!(close(at(180.0), (210.0, 35.0, 10.0, 35.0)));
+        assert!(close(at(270.0), (110.0, 50.0, 110.0, 20.0)));
+    }
+
+    #[test]
+    fn diagonal_ramp_reaches_the_corners() {
+        // At 45° the corners project onto the two ends of the line.
+        let (x1, y1, x2, y2) = linear_gradient_endpoints(45.0, 0.0, 0.0, 100.0, 40.0);
+        let (dx, dy) = (x2 - x1, y2 - y1);
+        let t = |px: f64, py: f64| ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+        assert!(t(0.0, 0.0).abs() < 1e-9);
+        assert!((t(100.0, 40.0) - 1.0).abs() < 1e-9);
+    }
 }

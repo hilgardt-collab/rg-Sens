@@ -86,6 +86,10 @@ clap = { version = "4", features = ["derive"] }
 [dev-dependencies]
 criterion = "0.5"
 
+[[example]]
+name = "webkit_leak"
+required-features = ["webkit"]
+
 [features]
 default = ["nvidia", "webkit"]
 nvidia = ["nvml-wrapper", "rg-sens-sources/nvidia"]  # NVIDIA GPU support

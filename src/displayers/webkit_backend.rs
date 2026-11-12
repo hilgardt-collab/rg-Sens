@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -26,6 +26,38 @@ use crate::ui::css_template_display::{
 
 /// Global shutdown flag - when set, all CSS template timers will stop
 static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
+
+/// Diagnostics for the leak harness (`examples/webkit_leak.rs`): how many
+/// JavaScript updates were sent, how many WebViews were recycled, and how many
+/// backend timers are alive.
+pub static EVAL_COUNT: AtomicU64 = AtomicU64::new(0);
+pub static RECYCLE_COUNT: AtomicU64 = AtomicU64::new(0);
+pub static LIVE_TIMERS: AtomicI64 = AtomicI64::new(0);
+
+/// WebViews that are still alive (not finalized), whether or not they are
+/// still in a window.
+pub fn live_webviews() -> usize {
+    ACTIVE_WEBVIEWS.with(|views| {
+        views
+            .borrow()
+            .iter()
+            .filter(|weak| weak.upgrade().is_some())
+            .count()
+    })
+}
+
+/// Memory limit handed to WebKit for each web process (MB, 0 = WebKit's own
+/// default, which is a fraction of system RAM). WebKit starts releasing
+/// caches at a third of the limit and does so aggressively at half.
+const DEFAULT_MEMORY_LIMIT_MB: u64 = 192;
+
+/// Test-only override of a tuning constant through the environment.
+fn env_override(name: &str, default: u64) -> u64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
 
 /// Number of consecutive timer ticks a WebView must stay orphaned (no root)
 /// before its web process is terminated. Widgets can be transiently unparented
@@ -136,7 +168,27 @@ impl Default for WebKitBackend {
 
 /// Create and configure a new WebView
 fn create_webview() -> WebView {
-    let webview = WebView::new();
+    let limit_mb = env_override("RG_SENS_WEBKIT_MEMLIMIT_MB", DEFAULT_MEMORY_LIMIT_MB) as u32;
+    let webview = if limit_mb > 0 {
+        thread_local! {
+            static CONTEXT: RefCell<Option<webkit6::WebContext>> = const { RefCell::new(None) };
+        }
+        let context = CONTEXT.with(|c| {
+            c.borrow_mut()
+                .get_or_insert_with(|| {
+                    let mut settings = webkit6::MemoryPressureSettings::new();
+                    settings.set_memory_limit(limit_mb);
+                    settings.set_poll_interval(5.0);
+                    webkit6::WebContext::builder()
+                        .memory_pressure_settings(&settings)
+                        .build()
+                })
+                .clone()
+        });
+        WebView::builder().web_context(&context).build()
+    } else {
+        WebView::new()
+    };
 
     // Set cache model to DocumentViewer for minimal caching
     if let Some(context) = webview.web_context() {
@@ -262,7 +314,10 @@ impl TemplateBackend for WebKitBackend {
         }));
 
         // Set up periodic timer for updates and WebView recycling
-        glib::timeout_add_local(Duration::from_millis(1000), {
+        let tick_ms = env_override("RG_SENS_WEBKIT_TICK_MS", 1000);
+        let recycle_every = env_override("RG_SENS_WEBKIT_RECYCLE_EVERY", 300) as u32;
+        LIVE_TIMERS.fetch_add(1, Ordering::Relaxed);
+        let tick = {
             let data_clone = data.clone();
             let state_clone = state.clone();
             let event_layer_clone = event_layer.clone();
@@ -384,7 +439,8 @@ impl TemplateBackend for WebKitBackend {
                             data.js_update_count += 1;
 
                             // Every 300 updates (~5 minutes), completely destroy and recreate WebView
-                            if data.js_update_count % 300 == 0 {
+                            if recycle_every > 0 && data.js_update_count % recycle_every == 0 {
+                                RECYCLE_COUNT.fetch_add(1, Ordering::Relaxed);
                                 log::info!(
                                     "WebKit backend: recycling WebView after {} updates to release memory",
                                     data.js_update_count
@@ -451,6 +507,7 @@ impl TemplateBackend for WebKitBackend {
 
                             // Normal JS update
                             if let Some(ref webview) = state.webview {
+                                EVAL_COUNT.fetch_add(1, Ordering::Relaxed);
                                 let js_call = format!(
                                     "if (window.updateValues) {{ window.updateValues({{{}}}); }}",
                                     js_values
@@ -469,6 +526,13 @@ impl TemplateBackend for WebKitBackend {
 
                 glib::ControlFlow::Continue
             }
+        };
+        glib::timeout_add_local(Duration::from_millis(tick_ms), move || {
+            let flow = tick();
+            if flow == glib::ControlFlow::Break {
+                LIVE_TIMERS.fetch_sub(1, Ordering::Relaxed);
+            }
+            flow
         });
 
         // Wrap in a Box so we return a stable widget reference
@@ -490,8 +554,7 @@ fn build_js_values(data: &DisplayData) -> String {
         // newlines, CR, control chars, etc. (one multi-line value would
         // otherwise syntax-error the whole updateValues payload). JSON string
         // output is valid JS for all these cases.
-        let quoted =
-            serde_json::to_string(&value).unwrap_or_else(|_| "\"--\"".to_string());
+        let quoted = serde_json::to_string(&value).unwrap_or_else(|_| "\"--\"".to_string());
         entries.push(format!("\"{}\": {}", mapping.index, quoted));
     }
 

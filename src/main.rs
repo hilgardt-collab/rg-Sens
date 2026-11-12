@@ -81,9 +81,13 @@ struct Cli {
     #[arg(value_name = "LAYOUT_FILE")]
     layout_file: Option<String>,
 
-    /// Enable WebKit-based CSS Template panels (disabled by default due to memory usage)
-    #[arg(long = "webkit-enable", conflicts_with = "servo_enable")]
+    /// Accepted for compatibility: CSS Template panels are enabled by default
+    #[arg(long = "webkit-enable", conflicts_with = "servo_enable", hide = true)]
     webkit_enable: bool,
+
+    /// Disable the WebKit-based CSS Template panels
+    #[arg(long = "webkit-disable", conflicts_with = "webkit_enable")]
+    webkit_disable: bool,
 
     /// Enable Servo-based CSS Template panels (experimental, requires servo feature)
     #[arg(long = "servo-enable", conflicts_with = "webkit_enable")]
@@ -140,7 +144,8 @@ fn is_fullscreen_on_secondary_gpu(cli: &Cli) -> bool {
     };
 
     // Build map: card_number -> list of connected connector names
-    let mut gpu_connectors: std::collections::HashMap<u32, Vec<String>> = std::collections::HashMap::new();
+    let mut gpu_connectors: std::collections::HashMap<u32, Vec<String>> =
+        std::collections::HashMap::new();
     let mut primary_card: Option<u32> = None;
 
     for entry in entries.flatten() {
@@ -159,13 +164,9 @@ fn is_fullscreen_on_secondary_gpu(cli: &Cli) -> bool {
                             // Convert sysfs connector name to GDK format
                             // sysfs: "HDMI-A-2" → GDK: "HDMI-2"
                             // sysfs: "DP-4" → GDK: "DP-4"
-                            let gdk_name = connector_sysfs
-                                .replace("HDMI-A-", "HDMI-");
+                            let gdk_name = connector_sysfs.replace("HDMI-A-", "HDMI-");
 
-                            gpu_connectors
-                                .entry(card_num)
-                                .or_default()
-                                .push(gdk_name);
+                            gpu_connectors.entry(card_num).or_default().push(gdk_name);
 
                             // Track the lowest card number with connected outputs as primary
                             if primary_card.is_none() || card_num < primary_card.unwrap() {
@@ -304,7 +305,9 @@ fn main() {
                 // on Wayland, and Vulkan crashes with VK_ERROR_OUT_OF_DATE_KHR.
                 // Use --renderer gl to try GL if your driver supports it.
                 std::env::set_var("GSK_RENDERER", "cairo");
-                info!("Using cairo renderer (default for compatibility, use --renderer gl to try GL)");
+                info!(
+                    "Using cairo renderer (default for compatibility, use --renderer gl to try GL)"
+                );
             }
         } else {
             // Default to Cairo for maximum compatibility
@@ -339,9 +342,11 @@ fn main() {
         return;
     }
 
-    // Extract webkit_enable and servo_enable before moving cli into CLI_OPTIONS
-    let webkit_enable = cli.webkit_enable;
+    // CSS Template panels are on by default (WebKit backend); the Servo
+    // backend replaces it, and --webkit-disable turns them off. The old
+    // --webkit-enable flag is still accepted and changes nothing.
     let servo_enable = cli.servo_enable;
+    let webkit_enable = !cli.webkit_disable && !servo_enable;
 
     // Store CLI options for access in build_ui
     CLI_OPTIONS.set(cli).expect("CLI options already set");
@@ -350,7 +355,6 @@ fn main() {
     sources::initialize_sensors();
 
     // Register all built-in sources and displayers
-    // CSS Template requires --webkit-enable or --servo-enable (mutually exclusive)
     sources::register_all();
     displayers::register_all(webkit_enable, servo_enable);
     rg_sens::ui::editor_registry::register_all_editors();
@@ -433,6 +437,7 @@ fn build_ui(app: &Application) {
         renderer: None,
         layout_file: None,
         webkit_enable: false,
+        webkit_disable: false,
         servo_enable: false,
     });
 
@@ -1095,9 +1100,7 @@ fn build_ui(app: &Application) {
     // Set initial viewport size for drag visualization from config
     {
         let config = app_config.borrow();
-        let vp_width = config
-            .window
-            .effective_viewport_width(config.window.width);
+        let vp_width = config.window.effective_viewport_width(config.window.width);
         let vp_height = config
             .window
             .effective_viewport_height(config.window.height);

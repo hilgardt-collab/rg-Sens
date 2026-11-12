@@ -297,7 +297,7 @@ pub use combo_generic::GenericComboDisplayerShared;
 /// Register all built-in displayers with the global registry
 ///
 /// # Arguments
-/// * `webkit_enabled` - If true, register the CSS Template displayer with WebKit backend (requires --webkit-enable flag)
+/// * `webkit_enabled` - If true, register the CSS Template displayer with WebKit backend (the default; `--webkit-disable` turns it off)
 /// * `servo_enabled` - If true, register the CSS Template displayer with Servo backend (requires --servo-enable flag)
 ///
 /// Note: webkit_enabled and servo_enabled are mutually exclusive (enforced by CLI argument parsing)
@@ -393,13 +393,13 @@ pub fn register_all(webkit_enabled: bool, servo_enabled: bool) {
     });
 
     // Register CSS Template displayer based on enabled backend
-    // WebKit backend (--webkit-enable)
+    // WebKit backend (on by default, off with --webkit-disable)
     #[cfg(feature = "webkit")]
     if webkit_enabled {
         global_registry().register_displayer_with_info("css_template", "CSS Template", || {
             Box::new(CssTemplateDisplayer::with_webkit_backend())
         });
-        log::info!("CSS Template displayer enabled with WebKit backend (--webkit-enable)");
+        log::info!("CSS Template displayer enabled with WebKit backend");
     }
 
     // Servo backend (--servo-enable)
