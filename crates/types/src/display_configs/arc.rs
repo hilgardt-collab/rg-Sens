@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::color::Color;
 use crate::text::TextOverlayConfig;
 use crate::theme::{
-    deserialize_color_or_source, deserialize_color_stops_vec, ColorSource, ColorStopSource,
-    ComboThemeConfig,
+    deserialize_color_or_source, deserialize_color_stops_vec, is_false, ColorSource,
+    ColorStopSource, ComboThemeConfig,
 };
 
 /// Arc end cap style
@@ -102,6 +102,9 @@ pub struct ArcDisplayConfig {
         deserialize_with = "deserialize_color_stops_vec"
     )]
     pub color_stops: Vec<ColorStopSource>,
+    /// Draw with the theme gradient's stops instead of `color_stops`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub theme_gradient: bool,
     #[serde(default)]
     pub color_transition: ColorTransitionStyle,
     #[serde(default)]
@@ -216,6 +219,7 @@ impl Default for ArcDisplayConfig {
             taper_style: ArcTaperStyle::default(),
             taper_amount: default_taper_amount(),
             color_stops: default_color_stops(),
+            theme_gradient: false,
             color_transition: ColorTransitionStyle::default(),
             color_mode: ColorApplicationMode::default(),
             fill: ArcFill::default(),
@@ -361,6 +365,7 @@ impl crate::schema::Schema for ArcDisplayConfig {
                     linear: true,
                     themed: true,
                     angle_key: None,
+                    theme_key: Some("theme_gradient"),
                 },
             )
             .section("Colours")

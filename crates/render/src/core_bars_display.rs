@@ -14,7 +14,7 @@ use crate::bar_display::{
 };
 use crate::pango_text::{pango_show_text, pango_text_extents};
 use crate::text_renderer::render_text_lines_with_theme;
-use rg_sens_types::theme::ComboThemeConfig;
+use rg_sens_types::theme::{resolve_stops, ComboThemeConfig};
 
 // Re-export core bars config types from rg-sens-types
 pub use rg_sens_types::display_configs::core_bars::{CoreBarsConfig, LabelPosition};
@@ -322,15 +322,19 @@ fn render_single_bar(
 
                 // When gradient_spans_bars is true, sample a single color from gradient
                 if config.gradient_spans_bars {
-                    if let BarFillType::Gradient { stops, .. } = &config.foreground {
+                    if let BarFillType::Gradient {
+                        stops,
+                        theme_gradient,
+                        ..
+                    } = &config.foreground
+                    {
                         let position = if total_bars > 1 {
                             bar_index as f64 / (total_bars - 1) as f64
                         } else {
                             0.5
                         };
                         // Resolve color stops and sample
-                        let resolved_stops: Vec<ColorStop> =
-                            stops.iter().map(|s| s.resolve(theme)).collect();
+                        let resolved_stops = resolve_stops(*theme_gradient, stops, theme);
                         let color = sample_gradient_color(&resolved_stops, position);
                         color.apply_to_cairo(cr);
                         cr.paint()?;
@@ -494,15 +498,19 @@ fn render_segment(
         cr.clip();
         // When gradient_spans_bars is true, sample a single color from gradient
         if config.gradient_spans_bars {
-            if let BarFillType::Gradient { stops, .. } = &config.foreground {
+            if let BarFillType::Gradient {
+                stops,
+                theme_gradient,
+                ..
+            } = &config.foreground
+            {
                 let position = if total_bars > 1 {
                     bar_index as f64 / (total_bars - 1) as f64
                 } else {
                     0.5
                 };
                 // Resolve color stops and sample
-                let resolved_stops: Vec<ColorStop> =
-                    stops.iter().map(|s| s.resolve(theme)).collect();
+                let resolved_stops = resolve_stops(*theme_gradient, stops, theme);
                 let color = sample_gradient_color(&resolved_stops, position);
                 color.apply_to_cairo(cr);
                 cr.paint()?;
@@ -678,8 +686,12 @@ fn render_background(
             resolved.apply_to_cairo(cr);
             cr.paint()?;
         }
-        BarBackgroundType::Gradient { stops, angle } => {
-            let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+        BarBackgroundType::Gradient {
+            stops,
+            angle,
+            theme_gradient,
+        } => {
+            let resolved_stops = resolve_stops(*theme_gradient, stops, theme);
             render_gradient(cr, &resolved_stops, *angle, x, y, width, height)?;
         }
         BarBackgroundType::Transparent => {
@@ -705,8 +717,12 @@ fn render_foreground(
             resolved.apply_to_cairo(cr);
             cr.paint()?;
         }
-        BarFillType::Gradient { stops, angle } => {
-            let resolved_stops: Vec<ColorStop> = stops.iter().map(|s| s.resolve(theme)).collect();
+        BarFillType::Gradient {
+            stops,
+            angle,
+            theme_gradient,
+        } => {
+            let resolved_stops = resolve_stops(*theme_gradient, stops, theme);
             render_gradient(cr, &resolved_stops, *angle, x, y, width, height)?;
         }
     }
@@ -786,16 +802,7 @@ fn render_gradient(
         return Ok(());
     }
 
-    let angle_rad = angle.to_radians();
-    let diagonal = (width * width + height * height).sqrt();
-
-    let cx = x + width / 2.0;
-    let cy = y + height / 2.0;
-
-    let x1 = cx - diagonal * angle_rad.cos() / 2.0;
-    let y1 = cy - diagonal * angle_rad.sin() / 2.0;
-    let x2 = cx + diagonal * angle_rad.cos() / 2.0;
-    let y2 = cy + diagonal * angle_rad.sin() / 2.0;
+    let (x1, y1, x2, y2) = crate::background::linear_gradient_endpoints(angle, x, y, width, height);
 
     let pattern = cairo::LinearGradient::new(x1, y1, x2, y2);
 

@@ -144,6 +144,10 @@ pub struct SpeedometerConfig {
     pub track_color: ColorSource,
     #[serde(default = "default_color_stops")]
     pub track_color_stops: Vec<ColorStopSource>, // Color zones for track (theme-aware)
+    /// Draw the track with the theme gradient's stops instead of
+    /// `track_color_stops`.
+    #[serde(default, skip_serializing_if = "crate::theme::is_false")]
+    pub track_theme_gradient: bool,
 
     // Ticks
     #[serde(default = "default_true")]
@@ -411,6 +415,7 @@ impl Default for SpeedometerConfig {
             track_fill: TrackFill::default(),
             track_color: default_track_color_source(),
             track_color_stops: default_color_stops(),
+            track_theme_gradient: false,
             show_major_ticks: default_true(),
             major_tick_count: default_major_tick_count(),
             major_tick_length: default_major_tick_length(),
@@ -545,6 +550,7 @@ impl crate::schema::Schema for SpeedometerConfig {
                     linear: true,
                     themed: true,
                     angle_key: None,
+                    theme_key: Some("track_theme_gradient"),
                 },
             )
             .section("Track")

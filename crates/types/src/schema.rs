@@ -112,11 +112,15 @@ pub enum PropKind {
     /// `Vec<ColorStop>` otherwise. `linear` picks the preview: a linear ramp
     /// (bar fills) or the arc-style sweep (arc colour stops). `angle_key`
     /// names the sibling key holding the ramp's angle in degrees; the editor
-    /// then carries the angle control and its preview follows it.
+    /// then carries the angle control and its preview follows it. `theme_key`
+    /// names the sibling boolean that makes the field draw with the theme
+    /// gradient's stops (`theme::resolve_stops`); the row then offers a
+    /// "Theme gradient" toggle. The flag is additive: an absent key is `false`.
     ColorStops {
         linear: bool,
         themed: bool,
         angle_key: Option<&'static str>,
+        theme_key: Option<&'static str>,
     },
     /// A theme-or-custom font (`FontSource`, possibly `Option`). When the
     /// value is `null`, `legacy` names the `(family, size)` keys of the same
@@ -522,7 +526,22 @@ fn check_object(
                     return Err(format!("colour {} has no 'type'", display_path(&here)));
                 }
             }
-            PropKind::ColorStops { angle_key, .. } => {
+            PropKind::ColorStops {
+                angle_key,
+                theme_key,
+                ..
+            } => {
+                // The flag is skipped when false, so the default need not
+                // carry it; a present key must be a boolean.
+                if let Some(k) = theme_key {
+                    if !object.get(*k).map(Value::is_boolean).unwrap_or(true) {
+                        return Err(format!(
+                            "theme key '{}' of {} is not a boolean field",
+                            k,
+                            display_path(&here)
+                        ));
+                    }
+                }
                 if !current.is_array() {
                     return Err(format!(
                         "colour stops {} are not an array",
@@ -760,6 +779,7 @@ mod tests {
                     linear: true,
                     themed: false,
                     angle_key,
+                    theme_key: None,
                 },
             )]
         };

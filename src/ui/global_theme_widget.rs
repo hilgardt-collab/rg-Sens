@@ -83,11 +83,20 @@ impl GlobalThemeWidget {
         widget.append(&colors_grid);
 
         // Theme Gradient section
+        // Heading row with the same Copy / Paste pair every other gradient
+        // editor carries (the clipboard holds resolved stops).
+        let gradient_header = GtkBox::new(Orientation::Horizontal, 8);
+        gradient_header.set_margin_top(12);
         let gradient_label = Label::new(Some("Theme Gradient"));
         gradient_label.set_halign(gtk4::Align::Start);
+        gradient_label.set_hexpand(true);
         gradient_label.add_css_class("heading");
-        gradient_label.set_margin_top(12);
-        widget.append(&gradient_label);
+        gradient_header.append(&gradient_label);
+        let copy_gradient_btn = Button::with_label("Copy gradient");
+        let paste_gradient_btn = Button::with_label("Paste gradient");
+        gradient_header.append(&copy_gradient_btn);
+        gradient_header.append(&paste_gradient_btn);
+        widget.append(&gradient_header);
 
         let gradient_editor = Rc::new(GradientEditor::new());
         gradient_editor.set_gradient_source_config(&config.borrow().gradient);
@@ -163,6 +172,36 @@ impl GlobalThemeWidget {
                 config_grad.borrow_mut().gradient =
                     gradient_editor_clone.get_gradient_source_config();
                 if let Some(cb) = on_change_grad.borrow().as_ref() {
+                    cb();
+                }
+            });
+        }
+
+        // Copy / paste the theme gradient's stops
+        {
+            let gradient_editor = gradient_editor.clone();
+            copy_gradient_btn.connect_clicked(move |_| {
+                if let Ok(mut clipboard) = crate::ui::clipboard::CLIPBOARD.lock() {
+                    clipboard.copy_gradient_stops(gradient_editor.get_stops());
+                }
+            });
+        }
+        {
+            let config_paste = config.clone();
+            let on_change_paste = on_change.clone();
+            let gradient_editor = gradient_editor.clone();
+            paste_gradient_btn.connect_clicked(move |_| {
+                let stops = crate::ui::clipboard::CLIPBOARD
+                    .lock()
+                    .ok()
+                    .and_then(|clipboard| clipboard.paste_gradient_stops());
+                let Some(stops) = stops else { return };
+                // Stops only: the angle keeps its value. `set_stops` is a
+                // guarded setter, so the config and the change callback are
+                // driven from here.
+                gradient_editor.set_stops(stops);
+                config_paste.borrow_mut().gradient = gradient_editor.get_gradient_source_config();
+                if let Some(cb) = on_change_paste.borrow().as_ref() {
                     cb();
                 }
             });

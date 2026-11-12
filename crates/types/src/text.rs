@@ -6,7 +6,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::color::{Color, ColorStop};
-use crate::theme::{ColorSource, ColorStopSource, ComboThemeConfig, FontSource};
+use crate::theme::{
+    is_false, resolve_stops, ColorSource, ColorStopSource, ComboThemeConfig, FontSource,
+};
 
 /// Vertical position of text
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
@@ -133,7 +135,29 @@ pub enum TextFillType {
     LinearGradient {
         stops: Vec<ColorStop>,
         angle: f64, // Angle in degrees, relative to text baseline
+        /// Draw with the theme gradient's stops instead of `stops`.
+        #[serde(default, skip_serializing_if = "is_false")]
+        theme_gradient: bool,
     },
+}
+
+impl TextFillType {
+    /// The stops a gradient fill draws with: the theme gradient's when the
+    /// fill follows the theme (and a theme is at hand), its own otherwise.
+    /// Empty for a solid fill.
+    pub fn gradient_stops(&self, theme: Option<&ComboThemeConfig>) -> Vec<ColorStop> {
+        match (self, theme) {
+            (
+                TextFillType::LinearGradient {
+                    theme_gradient: true,
+                    ..
+                },
+                Some(theme),
+            ) => resolve_stops(true, &[], theme),
+            (TextFillType::LinearGradient { stops, .. }, _) => stops.clone(),
+            _ => Vec::new(),
+        }
+    }
 }
 
 impl Default for TextFillType {
@@ -169,7 +193,8 @@ impl TextFillType {
                     }
                 }
             }
-            TextFillType::LinearGradient { stops, .. } => stops
+            TextFillType::LinearGradient { .. } => self
+                .gradient_stops(theme)
                 .first()
                 .map(|s| s.color)
                 .unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0)),
@@ -218,6 +243,9 @@ pub enum TextBackgroundType {
     LinearGradient {
         stops: Vec<ColorStopSource>,
         angle: f64,
+        /// Draw with the theme gradient's stops instead of `stops`.
+        #[serde(default, skip_serializing_if = "is_false")]
+        theme_gradient: bool,
     },
 }
 
@@ -244,10 +272,9 @@ impl TextBackgroundType {
                     }
                 })
             }
-            TextBackgroundType::LinearGradient { stops, .. } => stops.first().map(|s| {
-                s.color
-                    .resolve(theme.unwrap_or(&ComboThemeConfig::default()))
-            }),
+            TextBackgroundType::LinearGradient { .. } => self
+                .resolve_gradient(theme)
+                .and_then(|(stops, _)| stops.first().map(|s| s.color)),
         }
     }
 
@@ -262,12 +289,14 @@ impl TextBackgroundType {
         theme: Option<&ComboThemeConfig>,
     ) -> Option<(Vec<ColorStop>, f64)> {
         match self {
-            TextBackgroundType::LinearGradient { stops, angle } => {
+            TextBackgroundType::LinearGradient {
+                stops,
+                angle,
+                theme_gradient,
+            } => {
                 let default_theme = ComboThemeConfig::default();
                 let theme_ref = theme.unwrap_or(&default_theme);
-                let resolved_stops: Vec<ColorStop> =
-                    stops.iter().map(|s| s.resolve(theme_ref)).collect();
-                Some((resolved_stops, *angle))
+                Some((resolve_stops(*theme_gradient, stops, theme_ref), *angle))
             }
             _ => None,
         }
@@ -653,6 +682,7 @@ fn text_fill_gradient() -> serde_json::Value {
             },
         ],
         angle: 0.0,
+        theme_gradient: false,
     })
     .expect("fill serializes")
 }
@@ -677,6 +707,7 @@ fn text_bg_gradient() -> serde_json::Value {
             ColorStopSource::custom(1.0, Color::new(0.0, 0.0, 0.0, 0.2)),
         ],
         angle: 90.0,
+        theme_gradient: false,
     })
     .expect("background serializes")
 }
@@ -730,6 +761,7 @@ impl crate::schema::Schema for TextLineConfig {
                                     linear: true,
                                     themed: false,
                                     angle_key: Some("angle"),
+                                    theme_key: Some("theme_gradient"),
                                 },
                             )],
                             template: text_fill_gradient,
@@ -770,6 +802,7 @@ impl crate::schema::Schema for TextLineConfig {
                                                 linear: true,
                                                 themed: true,
                                                 angle_key: Some("angle"),
+                                                theme_key: Some("theme_gradient"),
                                             },
                                         )],
                                         template: text_bg_gradient,

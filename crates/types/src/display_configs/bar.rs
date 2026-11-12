@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::color::{Color, ColorStop};
 use crate::text::TextOverlayConfig;
 use crate::theme::{
-    deserialize_color_or_source, deserialize_color_stops_vec, ColorSource, ColorStopSource,
-    ComboThemeConfig,
+    deserialize_color_or_source, deserialize_color_stops_vec, is_false, resolve_stops, ColorSource,
+    ColorStopSource, ComboThemeConfig,
 };
 
 /// Bar display style
@@ -88,6 +88,9 @@ pub enum BarFillType {
         stops: Vec<ColorStopSource>,
         #[serde(default = "default_gradient_angle")]
         angle: f64,
+        /// Draw with the theme gradient's stops instead of `stops`.
+        #[serde(default, skip_serializing_if = "is_false")]
+        theme_gradient: bool,
     },
 }
 
@@ -102,8 +105,12 @@ impl BarFillType {
             BarFillType::Solid { color } => ResolvedBarFill::Solid {
                 color: color.resolve(theme),
             },
-            BarFillType::Gradient { stops, angle } => ResolvedBarFill::Gradient {
-                stops: stops.iter().map(|s| s.resolve(theme)).collect(),
+            BarFillType::Gradient {
+                stops,
+                angle,
+                theme_gradient,
+            } => ResolvedBarFill::Gradient {
+                stops: resolve_stops(*theme_gradient, stops, theme),
                 angle: *angle,
             },
         }
@@ -142,6 +149,9 @@ pub enum BarBackgroundType {
         stops: Vec<ColorStopSource>,
         #[serde(default = "default_gradient_angle")]
         angle: f64,
+        /// Draw with the theme gradient's stops instead of `stops`.
+        #[serde(default, skip_serializing_if = "is_false")]
+        theme_gradient: bool,
     },
     #[serde(rename = "transparent")]
     #[default]
@@ -155,8 +165,12 @@ impl BarBackgroundType {
             BarBackgroundType::Solid { color } => ResolvedBarBackground::Solid {
                 color: color.resolve(theme),
             },
-            BarBackgroundType::Gradient { stops, angle } => ResolvedBarBackground::Gradient {
-                stops: stops.iter().map(|s| s.resolve(theme)).collect(),
+            BarBackgroundType::Gradient {
+                stops,
+                angle,
+                theme_gradient,
+            } => ResolvedBarBackground::Gradient {
+                stops: resolve_stops(*theme_gradient, stops, theme),
                 angle: *angle,
             },
             BarBackgroundType::Transparent => ResolvedBarBackground::Transparent,
@@ -350,6 +364,7 @@ fn fg_gradient() -> serde_json::Value {
             },
         ],
         angle: 90.0,
+        theme_gradient: false,
     })
     .expect("fill serializes")
 }
@@ -370,6 +385,7 @@ fn bg_gradient() -> serde_json::Value {
             ColorStopSource::custom(1.0, Color::new(0.1, 0.1, 0.1, 1.0)),
         ],
         angle: 90.0,
+        theme_gradient: false,
     })
     .expect("background serializes")
 }
@@ -404,6 +420,7 @@ pub fn fill_prop(key: &'static str, label: &'static str) -> crate::schema::Prop 
                             linear: true,
                             themed: true,
                             angle_key: Some("angle"),
+                            theme_key: Some("theme_gradient"),
                         },
                     )],
                     template: fg_gradient,
@@ -444,6 +461,7 @@ pub fn background_prop(key: &'static str, label: &'static str) -> crate::schema:
                             linear: true,
                             themed: true,
                             angle_key: Some("angle"),
+                            theme_key: Some("theme_gradient"),
                         },
                     )],
                     template: bg_gradient,

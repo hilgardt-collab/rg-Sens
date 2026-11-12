@@ -358,6 +358,7 @@ impl BackgroundConfigWidget {
             "Image",
             "Tessellated Polygons",
             "Indicator",
+            "Theme Gradient",
         ]);
         let type_dropdown = DropDown::new(Some(type_options), Option::<gtk4::Expression>::None);
         type_dropdown.set_selected(0); // Default to Solid Color
@@ -513,6 +514,17 @@ impl BackgroundConfigWidget {
         );
         config_stack.add_named(&indicator_page, Some("indicator"));
 
+        // Theme gradient: nothing to configure here, it follows the theme
+        let theme_gradient_page = Label::new(Some(
+            "Uses the gradient of the panel's theme (stops and angle).\n\
+             Edit it on the Theme page, or in Themes & Groups for a shared theme.",
+        ));
+        theme_gradient_page.set_xalign(0.0);
+        theme_gradient_page.set_valign(gtk4::Align::Start);
+        theme_gradient_page.set_wrap(true);
+        theme_gradient_page.add_css_class("dim-label");
+        config_stack.add_named(&theme_gradient_page, Some("theme_gradient"));
+
         container.append(&config_stack);
 
         // Connect type selector
@@ -536,6 +548,7 @@ impl BackgroundConfigWidget {
                 3 => "image",
                 4 => "polygons",
                 5 => "indicator",
+                6 => "theme_gradient",
                 _ => "solid",
             };
 
@@ -552,6 +565,7 @@ impl BackgroundConfigWidget {
                     BackgroundType::Image { .. } => 3,
                     BackgroundType::Polygons(_) => 4,
                     BackgroundType::Indicator(_) => 5,
+                    BackgroundType::ThemeGradient => 6,
                 }
             };
 
@@ -570,6 +584,7 @@ impl BackgroundConfigWidget {
                     },
                     4 => BackgroundType::Polygons(PolygonConfig::default()),
                     5 => BackgroundType::Indicator(IndicatorBackgroundConfig::default()),
+                    6 => BackgroundType::ThemeGradient,
                     _ => BackgroundType::default(),
                 };
 
@@ -1698,6 +1713,7 @@ impl BackgroundConfigWidget {
             BackgroundType::Image { .. } => 3,
             BackgroundType::Polygons(_) => 4,
             BackgroundType::Indicator(_) => 5,
+            BackgroundType::ThemeGradient => 6,
         };
 
         // Guard control change handlers while widgets are synced programmatically
@@ -1809,6 +1825,7 @@ impl BackgroundConfigWidget {
             3 => "image",
             4 => "polygons",
             5 => "indicator",
+            6 => "theme_gradient",
             _ => "solid",
         };
         self.config_stack.set_visible_child_name(page_name);

@@ -412,6 +412,31 @@ impl ColorStopSource {
     }
 }
 
+/// The stops a themed gradient field draws with: the theme gradient's when
+/// the field's "use theme gradient" flag is set, its own otherwise. Every
+/// renderer goes through here, so the flag means the same thing everywhere.
+///
+/// Only the stops follow the theme. The angle stays the field's own: an arc
+/// or a speedometer track has no angle at all, and a bar's ramp direction
+/// belongs to the bar's shape, not to the palette.
+pub fn resolve_stops(
+    use_theme_gradient: bool,
+    own: &[ColorStopSource],
+    theme: &ComboThemeConfig,
+) -> Vec<ColorStop> {
+    let stops = if use_theme_gradient {
+        &theme.gradient.stops[..]
+    } else {
+        own
+    };
+    stops.iter().map(|s| s.resolve(theme)).collect()
+}
+
+/// `skip_serializing_if` helper for additive boolean flags.
+pub fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 /// Theme configuration for combo panels
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ComboThemeConfig {
@@ -1268,6 +1293,136 @@ mod tests {
         assert_eq!(result.stops.len(), 2);
         assert_eq!(result.stops[0].color, ColorSource::Theme { index: 1 });
         assert_eq!(result.stops[1].color, ColorSource::Theme { index: 2 });
+    }
+}
+
+#[cfg(test)]
+mod theme_gradient_tests {
+    use super::*;
+    use crate::background::BackgroundType;
+    use crate::display_configs::arc::ArcDisplayConfig;
+    use crate::display_configs::bar::{BarFillType, ResolvedBarFill};
+
+    fn theme() -> ComboThemeConfig {
+        ComboThemeConfig {
+            gradient: LinearGradientSourceConfig::new(
+                180.0,
+                vec![
+                    ColorStopSource::theme(0.0, 1),
+                    ColorStopSource::custom(0.5, Color::new(0.0, 1.0, 0.0, 1.0)),
+                    ColorStopSource::theme(1.0, 2),
+                ],
+            ),
+            ..ComboThemeConfig::default()
+        }
+    }
+
+    #[test]
+    fn resolve_stops_follows_the_flag() {
+        let theme = theme();
+        let own = vec![ColorStopSource::custom(0.0, Color::new(1.0, 0.0, 0.0, 1.0))];
+        let plain = resolve_stops(false, &own, &theme);
+        assert_eq!(plain.len(), 1);
+        assert_eq!(plain[0].color, Color::new(1.0, 0.0, 0.0, 1.0));
+        let linked = resolve_stops(true, &own, &theme);
+        assert_eq!(linked.len(), 3);
+        assert_eq!(linked[0].color, theme.color1);
+        assert_eq!(linked[2].color, theme.color2);
+    }
+
+    #[test]
+    fn bar_gradient_without_the_key_keeps_its_own_stops() {
+        // A config saved before the flag existed.
+        let json = serde_json::json!({
+            "type": "gradient",
+            "stops": [{"position": 0.0, "color": {"r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0}}],
+            "angle": 45.0
+        });
+        let fill: BarFillType = serde_json::from_value(json.clone()).unwrap();
+        // Unset, the flag is not written back.
+        let saved = serde_json::to_value(&fill).unwrap();
+        assert!(saved.get("theme_gradient").is_none());
+        match fill.resolve(&theme()) {
+            ResolvedBarFill::Gradient { stops, angle } => {
+                assert_eq!(stops.len(), 1);
+                assert_eq!(angle, 45.0);
+            }
+            _ => panic!("expected a gradient"),
+        }
+    }
+
+    #[test]
+    fn linked_bar_gradient_takes_theme_stops_and_keeps_its_angle() {
+        let json = serde_json::json!({
+            "type": "gradient",
+            "stops": [{"position": 0.0, "color": {"type": "Theme", "index": 3}}],
+            "angle": 45.0,
+            "theme_gradient": true
+        });
+        let fill: BarFillType = serde_json::from_value(json).unwrap();
+        // The field's own stops survive the link.
+        let saved = serde_json::to_value(&fill).unwrap();
+        assert_eq!(saved["theme_gradient"], true);
+        assert_eq!(saved["stops"].as_array().unwrap().len(), 1);
+        match fill.resolve(&theme()) {
+            ResolvedBarFill::Gradient { stops, angle } => {
+                assert_eq!(stops.len(), 3);
+                assert_eq!(angle, 45.0);
+            }
+            _ => panic!("expected a gradient"),
+        }
+    }
+
+    #[test]
+    fn arc_flag_is_additive() {
+        let mut value = serde_json::to_value(ArcDisplayConfig::default()).unwrap();
+        assert!(value.get("theme_gradient").is_none());
+        value["theme_gradient"] = serde_json::Value::Bool(true);
+        let arc: ArcDisplayConfig = serde_json::from_value(value).unwrap();
+        assert!(arc.theme_gradient);
+    }
+
+    #[test]
+    fn speedometer_and_text_flags_bind_to_their_fields() {
+        use crate::display_configs::speedometer::SpeedometerConfig;
+        use crate::text::{TextBackgroundType, TextFillType};
+
+        let mut value = serde_json::to_value(SpeedometerConfig::default()).unwrap();
+        assert!(value.get("track_theme_gradient").is_none());
+        value["track_theme_gradient"] = serde_json::Value::Bool(true);
+        let speedometer: SpeedometerConfig = serde_json::from_value(value).unwrap();
+        assert!(speedometer.track_theme_gradient);
+
+        let theme = theme();
+        let bg: TextBackgroundType = serde_json::from_value(serde_json::json!({
+            "type": "linear_gradient", "stops": [], "angle": 30.0, "theme_gradient": true
+        }))
+        .unwrap();
+        let (stops, angle) = bg.resolve_gradient(Some(&theme)).unwrap();
+        assert_eq!((stops.len(), angle), (3, 30.0));
+
+        let fill: TextFillType = serde_json::from_value(serde_json::json!({
+            "type": "linear_gradient",
+            "stops": [{"position": 0.0, "color": {"r": 1.0, "g": 0.0, "b": 0.0, "a": 1.0}}],
+            "angle": 0.0,
+            "theme_gradient": true
+        }))
+        .unwrap();
+        assert_eq!(fill.gradient_stops(Some(&theme)).len(), 3);
+        // Without a theme at hand the fill falls back to its own stops.
+        assert_eq!(fill.gradient_stops(None).len(), 1);
+        assert_eq!(fill.primary_color(Some(&theme)), theme.color1);
+    }
+
+    #[test]
+    fn theme_gradient_background_round_trips() {
+        let bg: BackgroundType =
+            serde_json::from_value(serde_json::json!({"type": "theme_gradient"})).unwrap();
+        assert_eq!(bg, BackgroundType::ThemeGradient);
+        assert_eq!(
+            serde_json::to_value(&bg).unwrap(),
+            serde_json::json!({"type": "theme_gradient"})
+        );
     }
 }
 

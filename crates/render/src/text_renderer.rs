@@ -5,11 +5,11 @@ use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::pango_text::{get_font_description, pango_show_text, pango_text_extents};
 use rg_sens_types::text::{
     CombineDirection, HorizontalPosition, TextBackgroundConfig, TextBackgroundType,
     TextDisplayerConfig, TextFillType, TextLineConfig, TextPosition, VerticalPosition,
 };
-use crate::pango_text::{get_font_description, pango_show_text, pango_text_extents};
 use rg_sens_types::theme::ComboThemeConfig;
 
 // Thread-local buffers to avoid allocations in hot render paths
@@ -530,7 +530,7 @@ fn render_text_background(
             cr.fill().ok();
             cr.restore().ok();
         }
-        TextBackgroundType::LinearGradient { stops, angle } => {
+        TextBackgroundType::LinearGradient { angle, .. } => {
             cr.save().ok();
             let padding = bg_config.padding;
             let radius = bg_config.corner_radius;
@@ -540,19 +540,17 @@ fn render_text_background(
             let bg_h = height + padding * 2.0;
 
             // Create gradient
-            let angle_rad = angle.to_radians();
-            let cx = bg_x + bg_w / 2.0;
-            let cy = bg_y + bg_h / 2.0;
-            let length = (bg_w * bg_w + bg_h * bg_h).sqrt() / 2.0;
-            let dx = angle_rad.cos() * length;
-            let dy = angle_rad.sin() * length;
-
-            let gradient = cairo::LinearGradient::new(cx - dx, cy - dy, cx + dx, cy + dy);
-            // Resolve theme-aware color stops
-            let default_theme = ComboThemeConfig::default();
-            let theme_ref = theme.unwrap_or(&default_theme);
-            for stop in stops {
-                let resolved = stop.resolve(theme_ref);
+            let (x1, y1, x2, y2) =
+                crate::background::linear_gradient_endpoints(*angle, bg_x, bg_y, bg_w, bg_h);
+            let gradient = cairo::LinearGradient::new(x1, y1, x2, y2);
+            // Resolve theme-aware color stops (the theme gradient's when the
+            // background follows the theme)
+            let stops = bg_config
+                .background
+                .resolve_gradient(theme)
+                .map(|(stops, _)| stops)
+                .unwrap_or_default();
+            for resolved in stops {
                 gradient.add_color_stop_rgba(
                     resolved.position,
                     resolved.color.r,
@@ -593,7 +591,9 @@ fn render_text_fill(
             cr.move_to(x, y);
             pango_show_text(cr, text, font_family, font_slant, font_weight, font_size);
         }
-        TextFillType::LinearGradient { stops, angle } => {
+        TextFillType::LinearGradient { angle, .. } => {
+            // The theme gradient's stops when the fill follows the theme
+            let stops = config.fill.gradient_stops(theme);
             // Create text path using Pango layout
             let font_desc = get_font_description(font_family, font_slant, font_weight, font_size);
             let layout = pangocairo::functions::create_layout(cr);
@@ -608,17 +608,15 @@ fn render_text_fill(
             pangocairo::functions::layout_path(cr, &layout);
 
             // Create gradient covering the text bounds
-            let angle_rad = angle.to_radians();
-            let cx = x + extents.width() / 2.0;
-            let cy = y + extents.y_bearing() + extents.height() / 2.0;
-            let length = (extents.width() * extents.width() + extents.height() * extents.height())
-                .sqrt()
-                / 2.0;
-            let dx = angle_rad.cos() * length;
-            let dy = angle_rad.sin() * length;
-
-            let gradient = cairo::LinearGradient::new(cx - dx, cy - dy, cx + dx, cy + dy);
-            for stop in stops {
+            let (x1, y1, x2, y2) = crate::background::linear_gradient_endpoints(
+                *angle,
+                x,
+                y + extents.y_bearing(),
+                extents.width(),
+                extents.height(),
+            );
+            let gradient = cairo::LinearGradient::new(x1, y1, x2, y2);
+            for stop in &stops {
                 gradient.add_color_stop_rgba(
                     stop.position,
                     stop.color.r,

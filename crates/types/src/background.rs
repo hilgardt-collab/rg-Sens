@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::color::{Color, ColorStop, RadialGradientConfig, LinearGradientConfig};
+use crate::color::{Color, ColorStop, LinearGradientConfig, RadialGradientConfig};
 use crate::theme::ColorSource;
 
 /// Tiling polygons configuration
@@ -72,6 +72,10 @@ pub enum BackgroundType {
     Polygons(PolygonConfig),
     #[serde(rename = "indicator")]
     Indicator(IndicatorBackgroundConfig),
+    /// The resolved theme's gradient, stops and angle: the background
+    /// follows the panel's theme (panel → group → global).
+    #[serde(rename = "theme_gradient")]
+    ThemeGradient,
 }
 
 impl BackgroundType {

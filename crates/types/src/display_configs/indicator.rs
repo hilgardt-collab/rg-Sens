@@ -181,6 +181,7 @@ impl crate::schema::Schema for IndicatorConfig {
                     linear: true,
                     themed: false,
                     angle_key: None,
+                    theme_key: None,
                 },
             )
             .section("Colours")

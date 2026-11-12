@@ -358,7 +358,9 @@ fn render_rectangle_bar(
         cr.save()?;
         rounded_rectangle(cr, bar_x, bar_y, bar_width, bar_height, radius);
         cr.clip();
-        render_background_resolved(cr, background, width, height)?;
+        // The gradient spans the bar's rectangle, not the panel's
+        cr.translate(bar_x, bar_y);
+        render_background_resolved(cr, background, bar_width, bar_height)?;
         cr.restore()?;
     }
 
@@ -390,7 +392,9 @@ fn render_rectangle_bar(
         rounded_rectangle(cr, fill_x, fill_y, fill_width, fill_height, radius);
         cr.clip();
 
-        render_foreground_resolved(cr, foreground, config.fill_direction, width, height)?;
+        // The gradient spans the bar's rectangle, not the panel's
+        cr.translate(bar_x, bar_y);
+        render_foreground_resolved(cr, foreground, config.fill_direction, bar_width, bar_height)?;
 
         cr.restore()?;
     }
@@ -759,15 +763,9 @@ fn create_gradient_pattern(
         return None;
     }
 
-    // Convert angle to radians (same convention as background.rs)
-    let angle_rad = angle.to_radians();
-
-    // Calculate gradient vector - same formula as background.rs
-    let diagonal = (width * width + height * height).sqrt();
-    let x1 = width / 2.0 - diagonal * angle_rad.cos() / 2.0;
-    let y1 = height / 2.0 - diagonal * angle_rad.sin() / 2.0;
-    let x2 = width / 2.0 + diagonal * angle_rad.cos() / 2.0;
-    let y2 = height / 2.0 + diagonal * angle_rad.sin() / 2.0;
+    // The ramp spans exactly the bar's rectangle (shared with background.rs)
+    let (x1, y1, x2, y2) =
+        crate::background::linear_gradient_endpoints(angle, 0.0, 0.0, width, height);
 
     let pattern = cairo::LinearGradient::new(x1, y1, x2, y2);
 

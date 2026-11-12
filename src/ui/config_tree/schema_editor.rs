@@ -25,7 +25,7 @@ use crate::ui::{
 use gtk4::prelude::*;
 use gtk4::{
     Box as GtkBox, Button, CheckButton, DropDown, Entry, Frame, Label, Orientation, Separator,
-    SpinButton, StringList, Widget,
+    SpinButton, StringList, ToggleButton, Widget,
 };
 use rg_sens_types::color::{Color, ColorStop};
 use rg_sens_types::schema::{
@@ -980,12 +980,30 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
             linear,
             themed,
             angle_key,
+            theme_key,
         } => {
             let themed = *themed;
             let angle_key: Option<&'static str> = *angle_key;
+            let theme_key: Option<&'static str> = *theme_key;
             let copy_btn = Button::with_label("Copy gradient");
             let paste_btn = Button::with_label("Paste gradient");
-            let (outer, body) = titled_block(prop, &[&copy_btn, &paste_btn]);
+            // "Theme gradient" links the field to the theme's gradient, the
+            // way a theme swatch links a colour: the stops shown are the
+            // theme's and read-only, the field's own stops stay in the model
+            // untouched and come back when the link is switched off.
+            let theme_btn = ToggleButton::with_label("Theme gradient");
+            theme_btn.set_tooltip_text(Some(
+                "Use the theme's gradient stops (edit them on the Theme page)",
+            ));
+            let theme_mode = Rc::new(Cell::new(false));
+            let syncing_toggle = Rc::new(Cell::new(false));
+            let mut trailing: Vec<&Button> = Vec::new();
+            if theme_key.is_some() {
+                trailing.push(theme_btn.upcast_ref());
+            }
+            trailing.push(&copy_btn);
+            trailing.push(&paste_btn);
+            let (outer, body) = titled_block(prop, &trailing);
             // With an angle key the editor carries the angle control and the
             // row writes both keys, so the preview follows the angle.
             let editor = Rc::new(match (*linear, angle_key) {
@@ -999,15 +1017,20 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
             // colours (`TextFillType` gradients). The entries to write back.
             let current_entries = {
                 let editor = editor.clone();
+                let theme_mode = theme_mode.clone();
                 move || -> Vec<(&'static str, Value)> {
-                    let stops = if themed {
-                        serde_json::to_value(editor.get_stops_source())
-                    } else {
-                        serde_json::to_value(editor.get_stops())
-                    };
                     let mut out = Vec::new();
-                    if let Ok(v) = stops {
-                        out.push((key, v));
+                    // Linked to the theme, the editor shows the theme's
+                    // stops: writing them back would replace the field's own.
+                    if !theme_mode.get() {
+                        let stops = if themed {
+                            serde_json::to_value(editor.get_stops_source())
+                        } else {
+                            serde_json::to_value(editor.get_stops())
+                        };
+                        if let Ok(v) = stops {
+                            out.push((key, v));
+                        }
                     }
                     if let Some(ak) = angle_key {
                         out.push((ak, Value::from(editor.angle())));
@@ -1019,6 +1042,9 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 let model = model.clone();
                 let fire = fire.clone();
                 move |entries: Vec<(&'static str, Value)>| {
+                    if entries.is_empty() {
+                        return;
+                    }
                     {
                         let mut m = model.borrow_mut();
                         for (k, v) in entries {
@@ -1030,6 +1056,11 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
             };
             let set_value = {
                 let editor = editor.clone();
+                let theme = ctx.theme.clone();
+                let theme_mode = theme_mode.clone();
+                let syncing_toggle = syncing_toggle.clone();
+                let theme_btn = theme_btn.clone();
+                let paste_btn = paste_btn.clone();
                 move |m: &Map<String, Value>| {
                     let Some(v) = m.get(key) else { return };
                     // Without an angle key the editor's angle is unused.
@@ -1037,7 +1068,21 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                         .and_then(|ak| m.get(ak))
                         .and_then(|a| a.as_f64())
                         .unwrap_or_else(|| editor.angle());
-                    if themed {
+                    // An absent flag is `false` (the key is additive).
+                    let linked = theme_key
+                        .and_then(|tk| m.get(tk))
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    theme_mode.set(linked);
+                    syncing_toggle.set(true);
+                    theme_btn.set_active(linked);
+                    syncing_toggle.set(false);
+                    editor.set_stops_locked(linked);
+                    paste_btn.set_sensitive(!linked);
+                    if linked {
+                        let stops = theme.borrow().gradient.stops.clone();
+                        editor.set_gradient_source(angle, stops);
+                    } else if themed {
                         if let Ok(stops) = serde_json::from_value::<Vec<ColorStopSource>>(v.clone())
                         {
                             editor.set_gradient_source(angle, stops);
@@ -1086,6 +1131,24 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                     write(current_entries());
                 });
             }
+            if let Some(tk) = theme_key {
+                let model = model.clone();
+                let fire = fire.clone();
+                let set_value = set_value.clone();
+                let syncing_toggle = syncing_toggle.clone();
+                theme_btn.connect_toggled(move |btn| {
+                    if syncing_toggle.get() {
+                        return;
+                    }
+                    model
+                        .borrow_mut()
+                        .insert(tk.to_string(), Value::Bool(btn.is_active()));
+                    // Show the theme's stops, or the field's own again.
+                    let snapshot = model.borrow().clone();
+                    set_value(&snapshot);
+                    fire();
+                });
+            }
             // Guarded setters: they do not fire the editor's on_change.
             let refresh: FieldRefresh = Box::new(move |m| set_value(m));
             let editor_theme = editor.clone();
@@ -1093,7 +1156,14 @@ fn build_row(prop: &Prop, model: &Model, ctx: &Ctx, fire: &Rc<dyn Fn()>) -> Row 
                 prop: prop.clone(),
                 widget: outer,
                 refresh,
-                on_theme: Some(Box::new(move |t| editor_theme.set_theme_config(t.clone()))),
+                on_theme: Some(Box::new(move |t| {
+                    editor_theme.set_theme_config(t.clone());
+                    // The editor only rebuilds for colour changes; a linked
+                    // field also follows the theme's stop list.
+                    if theme_mode.get() && editor_theme.get_stops_source() != t.gradient.stops {
+                        editor_theme.set_stops_source(t.gradient.stops.clone());
+                    }
+                })),
                 // The editor's own change closure holds an Rc to the editor
                 // (gotcha 11): drop it when the row goes.
                 cleanup: Some(Box::new(move || editor.set_on_change(|| {}))),

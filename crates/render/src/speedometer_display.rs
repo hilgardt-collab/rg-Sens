@@ -229,14 +229,17 @@ fn draw_track(
 
     // A gradient needs two zones; a solid fill (or a single zone) is the
     // track colour along the whole track
-    if config.track_fill == TrackFill::Gradient && config.track_color_stops.len() > 1 {
-        // Resolve theme-aware color stops to concrete colors
-        let resolved_stops: Vec<ColorStop> = config
-            .track_color_stops
-            .iter()
-            .map(|stop| stop.resolve(theme))
-            .collect();
-
+    // (the theme gradient's zones when the track follows the theme)
+    let resolved_stops: Vec<ColorStop> = if config.track_fill == TrackFill::Gradient {
+        rg_sens_types::theme::resolve_stops(
+            config.track_theme_gradient,
+            &config.track_color_stops,
+            theme,
+        )
+    } else {
+        Vec::new()
+    };
+    if resolved_stops.len() > 1 {
         // Fetch the gradient LUT once for the whole track (avoids re-hashing
         // the stop list for each of the 100 segments below)
         let lut = crate::render_cache::get_cached_gradient_lut(&resolved_stops);
@@ -649,4 +652,3 @@ fn draw_center_hub(
     cr.restore()?;
     Ok(())
 }
-

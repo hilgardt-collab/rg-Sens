@@ -71,6 +71,7 @@ pub struct GradientEditor {
     theme_config: Rc<RefCell<Option<ComboThemeConfig>>>,
     on_change: Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>,
     stops_listbox: ListBox,
+    add_button: Button,
     angle_scale: Option<Scale>,
     angle_spin: Option<SpinButton>,
     /// Guard flag to prevent infinite callback loops during theme updates
@@ -211,18 +212,16 @@ impl GradientEditor {
                         if use_linear_preview {
                             // Linear ramp along the configured angle, with the
                             // renderer's endpoints (`background.rs`: 0° is
-                            // left to right, 90° top to bottom, through the
-                            // centre along the diagonal).
-                            let (w, h) = (width as f64, height as f64);
-                            let rad = angle_val.to_radians();
-                            let diagonal = (w * w + h * h).sqrt();
-                            let (dx, dy) = (diagonal * rad.cos() / 2.0, diagonal * rad.sin() / 2.0);
-                            let gradient = cairo::LinearGradient::new(
-                                w / 2.0 - dx,
-                                h / 2.0 - dy,
-                                w / 2.0 + dx,
-                                h / 2.0 + dy,
+                            // left to right, 90° top to bottom, spanning
+                            // exactly the rectangle).
+                            let (x1, y1, x2, y2) = crate::ui::background::linear_gradient_endpoints(
+                                angle_val,
+                                0.0,
+                                0.0,
+                                width as f64,
+                                height as f64,
                             );
+                            let gradient = cairo::LinearGradient::new(x1, y1, x2, y2);
                             for stop in &resolved_stops {
                                 gradient.add_color_stop_rgba(
                                     stop.position,
@@ -461,6 +460,7 @@ impl GradientEditor {
             theme_config,
             on_change,
             stops_listbox,
+            add_button,
             angle_scale,
             angle_spin,
             is_updating,
@@ -806,6 +806,14 @@ impl GradientEditor {
 
         // Update preview
         self.update_preview();
+    }
+
+    /// Make the stop list read-only (rows and "Add Stop" insensitive). The
+    /// angle control stays live: an editor that shows the theme gradient
+    /// still owns its own angle.
+    pub fn set_stops_locked(&self, locked: bool) {
+        self.stops_listbox.set_sensitive(!locked);
+        self.add_button.set_sensitive(!locked);
     }
 
     /// Get the color stops as ColorStopSource (theme-aware)
