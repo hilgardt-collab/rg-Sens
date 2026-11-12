@@ -623,33 +623,32 @@ impl CssTemplateConfigWidget {
         row.append(&source_dropdown);
 
         // Field dropdown
-        let field_list = StringList::new(&["value", "caption", "unit", "percent", "min", "max"]);
+        // The usual fields, plus this mapping's own when a template asked
+        // for another one a source publishes (the clock's `time`, `day_name`…):
+        // showing such a row as "value" would misreport what it reads.
+        let mut field_names: Vec<String> = ["value", "caption", "unit", "percent", "min", "max"]
+            .iter()
+            .map(|f| f.to_string())
+            .collect();
+        if !mapping.field.is_empty() && !field_names.contains(&mapping.field) {
+            field_names.push(mapping.field.clone());
+        }
+        let field_refs: Vec<&str> = field_names.iter().map(String::as_str).collect();
+        let field_list = StringList::new(&field_refs);
         let field_dropdown = DropDown::new(Some(field_list), None::<gtk4::Expression>);
 
         // Find current field selection
-        let field_idx = match mapping.field.as_str() {
-            "value" => 0,
-            "caption" => 1,
-            "unit" => 2,
-            "percent" => 3,
-            "min" => 4,
-            "max" => 5,
-            _ => 0,
-        };
-        field_dropdown.set_selected(field_idx);
+        let field_idx = field_names
+            .iter()
+            .position(|f| f == &mapping.field)
+            .unwrap_or(0);
+        field_dropdown.set_selected(field_idx as u32);
 
         let config_for_field = config.clone();
         let on_change_for_field = on_change.clone();
         field_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            let field = match selected {
-                0 => "value",
-                1 => "caption",
-                2 => "unit",
-                3 => "percent",
-                4 => "min",
-                5 => "max",
-                _ => "value",
+            let Some(field) = field_names.get(dropdown.selected() as usize) else {
+                return;
             };
 
             let mut cfg = config_for_field.borrow_mut();

@@ -40,6 +40,7 @@ use rg_sens_types::source_configs::cpu::CpuSourceConfig;
 use rg_sens_types::source_configs::fan_speed::FanSpeedConfig;
 use rg_sens_types::source_configs::gpu::GpuSourceConfig;
 use rg_sens_types::source_configs::static_text::StaticTextSourceConfig;
+use rg_sens_types::source_configs::uptime::UptimeSourceConfig;
 use rg_sens_types::source_configs::system_temp::SystemTempConfig;
 use rg_sens_types::source_configs::{DiskSourceConfig, MemorySourceConfig, NetworkSourceConfig};
 use rg_sens_types::text::TextDisplayerConfig;
@@ -383,6 +384,9 @@ pub fn register_all_editors() {
     });
     register_source_editor("static_text", || {
         SchemaSourceEditor::create("static_text", StaticTextSourceConfig::props())
+    });
+    register_source_editor("uptime", || {
+        SchemaSourceEditor::create("uptime", UptimeSourceConfig::props())
     });
     // The test source keeps its widget: its values live in the global Test
     // Source dialog, the widget only edits the interval.

@@ -113,9 +113,9 @@ Add a JSON script block to your HTML:
 | Property | Required | Description |
 |----------|----------|-------------|
 | `hint` | No | Human-readable description shown in UI |
-| `source` | Yes* | Source type: `cpu`, `gpu`, `memory`, `disk`, `clock`, `network` |
-| `instance` | No | Instance index (1-based for specific slot, 0 for auto-assign) |
-| `field` | Yes* | Field to use: `value`, `caption`, `unit`, `max`, `percent`, `time` |
+| `source` | Yes* | Source type, the first word of the source's name in lower case: `cpu`, `gpu`, `memory`, `disk`, `clock`, `network`, `fan`, `system`, `uptime` |
+| `instance` | No | `0` takes the next unused slot of that source type, in slot order; `N` takes the first slot of that type in group N (use it when several placeholders read different fields of one slot) |
+| `field` | Yes* | Field to use: `value`, `caption`, `unit`, `max`, `min`, `percent`, `time`, or any other field the source publishes (`max`/`min` are the slot's limits) |
 | `format` | No | Format string, e.g., `"{:.1}"` for 1 decimal place |
 
 *Required for auto-configure to work
@@ -358,19 +358,22 @@ place as a safety net.
 
 **What costs memory in a template:**
 - Infinite CSS animations of paint-heavy properties, above all an animated
-  `text-shadow` or `box-shadow` blur: the example Art Deco panel's glowing clock
-  was the whole of its growth. Animating `opacity` or `transform` is cheap.
+  `text-shadow` or `box-shadow` blur: a glowing clock in an earlier Art Deco
+  example was the whole of its growth. Animating `opacity` or `transform` is cheap.
 - Transitions that are restarted faster than they finish.
 - JavaScript that keeps references to DOM nodes between updates (the bundled
   `rg-sens-gauges.js` does not).
 
 **What a panel costs:** the first CSS Template panel starts WebKit's web and
-network processes, about 300 MB in total across the three processes on the
-test machine; nothing is started while no CSS Template panel exists. A template
-with a continuously running animation also repaints every frame, which costs
-CPU in both rg-Sens and the web process (tens of percent of one core for the
-Art Deco example); a template that only changes when values change does not
-repaint in between.
+network processes, 300-370 MB in total across the three processes on the test
+machine, more for a larger panel; nothing is started while no CSS Template
+panel exists. CPU depends on how often the page repaints. A template with a
+continuously running animation repaints every frame: an earlier Art Deco
+example with a pulsing glow used tens of percent of one core. The current
+`examples/art_deco_panel.html` has no animations or transitions and writes to
+the page only when a value changed; fed synthetic values once a second (about
+half of its rows bound) it used about 1% of a core in rg-Sens and under 1% in
+the web process.
 
 CSS Template panels are enabled by default; start rg-Sens with
 `--webkit-disable` to turn them off.
@@ -390,14 +393,21 @@ CSS Template panels are enabled by default; start rg-Sens with
 
 | Source | Fields | Description |
 |--------|--------|-------------|
-| `clock` | `time`, `hour_value`, `minute_value`, `second_value` | Current time |
+| `clock` | `time`, `date`, `day_name`, `month_name`, `day`, `hour`, `minute`, `second` | Current time and date |
 | `cpu` | `value`, `caption`, `unit`, `max`, `percent` | CPU metrics |
 | `gpu` | `value`, `caption`, `unit`, `max`, `percent` | GPU metrics |
 | `memory` | `value`, `caption`, `unit`, `max`, `percent` | RAM usage |
 | `disk` | `value`, `caption`, `unit`, `max`, `percent` | Disk usage |
 | `network` | `value`, `caption`, `unit`, `download_speed`, `upload_speed`, `total_download`, `total_upload` | Network interface stats |
+| `fan` | `value`, `caption`, `unit`, `max` | Fan speed (RPM) |
+| `uptime` | `value`, `caption`, `text`, `compact`, `seconds`, `days`, `hours`, `minutes` | Time since boot: `text` is "4 days, 7 hours", `compact` is "4d 07:12" |
 
 ## See Also
 
-- [Art Nouveau Panel Example](../examples/art_nouveau_panel.html) - Full-featured example with gauges
+- [Art Deco Panel Example](../examples/art_deco_panel.html) and
+  [Art Nouveau Panel Example](../examples/art_nouveau_panel.html) - full 480x1920
+  panels sharing one placeholder mapping: gauges, fan meters, bars, sections
+  that hide when unmapped; setup steps are in the comment at the top of each.
+  They load their fonts from `examples/fonts/` (SIL Open Font License), so copy
+  that folder along with a template
 - [CSS Template Example](../examples/css_template_example.html) - Basic template structure

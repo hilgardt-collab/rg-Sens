@@ -62,7 +62,14 @@ pub fn combo_summaries(cfg: &ComboSourceConfig) -> Vec<(String, String, usize, u
                 Some(s) if s.source_id.is_empty() || s.source_id == "none" => {
                     "(Not configured)".to_string()
                 }
-                Some(s) if !s.caption_override.is_empty() => s.caption_override.clone(),
+                // Source name first: the CSS Template auto-configure reads the
+                // slot's source type from the first word, and a caption alone
+                // ("CPU Fan" on a fan slot) named the wrong one.
+                Some(s) if !s.caption_override.is_empty() => format!(
+                    "{} ({})",
+                    source_display_name(&s.source_id),
+                    s.caption_override
+                ),
                 Some(s) => source_display_name(&s.source_id),
                 None => "(Not configured)".to_string(),
             };

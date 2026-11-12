@@ -167,6 +167,23 @@ impl Default for WebKitBackend {
 }
 
 /// Create and configure a new WebView
+/// Send the current values again once a page has finished loading.
+///
+/// A value update that reaches the page before its script has run is lost, and
+/// unchanged values are not sent twice, so a page whose values did not change
+/// after its first tick (or after a recycle or hot reload) stayed on "--".
+fn resend_values_after_load(webview: &WebView, data: &Arc<Mutex<DisplayData>>) {
+    let data = data.clone();
+    webview.connect_load_changed(move |_, event| {
+        if event == webkit6::LoadEvent::Finished {
+            if let Ok(mut data) = data.lock() {
+                data.last_js_values.clear();
+                data.dirty = true;
+            }
+        }
+    });
+}
+
 fn create_webview() -> WebView {
     let limit_mb = env_override("RG_SENS_WEBKIT_MEMLIMIT_MB", DEFAULT_MEMORY_LIMIT_MB) as u32;
     let webview = if limit_mb > 0 {
@@ -260,6 +277,7 @@ impl TemplateBackend for WebKitBackend {
 
         // Create initial WebView
         let webview = create_webview();
+        resend_values_after_load(&webview, &data);
 
         // Load initial template
         let (html, base_uri) = {
@@ -469,6 +487,7 @@ impl TemplateBackend for WebKitBackend {
 
                                 // Create new WebView FIRST (before touching the old one)
                                 let new_webview = create_webview();
+                                resend_values_after_load(&new_webview, &data_clone);
 
                                 // Load cached HTML into new WebView before it's visible
                                 if let Some(ref html) = cached_html {
@@ -580,6 +599,16 @@ fn write_mapped_value(
         return;
     }
 
+    // The mapping editor and the templates call a slot's limits "min"/"max";
+    // sources publish them as `min_limit`/`max_limit`.
+    if matches!(mapping.field.as_str(), "min" | "max") {
+        let key = format!("{}_{}_limit", mapping.slot_prefix, mapping.field);
+        if let Some(value) = values.get(&key) {
+            write_formatted_value(value, mapping.format.as_deref(), output);
+            return;
+        }
+    }
+
     if let Some(value) = values.get(&mapping.slot_prefix) {
         write_formatted_value(value, mapping.format.as_deref(), output);
         return;
@@ -664,4 +693,66 @@ fn clear_display_data(data: &mut DisplayData) {
     data.values.shrink_to_fit();
     data.cached_html = None;
     data.last_js_values = String::new();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::css_template_display::PlaceholderMapping;
+    use crate::ui::css_template_display::{detect_placeholders, extract_placeholder_defaults};
+
+    fn mapped(values: &HashMap<String, Value>, field: &str) -> String {
+        let mapping = PlaceholderMapping {
+            index: 0,
+            slot_prefix: "group1_12".to_string(),
+            field: field.to_string(),
+            format: Some("{:.0}".to_string()),
+        };
+        let mut out = String::new();
+        write_mapped_value(values, &mapping, &mut out);
+        out
+    }
+
+    #[test]
+    fn max_and_min_read_the_slot_limits() {
+        let mut values = HashMap::new();
+        values.insert("group1_12_value".to_string(), Value::from(1240.4));
+        values.insert("group1_12_max_limit".to_string(), Value::from(2400.0));
+        assert_eq!(mapped(&values, "value"), "1240");
+        assert_eq!(mapped(&values, "max"), "2400");
+        assert_eq!(mapped(&values, "min"), "--");
+    }
+
+    /// The shipped Art Deco and Art Nouveau examples: every placeholder they
+    /// use has an auto-configure entry, the numbering has no holes, the two
+    /// share one mapping, and neither loads anything from the network.
+    #[test]
+    fn example_panels_are_fully_configured() {
+        let deco = include_str!("../../examples/art_deco_panel.html");
+        let nouveau = include_str!("../../examples/art_nouveau_panel.html");
+        for (html, count) in [(deco, 74u32), (nouveau, 74)] {
+            let placeholders = detect_placeholders(html);
+            assert_eq!(placeholders, (0..count).collect::<Vec<u32>>());
+            let defaults = extract_placeholder_defaults(html);
+            for index in &placeholders {
+                assert!(
+                    defaults.contains_key(index),
+                    "placeholder {index} has no default"
+                );
+            }
+            assert!(!html.contains("fonts.googleapis.com"));
+        }
+        let (deco, nouveau) = (
+            extract_placeholder_defaults(deco),
+            extract_placeholder_defaults(nouveau),
+        );
+        for (index, default) in &deco {
+            let other = &nouveau[index];
+            assert_eq!(
+                (&default.source, &default.field),
+                (&other.source, &other.field),
+                "placeholder {index} differs between the two panels"
+            );
+        }
+    }
 }

@@ -190,6 +190,18 @@ impl Displayer for CssTemplateDisplayer {
             {
                 if let Ok(mut display_data) = self.data.lock() {
                     display_data.config = css_config;
+                    // Keep exactly the slots the mappings read. The default
+                    // set stops at 10 items per group, which silently dropped
+                    // every later item of a larger group.
+                    if !display_data.config.mappings.is_empty() {
+                        display_data.cached_prefix_set = display_data
+                            .config
+                            .mappings
+                            .iter()
+                            .filter(|m| !m.slot_prefix.is_empty())
+                            .map(|m| m.slot_prefix.clone())
+                            .collect();
+                    }
                     display_data.cached_html = None;
                     display_data.config_changed = true;
 

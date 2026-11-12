@@ -14,6 +14,11 @@
 //!   churn=SECS              recreate the widget every SECS (default 0 = never)
 //!   duration=SECS           run length (default 120)
 //!   sample=SECS             sampling period (default 5)
+//!   values=FILE             JSON object {"index": "text"} shown as fixed values
+//!                           (placeholder N is bound to slot group1_N+1, field
+//!                           "value"); replaces the changing feed
+//!   size=WxH                window size (default 900x600)
+//!   snapshot=FILE.png       save what the widget drew after 4 s
 //! ```
 //!
 //! The backend's own cadence is set through the environment:
@@ -104,6 +109,16 @@ fn main() {
     let churn: u64 = arg("churn", "0").parse().unwrap_or(0);
     let duration: u64 = arg("duration", "120").parse().unwrap_or(120);
     let sample: u64 = arg("sample", "5").parse().unwrap_or(5);
+    let fixed: Option<HashMap<String, String>> =
+        Some(arg("values", "")).filter(|p| !p.is_empty()).map(|p| {
+            let text = std::fs::read_to_string(&p).expect("values file");
+            serde_json::from_str(&text).expect("values file is a JSON object of strings")
+        });
+    let snapshot = arg("snapshot", "");
+    let (win_w, win_h) = arg("size", "900x600")
+        .split_once('x')
+        .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
+        .unwrap_or((900, 600));
 
     let app = Application::builder()
         .application_id("com.github.rg_sens.webkit_leak")
@@ -114,14 +129,20 @@ fn main() {
         let window = ApplicationWindow::builder()
             .application(app)
             .title("rg-Sens WebKit leak harness")
-            .default_width(900)
-            .default_height(600)
+            .default_width(win_w)
+            .default_height(win_h)
             .build();
 
         // 40 placeholders bound to group1_1 … group4_10, field "value".
-        let slots: Vec<String> = (1..=4)
-            .flat_map(|g| (1..=10).map(move |m| format!("group{g}_{m}")))
-            .collect();
+        let slots: Vec<String> = match &fixed {
+            Some(values) => {
+                let count = values.keys().filter_map(|k| k.parse::<usize>().ok()).max();
+                (0..=count.unwrap_or(0)).map(|i| format!("group1_{}", i + 1)).collect()
+            }
+            None => (1..=4)
+                .flat_map(|g| (1..=10).map(move |m| format!("group{g}_{m}")))
+                .collect(),
+        };
         let mappings: Vec<Value> = slots
             .iter()
             .enumerate()
@@ -138,11 +159,42 @@ fn main() {
         displayer.apply_config(&config).expect("config applies");
         let displayer = Rc::new(RefCell::new(displayer));
 
-        window.set_child(Some(&displayer.borrow().create_widget()));
+        let widget = displayer.borrow().create_widget();
+        window.set_child(Some(&widget));
         window.present();
 
-        // Feed changing values.
-        if updates {
+        if !snapshot.is_empty() {
+            let (window, path) = (window.clone(), snapshot.clone());
+            glib::timeout_add_local_once(Duration::from_secs(4), move || {
+                let paintable = gtk4::WidgetPaintable::new(Some(&widget));
+                let (w, h) = (widget.width() as f64, widget.height() as f64);
+                let snap = gtk4::Snapshot::new();
+                paintable.snapshot(&snap, w, h);
+                let saved = snap
+                    .to_node()
+                    .zip(window.renderer())
+                    .map(|(node, renderer)| renderer.render_texture(&node, None).save_to_png(&path));
+                eprintln!("snapshot {w}x{h} -> {path}: {saved:?}");
+            });
+        }
+
+        // Feed the fixed values, or changing ones.
+        if let Some(fixed) = fixed.clone() {
+            let displayer = displayer.clone();
+            let slots = slots.clone();
+            glib::timeout_add_local(Duration::from_millis(feed_ms), move || {
+                let values: HashMap<String, Value> = slots
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, slot)| {
+                        let text = fixed.get(&i.to_string())?;
+                        Some((format!("{slot}_value"), json!(text)))
+                    })
+                    .collect();
+                displayer.borrow_mut().update_data(&values);
+                glib::ControlFlow::Continue
+            });
+        } else if updates {
             let displayer = displayer.clone();
             let n = Cell::new(0u64);
             glib::timeout_add_local(Duration::from_millis(feed_ms), move || {

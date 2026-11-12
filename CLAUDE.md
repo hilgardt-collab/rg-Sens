@@ -212,7 +212,7 @@ crates/
 ├── types/          # Serde config types shared across crates
 ├── render/         # Pure Cairo rendering (bar/arc/background/themed *_display.rs, render_cache)
 ├── sources/        # Data sources: cpu, memory, disk, network, gpu/, fan_speed,
-│                   #   system_temp, claude.rs + claude_auth.rs, combo, static_text
+│                   #   system_temp, claude.rs + claude_auth.rs, combo, static_text, uptime
 └── audio/          # Alarm/timer sound playback
 
 src/

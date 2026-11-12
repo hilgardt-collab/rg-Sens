@@ -1061,6 +1061,14 @@ impl PanelConfig {
                 }
                 SourceConfig::default_for_type("static_text").unwrap_or_default()
             }
+            "uptime" => {
+                if let Some(val) = self.settings.get("uptime_config") {
+                    if let Some(cfg) = try_migrate(val, "uptime", &self.id) {
+                        return SourceConfig::Uptime(cfg);
+                    }
+                }
+                SourceConfig::default_for_type("uptime").unwrap_or_default()
+            }
             _ => {
                 warn!(
                     "Unknown source type '{}', using default CPU config",

@@ -12,6 +12,7 @@ pub mod network;
 pub mod static_text;
 pub mod system_temp;
 pub mod test;
+pub mod uptime;
 
 // Re-export all source config types for convenience
 pub use claude::{ClaudeMetric, ClaudeSourceConfig};
@@ -26,3 +27,4 @@ pub use network::{NetworkField, NetworkSourceConfig, NetworkSpeedUnit, NetworkTo
 pub use static_text::{StaticTextLine, StaticTextSourceConfig};
 pub use system_temp::{SensorCategory, SensorInfo, SystemTempConfig};
 pub use test::{TestMode, TestSourceConfig};
+pub use uptime::{UptimeFormat, UptimeSourceConfig};

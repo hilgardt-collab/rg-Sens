@@ -28,6 +28,7 @@ use crate::source_configs::network::NetworkSourceConfig;
 use crate::source_configs::static_text::StaticTextSourceConfig;
 use crate::source_configs::system_temp::SystemTempConfig;
 use crate::source_configs::test::TestSourceConfig;
+use crate::source_configs::uptime::UptimeSourceConfig;
 use crate::text::TextDisplayerConfig;
 use crate::theme::{ComboThemeConfig, ThemeRef};
 
@@ -98,6 +99,9 @@ pub enum SourceConfig {
 
     #[serde(rename = "static_text")]
     StaticText(StaticTextSourceConfig),
+
+    #[serde(rename = "uptime")]
+    Uptime(UptimeSourceConfig),
 }
 
 impl SourceConfig {
@@ -116,6 +120,7 @@ impl SourceConfig {
             SourceConfig::FanSpeed(_) => "fan_speed",
             SourceConfig::Test(_) => "test",
             SourceConfig::StaticText(_) => "static_text",
+            SourceConfig::Uptime(_) => "uptime",
         }
     }
 
@@ -134,6 +139,7 @@ impl SourceConfig {
             SourceConfig::FanSpeed(cfg) => cfg.update_interval_ms,
             SourceConfig::Test(cfg) => cfg.update_interval_ms,
             SourceConfig::StaticText(cfg) => cfg.update_interval_ms,
+            SourceConfig::Uptime(cfg) => cfg.update_interval_ms,
         }
     }
 
@@ -201,6 +207,11 @@ impl SourceConfig {
                     map.insert("static_text_config".to_string(), val);
                 }
             }
+            SourceConfig::Uptime(cfg) => {
+                if let Ok(val) = serde_json::to_value(cfg) {
+                    map.insert("uptime_config".to_string(), val);
+                }
+            }
         }
         map
     }
@@ -220,6 +231,7 @@ impl SourceConfig {
             "fan_speed" => Some(SourceConfig::FanSpeed(FanSpeedConfig::default())),
             "test" => Some(SourceConfig::Test(TestSourceConfig::default())),
             "static_text" => Some(SourceConfig::StaticText(StaticTextSourceConfig::default())),
+            "uptime" => Some(SourceConfig::Uptime(UptimeSourceConfig::default())),
             _ => None,
         }
     }
@@ -245,6 +257,7 @@ impl SourceConfig {
             "fan_speed" => "fan_speed_config",
             "test" => "test_config",
             "static_text" => "static_text_config",
+            "uptime" => "uptime_config",
             _ => return None,
         };
 
@@ -285,6 +298,9 @@ impl SourceConfig {
             "static_text" => serde_json::from_value::<StaticTextSourceConfig>(value.clone())
                 .ok()
                 .map(SourceConfig::StaticText),
+            "uptime" => serde_json::from_value::<UptimeSourceConfig>(value.clone())
+                .ok()
+                .map(SourceConfig::Uptime),
             _ => None,
         })
     }
@@ -1109,6 +1125,7 @@ mod group_structure_tests {
             "fan_speed",
             "test",
             "static_text",
+            "uptime",
         ];
         for id in ids {
             let cfg = SourceConfig::default_for_type(id).unwrap_or_else(|| panic!("{}", id));

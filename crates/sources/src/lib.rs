@@ -12,6 +12,7 @@ mod memory;
 mod network;
 mod shared_sensors;
 mod static_text;
+mod uptime;
 mod system_temp;
 mod test;
 
@@ -28,6 +29,7 @@ pub use gpu::GpuSource;
 pub use memory::MemorySource;
 pub use network::NetworkSource;
 pub use static_text::{StaticTextLine, StaticTextSource, StaticTextSourceConfig};
+pub use uptime::{UptimeSource, UptimeSourceConfig};
 pub use system_temp::{
     resolve_sensor_index, set_sensor_by_index, SensorCategory, SensorInfo, SystemTempConfig,
     SystemTempSource, TemperatureUnit as SystemTempUnit,
@@ -126,4 +128,8 @@ pub fn register_all() {
         &["text"],
         || Box::new(StaticTextSource::new()),
     );
+
+    global_registry().register_source_with_info("uptime", "Uptime", &["text"], || {
+        Box::new(UptimeSource::new())
+    });
 }

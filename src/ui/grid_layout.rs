@@ -29,6 +29,7 @@ const SOURCE_CONFIG_KEYS: &[&str] = &[
     "fan_speed_config",
     "test_config",
     "static_text_config",
+    "uptime_config",
     "network_config",
     "claude_config",
 ];
