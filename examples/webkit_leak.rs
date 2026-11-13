@@ -24,7 +24,7 @@
 //!
 //! The backend's own cadence is set through the environment:
 //! `RG_SENS_WEBKIT_TICK_MS` (default 1000) and `RG_SENS_WEBKIT_RECYCLE_EVERY`
-//! (default 300 updates, 0 = never recycle).
+//! (value updates between WebView recycles; default 0 = never recycle).
 
 use gtk4::prelude::*;
 use gtk4::{glib, Application, ApplicationWindow};

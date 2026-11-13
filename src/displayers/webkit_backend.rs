@@ -50,6 +50,10 @@ pub fn live_webviews() -> usize {
 /// caches at a third of the limit and does so aggressively at half.
 const DEFAULT_MEMORY_LIMIT_MB: u64 = 192;
 
+/// Value updates between WebView recycles (destroy and recreate); 0 never
+/// recycles. Off by default: see where it is read.
+const DEFAULT_RECYCLE_EVERY: u64 = 0;
+
 /// Test-only override of a tuning constant through the environment.
 fn env_override(name: &str, default: u64) -> u64 {
     std::env::var(name)
@@ -332,9 +336,14 @@ impl TemplateBackend for WebKitBackend {
             orphan_ticks: 0,
         }));
 
-        // Set up periodic timer for updates and WebView recycling
+        // Set up the periodic timer for updates. Recycling the WebView every
+        // N value updates was a mitigation for a web-process memory leak that
+        // has since been fixed; it is off (0) and only the environment turns
+        // it back on. A recycle throws the page away, and with it whatever
+        // the page keeps itself (a template's history graphs).
         let tick_ms = env_override("RG_SENS_WEBKIT_TICK_MS", 1000);
-        let recycle_every = env_override("RG_SENS_WEBKIT_RECYCLE_EVERY", 300) as u32;
+        let recycle_every =
+            env_override("RG_SENS_WEBKIT_RECYCLE_EVERY", DEFAULT_RECYCLE_EVERY) as u32;
         LIVE_TIMERS.fetch_add(1, Ordering::Relaxed);
         let tick = {
             let data_clone = data.clone();
@@ -461,7 +470,8 @@ impl TemplateBackend for WebKitBackend {
                             data.last_js_values = js_values.clone();
                             data.js_update_count += 1;
 
-                            // Every 300 updates (~5 minutes), completely destroy and recreate WebView
+                            // When recycling is switched on: every `recycle_every`
+                            // updates, completely destroy and recreate the WebView
                             if recycle_every > 0 && data.js_update_count % recycle_every == 0 {
                                 RECYCLE_COUNT.fetch_add(1, Ordering::Relaxed);
                                 log::info!(

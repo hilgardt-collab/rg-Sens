@@ -359,8 +359,9 @@ threshold is a fraction of system RAM, so on a desktop it never triggered.
 
 rg-Sens now gives the web process a memory limit (192 MB; WebKit starts
 releasing caches at a third of it), which keeps a template updating once a
-second flat. The periodic WebView reset (every 300 value updates) is still in
-place as a safety net.
+second flat. The periodic WebView reset that used to back this up is off by
+default; `RG_SENS_WEBKIT_RECYCLE_EVERY=300` in the environment turns it back
+on (a reset every 300 value updates).
 
 **What costs memory in a template:**
 - Infinite CSS animations of paint-heavy properties, above all an animated
@@ -394,8 +395,9 @@ the static panels. Splitting a large SVG into stacked layers
 (`will-change: transform`) so that moving parts do not repaint static ones cut
 the web process's share by a quarter. Its motion alone holds memory level
 (about 165 MB in the web process over 18 minutes); rewriting its glowing
-(`text-shadow`) values every second is what grows, by roughly 15 MB a minute
-even under the memory limit, until the periodic WebView reset brings it back.
+(`text-shadow`) values every second is what grew when this was measured, by
+roughly 15 MB a minute even under the memory limit; the periodic WebView reset
+was what brought it back then.
 The 4 and 8 fps figures were measured before the layer split.
 
 CSS Template panels are enabled by default; start rg-Sens with
