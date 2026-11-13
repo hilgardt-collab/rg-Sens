@@ -1,0 +1,162 @@
+/* Brutalist Sensor Panel: stylesheet for brutalist_panel.html (rg-Sens CSS
+   Template displayer). Finishes, fonts, the grid of groups and the few
+   classes the page's script switches; the drawing itself is inline in the
+   HTML. Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: Archivo Black and IBM Plex Mono, both SIL Open Font License
+   (OFL.txt in each folder). Keep the fonts folder next to this file; without
+   it the page falls back to system fonts. */
+@font-face { font-family: "Archivo Black"; font-weight: 400; font-style: normal;
+  src: local("Archivo Black"), url("fonts/archivo-black/ArchivoBlack-Regular.ttf") format("truetype"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-style: normal;
+  src: local("IBM Plex Mono"), url("fonts/ibm-plex-mono/IBMPlexMono-Regular.ttf") format("truetype"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 600; font-style: normal;
+  src: local("IBM Plex Mono SemiBold"), url("fonts/ibm-plex-mono/IBMPlexMono-SemiBold.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Finish: raw (Raw Concrete), night or corten. */
+  --finish: raw;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Network chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  /* Raw Concrete */
+  --wall: #B6B3AD;
+  --board-1: #B9B6B0;
+  --board-2: #B2AFA9;
+  --board-3: #BEBBB5;
+  --board-4: #B5B2AC;
+  --board-5: #BBB8B2;
+  --slab: #C8C5BF;
+  --face: #CFCCC6;
+  --side: #8C8983;
+  --recess-1: #77746F;
+  --recess-2: #4E4C48;
+  --ink: #1E1E1C;
+  --sub: #57544F;
+  --engraved: #9C9993;
+  /* the one signal colour, its extruded side, and the critical red */
+  --accent: #E0561B;
+  --accent-side: #983A12;
+  --critical: #C81E1E;
+  /* the view through the opening */
+  --sky-1: #AEB6BE;
+  --sky-2: #E2E4E4;
+  --bld-face: #C4C1BB;
+  --bld-shade: #8A8782;
+  --bld-dark: #5C5A56;
+  --distant: #A3A6A8;
+  --ground: #8E8B86;
+  --win-dark: #2E3033;
+  --win-lit: #FFC46A;
+  /* percent of the megastructure's windows that are lit */
+  --lit-share: 12;
+}
+:root[data-finish="night"] {
+  --wall: #4A4845; --board-1: #4C4A47; --board-2: #474542; --board-3: #504E4A; --board-4: #484643; --board-5: #4E4C48;
+  --slab: #5A5753; --face: #625F5A; --side: #2C2A28; --recess-1: #2E2C2A; --recess-2: #161514;
+  --ink: #EDE8E0; --sub: #A9A39A; --engraved: #3A3835;
+  --accent: #FFA928; --accent-side: #8E5A0C; --critical: #FF4A2A;
+  --sky-1: #0E131E; --sky-2: #28324A; --bld-face: #4E4C48; --bld-shade: #2E2C2A; --bld-dark: #1A1918;
+  --distant: #232A3A; --ground: #1E1D1B; --win-dark: #16171A; --lit-share: 40;
+}
+:root[data-finish="corten"] {
+  --wall: #BBB1A4; --board-1: #BEB4A7; --board-2: #B6AC9F; --board-3: #C2B8AB; --board-4: #B9AFA2; --board-5: #BFB5A8;
+  --slab: #CCC2B4; --face: #D3C9BB; --side: #8E8475; --recess-1: #766C60; --recess-2: #4C443A;
+  --ink: #24201C; --sub: #5E554B; --engraved: #A0968A;
+  --accent: #A14A1E; --accent-side: #5A2810; --critical: #C81E1E;
+  --sky-1: #C4B49E; --sky-2: #EDE2CE; --bld-face: #C8BEB0; --bld-shade: #8E8476; --bld-dark: #5E564C;
+  --distant: #B3A694; --ground: #92887A; --win-dark: #2E2A26; --lit-share: 14;
+}
+html, body { margin: 0; background: var(--wall); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* The drawing's shapes carry Raw Concrete as attributes; these follow the finish. */
+[fill="#B9B6B0"] { fill: var(--board-1); }
+[fill="#B2AFA9"] { fill: var(--board-2); }
+[fill="#BEBBB5"] { fill: var(--board-3); }
+[fill="#B5B2AC"] { fill: var(--board-4); }
+[fill="#BBB8B2"] { fill: var(--board-5); }
+[fill="#C8C5BF"] { fill: var(--slab); }
+[fill="#8C8983"] { fill: var(--side); }
+[fill="#C4C1BB"] { fill: var(--bld-face); }
+[fill="#8A8782"] { fill: var(--bld-shade); }
+[fill="#5C5A56"] { fill: var(--bld-dark); }
+[fill="#A3A6A8"] { fill: var(--distant); }
+[fill="#8E8B86"] { fill: var(--ground); }
+[fill="#2E3033"], [fill="#2E3034"] { fill: var(--win-dark); }
+[fill="#FFC46A"] { fill: var(--win-lit); }
+[fill="#1E1E1C"] { fill: var(--ink); }
+[stroke="#1E1E1C"] { stroke: var(--ink); }
+[stroke="#8A8782"] { stroke: var(--bld-shade); }
+[stroke="#C4C1BB"] { stroke: var(--bld-face); }
+[stroke="#5C5A56"] { stroke: var(--bld-dark); }
+[stop-color="#77746F"] { stop-color: var(--recess-1); }
+[stop-color="#4E4C48"] { stop-color: var(--recess-2); }
+
+@keyframes br-blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes br-flicker { 0%,100% { opacity: 1; } 92% { opacity: 1; } 94% { opacity: .4; } 96% { opacity: 1; } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still-motion * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* Light on the wall: soft from the top left, darker towards the edges. */
+.ambient { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 15% 0%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.25) 100%); }
+:root[data-finish="night"] .ambient {
+  background: radial-gradient(ellipse at 50% 0%, rgba(255,169,40,0.16) 0%, rgba(255,169,40,0) 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.5) 100%); }
+:root[data-finish="corten"] .ambient {
+  background: radial-gradient(ellipse at 15% 0%, rgba(255,244,225,0.2) 0%, rgba(255,244,225,0) 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.25) 100%); }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over, so every
+   slab stretches to its cell. The gaps leave room for the slabs' extruded
+   sides. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 14px 30px; align-content: stretch; }
+.groups > .hall { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.groups > .slab { min-width: 0; }
+/* A stretched slab keeps its heading at the top and centres the rest (its
+   first five children are the concrete texture and the four tie holes, the
+   sixth is the heading). */
+.slab > :nth-child(7) { margin-top: auto; }
+.slab > :last-child { margin-bottom: auto; }
+
+/* A dial's blocks: concrete, the accent when lit, critical red and blinking
+   when the dial is critical. */
+.blk.side { fill: var(--side); }
+.blk.face { fill: var(--face); }
+.blk.side.lit { fill: var(--accent-side); }
+.blk.face.lit { fill: var(--accent); }
+.blk.side.crit { fill: color-mix(in srgb, var(--critical), #000 35%); }
+.blk.face.crit { fill: var(--critical); animation: br-blink 1.2s steps(2, jump-none) infinite; }
+/* The status stamp: NOMINAL, ELEVATED, CRITICAL. */
+[data-state].warm { color: var(--accent) !important; }
+[data-state].hot { color: var(--critical) !important; }
+/* A tower's windows. */
+.win { fill: var(--win-dark); }
+.win.lit { fill: var(--win-lit); filter: drop-shadow(0 0 2px var(--win-lit)); }
+/* The network skyline: concrete columns, the newest in the accent. */
+.col.side { fill: var(--side); }
+.col.top { fill: var(--bld-face); }
+.col.face { fill: var(--face); }
+.col.side.now { fill: var(--accent-side); }
+.col.top.now { fill: var(--accent); }
+.col.face.now { fill: var(--accent); animation: br-blink 1.6s steps(2, jump-none) infinite; }

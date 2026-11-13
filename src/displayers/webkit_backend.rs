@@ -774,9 +774,16 @@ mod tests {
             assert!(!plain.contains("fonts.googleapis.com"));
             assert_eq!(extract_placeholder_defaults(plain).len(), deco.len());
         }
+        // Brutalist has the year on 90.
+        let brutalist = include_str!("../../examples/brutalist_panel.html");
+        assert!(detect_placeholders(brutalist).is_empty());
+        assert!(!brutalist.contains("fonts.googleapis.com"));
+        let brutalist_defaults = extract_placeholder_defaults(brutalist);
+        assert_eq!(brutalist_defaults.len(), deco.len() + 1);
+        assert_eq!(brutalist_defaults[&90].field, "year");
         for other in [
             nouveau, steampunk, neon, lcars, warrior, leather, lcd, victorian, mughal, bauhaus,
-            gothic, western, japandi, gumdrop, filigree,
+            gothic, western, japandi, gumdrop, filigree, brutalist,
         ] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {

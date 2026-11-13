@@ -459,8 +459,9 @@ artwork follows the box is worth copying:
 
 | Artwork | How it follows the box | Examples |
 |---|---|---|
-| Repeating texture | CSS background or SVG `<pattern>` | LCD, Victorian, Gothic, Mughal Peacock, Western, Japandi (daylight bands), Filigree (side stems: one 80px period, the strip's height rounded down to whole periods) |
-| Scattered pieces | placed by percentage (glows), or in a strip down each side margin with percentage heights (bubbles) | Glass & Gumdrop |
+| Repeating texture | CSS background or SVG `<pattern>` | LCD, Victorian, Gothic, Mughal Peacock, Western, Japandi (daylight bands), Filigree (side stems: one 80px period, the strip's height rounded down to whole periods), Brutalist (wall boards and tie holes) |
+| Scattered pieces | placed by percentage (glows, rain drips), or in a strip down each side margin with percentage heights (bubbles) | Glass & Gumdrop, Brutalist |
+| A picture in a frame | an SVG with a `viewBox` and `preserveAspectRatio="xMidYMax meet"`, whose sky and ground rectangles run far past the viewBox: the picture is never cropped and the frame is filled around it | Brutalist (the opening) |
 | Rails with evenly spaced beads | CSS backgrounds, the beads with `background-repeat: space` | Filigree |
 | Strips down the sides | an SVG per side, `height="100%"`, `preserveAspectRatio="xMinYMin slice"` (cut off, not squeezed), the right one mirrored | Art Deco, Art Nouveau, Gothic, Mughal Peacock |
 | Corner pieces | an SVG per corner, placed by CSS | Art Deco, Gothic, Filigree |
@@ -499,7 +500,7 @@ whose look comes from the filter (a fill colour from the stylesheet is
 carried over), and keep them the first drawn content of their `<svg>`: the
 bitmap is put where the first marked element was. Small filtered shapes
 inside a card are not worth marking. Opened in a browser, the attribute does
-nothing. The Japandi, Gothic, Western and Filigree examples use it.
+nothing. The Japandi, Gothic, Western, Filigree and Brutalist examples use it.
 
 ### Memory Usage
 
@@ -595,8 +596,9 @@ CSS Template panels are enabled by default; start rg-Sens with
   [Gothic](../examples/gothic_panel.html),
   [Western](../examples/western_panel.html),
   [Japandi](../examples/japandi_panel.html),
-  [Glass & Gumdrop](../examples/gumdrop_panel.html) and
-  [Filigree](../examples/filigree_panel.html) panel examples - full 480x1920
+  [Glass & Gumdrop](../examples/gumdrop_panel.html),
+  [Filigree](../examples/filigree_panel.html) and
+  [Brutalist](../examples/brutalist_panel.html) panel examples - full 480x1920
   panels sharing one placeholder mapping: gauges, fan meters, bars, sections
   that hide when unmapped; setup steps are in the comment at the top of each.
   They load their fonts from `examples/fonts/` (SIL Open Font License; Special

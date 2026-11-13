@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1180 1440x920 2880x590">
+<title>Brutalist Sensor Panel</title>
+<!--
+  Brutalist sensor panel for the rg-Sens CSS Template displayer, drawn for
+  480x1920 portrait: raw board-formed concrete with tie holes and rain
+  stains, a deep-set opening onto a concrete megastructure, and precast
+  slabs holding block dials, cast fan grilles, tower blocks and a skyline of
+  network columns. A sibling of the other example panels: the same
+  placeholders 0-73 and the same setup, plus the year.
+
+  The look is beton brut: heavy slabs with hard extruded shadows, light from
+  the top left, and one blunt signal colour used sparingly. Keep it that way
+  when editing: no rounded corners, no decorative gradients, no soft UI.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names, year
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two dials ("PKG", "EDGE"), the fans and the towers; set
+  them on the sensors.
+
+  Anything left unbound is hidden: a row, a dial, a whole slab. The
+  processor's power row has no rg-Sens source and stays hidden unless you bind
+  a sensor to it by hand on the Bindings tab.
+
+  A dial is 12 extruded blocks over 20 to 100 degrees; the blocks up to the
+  reading are painted in the accent. The stamp reads NOMINAL, ELEVATED (from
+  72) or CRITICAL (from 85), when the lit blocks from the tenth on turn red
+  and blink. A tower has 14 floors that light from the ground up to the
+  share of its pool that is in use.
+
+  The network chart keeps the last minute (32 samples) in the page: inbound
+  as a skyline of concrete columns with the newest in the accent, outbound
+  as a steel line with a marker on every fourth sample, on one shared scale.
+  It starts empty and survives a reload of the template, not a restart of
+  rg-Sens.
+
+  Options (the panel's Display tab, or the top of brutalist_panel.css): finish
+  (Raw Concrete, Night, Corten), how the design fits the panel, the layout,
+  the frame rate, and the full scale of the bars and of the network chart.
+
+  Size: the design is drawn for 480x1920, but its six groups (the opening
+  with the clock slab, and the five numbered slabs) re-arrange to suit the
+  panel: one column of six, two of three, three of two or six side by side
+  (the rg-layouts list gives the size each needs), and the slabs then
+  stretch to the panel's exact shape. The wall's boards and tie holes repeat
+  over any size. The Layout option fixes the column count; the Fit option
+  can crop, letterbox or distort instead.
+
+  Concrete textures are noise filters, which are costly to redraw; the
+  full-size ones carry data-rg-bake, so rg-Sens draws each once into a
+  bitmap.
+
+  Motion: the fan rotors turn with RPM, a few lit windows flicker, the newest
+  network column blinks and a critical dial's red blocks blink, at
+  --motion-fps frames a second. 0 turns motion off, as do the panel's
+  Animation switch and the system's reduced-motion setting.
+
+  Fonts: Archivo Black (titles, clock, numbers) and IBM Plex Mono (labels,
+  units), loaded from the fonts folder next to this file; copy that folder
+  along with the template. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="brutalist_panel.css">
+</head>
+<body>
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background: var(--wall); font-family: 'IBM Plex Mono', 'Courier New', monospace; font-variant-numeric: tabular-nums; color: var(--ink); padding: 24px 28px 26px 24px; display: flex; flex-direction: column; gap: 14px">
+  <!-- ===== BACKGROUND: board-formed concrete wall (z 0) ===== -->
+  <svg aria-hidden="true" width="100%" height="100%" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none">
+    <defs>
+      <filter id="br-grit" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="2"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.12  0 0 0 0 0.11  -1.6 0 0 0 0.95"></feColorMatrix></filter>
+      <filter id="br-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.004 0.22" numOctaves="4" seed="5"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.1  0 0 0 0 0.09  0 0 0 1.5 -0.62"></feColorMatrix></filter>
+      <filter id="br-stain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.004" numOctaves="4" seed="8"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.11  0 0 0 0 0.1  0 0 0 1.6 -0.68"></feColorMatrix></filter>
+      <filter id="br-speck" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="11" result="n"></feTurbulence><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.1  0 0 0 0 0.09  -1.8 0 0 0 1.0" result="s"></feColorMatrix><feComposite in="s" in2="SourceAlpha" operator="in"></feComposite></filter>
+      <filter id="br-blur2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2"></feGaussianBlur></filter>
+      <linearGradient id="br-drip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A1916" stop-opacity="0.32"></stop><stop offset="1" stop-color="#1A1916" stop-opacity="0"></stop></linearGradient>
+      <radialGradient id="br-tie" cx="0.42" cy="0.38" r="0.6"><stop offset="0" stop-color="#000" stop-opacity="0.75"></stop><stop offset="0.7" stop-color="#000" stop-opacity="0.45"></stop><stop offset="1" stop-color="#000" stop-opacity="0"></stop></radialGradient>
+      <linearGradient id="br-sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="250"><stop offset="0" style="stop-color: var(--sky-1)"></stop><stop offset="1" style="stop-color: var(--sky-2)"></stop></linearGradient>
+      <linearGradient id="br-steel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8E9196"></stop><stop offset="0.45" stop-color="#5A5D62"></stop><stop offset="1" stop-color="#2E3034"></stop></linearGradient>
+      <radialGradient id="br-well" cx="0.62" cy="0.66" r="0.62"><stop offset="0" stop-color="#77746F"></stop><stop offset="0.8" stop-color="#4E4C48"></stop><stop offset="1" stop-color="#000"></stop></radialGradient>
+      <pattern id="br-boards" patternUnits="userSpaceOnUse" width="8000" height="960"><rect x="0" y="0" width="8000" height="24" fill="#B9B6B0"></rect><rect x="0" y="24" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="48" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="72" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="96" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="120" width="8000" height="24" fill="#BEBBB5"></rect><rect x="0" y="144" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="168" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="192" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="216" width="8000" height="24" fill="#BEBBB5"></rect><rect x="0" y="240" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="264" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="288" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="312" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="336" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="360" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="384" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="408" width="8000" height="24" fill="#B9B6B0"></rect><rect x="0" y="432" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="456" width="8000" height="24" fill="#BEBBB5"></rect><rect x="0" y="480" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="504" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="528" width="8000" height="24" fill="#B9B6B0"></rect><rect x="0" y="552" width="8000" height="24" fill="#BEBBB5"></rect><rect x="0" y="576" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="600" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="624" width="8000" height="24" fill="#B5B2AC"></rect><rect x="0" y="648" width="8000" height="24" fill="#BEBBB5"></rect><rect x="0" y="672" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="696" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="720" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="744" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="768" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="792" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="816" width="8000" height="24" fill="#B9B6B0"></rect><rect x="0" y="840" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="864" width="8000" height="24" fill="#BEBBB5"></rect><rect x="0" y="888" width="8000" height="24" fill="#B2AFA9"></rect><rect x="0" y="912" width="8000" height="24" fill="#BBB8B2"></rect><rect x="0" y="936" width="8000" height="24" fill="#BEBBB5"></rect><path d="M0 0.5 H8000 M0 24.5 H8000 M0 48.5 H8000 M0 72.5 H8000 M0 96.5 H8000 M0 120.5 H8000 M0 144.5 H8000 M0 168.5 H8000 M0 192.5 H8000 M0 216.5 H8000 M0 240.5 H8000 M0 264.5 H8000 M0 288.5 H8000 M0 312.5 H8000 M0 336.5 H8000 M0 360.5 H8000 M0 384.5 H8000 M0 408.5 H8000 M0 432.5 H8000 M0 456.5 H8000 M0 480.5 H8000 M0 504.5 H8000 M0 528.5 H8000 M0 552.5 H8000 M0 576.5 H8000 M0 600.5 H8000 M0 624.5 H8000 M0 648.5 H8000 M0 672.5 H8000 M0 696.5 H8000 M0 720.5 H8000 M0 744.5 H8000 M0 768.5 H8000 M0 792.5 H8000 M0 816.5 H8000 M0 840.5 H8000 M0 864.5 H8000 M0 888.5 H8000 M0 912.5 H8000 M0 936.5 H8000" stroke="#000" stroke-width="1" opacity="0.22"></path><path d="M0 1.5 H8000 M0 25.5 H8000 M0 49.5 H8000 M0 73.5 H8000 M0 97.5 H8000 M0 121.5 H8000 M0 145.5 H8000 M0 169.5 H8000 M0 193.5 H8000 M0 217.5 H8000 M0 241.5 H8000 M0 265.5 H8000 M0 289.5 H8000 M0 313.5 H8000 M0 337.5 H8000 M0 361.5 H8000 M0 385.5 H8000 M0 409.5 H8000 M0 433.5 H8000 M0 457.5 H8000 M0 481.5 H8000 M0 505.5 H8000 M0 529.5 H8000 M0 553.5 H8000 M0 577.5 H8000 M0 601.5 H8000 M0 625.5 H8000 M0 649.5 H8000 M0 673.5 H8000 M0 697.5 H8000 M0 721.5 H8000 M0 745.5 H8000 M0 769.5 H8000 M0 793.5 H8000 M0 817.5 H8000 M0 841.5 H8000 M0 865.5 H8000 M0 889.5 H8000 M0 913.5 H8000 M0 937.5 H8000" stroke="#FFF" stroke-width="1" opacity="0.18"></path></pattern>
+      <pattern id="br-ties" patternUnits="userSpaceOnUse" width="152" height="192"><g transform="translate(12 60)"><circle r="5" fill="url(#br-tie) #000"></circle><path d="M-4 2.5 A5 5 0 0 0 4 2.5" fill="none" stroke="#FFF" stroke-width="0.8" opacity="0.3"></path></g></pattern>
+    </defs>
+    <rect x="0" y="0" width="100%" height="100%" fill="url(#br-boards)"></rect>
+    <rect x="77.9%" y="82.3%" width="4" height="244" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="7.7%" y="38.1%" width="4" height="96" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="97.5%" y="20.6%" width="8" height="109" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="44.8%" y="55.6%" width="4" height="264" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="86.7%" y="83.5%" width="10" height="262" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="74.6%" y="25.8%" width="3" height="130" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="7.5%" y="0.2%" width="8" height="126" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="72.5%" y="45.9%" width="9" height="128" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="86.5%" y="22.0%" width="6" height="259" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="11.7%" y="45.9%" width="3" height="263" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="62.3%" y="86.5%" width="3" height="260" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect><rect x="18.3%" y="90.8%" width="8" height="216" fill="url(#br-drip) #1A1916" filter="url(#br-blur2)"></rect>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grain)" opacity="0.45"></rect>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-stain)"></rect>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.55"></rect>
+    <rect x="0" y="0" width="100%" height="100%" fill="url(#br-ties)"></rect>
+  </svg>
+  <div aria-hidden="true" class="ambient"></div>
+  <!-- ===== HEADER ===== -->
+  <header style="position: relative; z-index: 1; display: block">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end">
+      <h1 style="margin: 0; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: 34px; line-height: 0.9; letter-spacing: -0.01em; color: var(--engraved); text-shadow: 1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.35)">SYSTEM<br>SENSORS</h1>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+        <span style="display: inline-block; width: 46px; height: 12px; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side)"></span>
+        <span style="font-weight: 600; font-size: 12px; letter-spacing: 0.12em; color: var(--sub)" data-dmy>&nbsp;</span>
+      </div>
+    </div>
+  </header>
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
+  <section class="hall">
+    <!-- deep-set opening onto a concrete megastructure -->
+    <div style="position: relative; flex: 1; min-height: 250px; overflow: hidden; background: var(--sky-2); box-shadow: inset 12px 12px 18px rgba(0,0,0,0.55), inset -2px -2px 0 rgba(255,255,255,0.3)">
+      <svg role="img" aria-label="Concrete megastructure" width="100%" height="100%" viewBox="0 0 432 250" preserveAspectRatio="xMidYMax meet" style="position: absolute; top: 0; left: 0">
+        <rect x="-2000" y="-2000" width="4432" height="2250" fill="url(#br-sky)"></rect>
+        <ellipse cx="90" cy="40" rx="70" ry="10" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="330" cy="70" rx="90" ry="12" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="200" cy="18" rx="60" ry="7" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="400" cy="30" rx="40" ry="6" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse>
+        <!-- distant slab blocks -->
+        <path d="M0 210 V150 H36 V170 H70 V130 H96 V210 Z M330 210 V160 H366 V120 H404 V150 H432 V210 Z" fill="#A3A6A8"></path>
+        <!-- cast shadows on the ground -->
+        <rect x="-2000" y="236" width="4432" height="14" fill="#8E8B86"></rect>
+        <!-- main tower: right side face, front face, window grid -->
+        <path d="M250 196 V40 L266 48 V196 Z" fill="#8A8782"></path>
+        <rect x="60" y="40" width="190" height="156" fill="#C4C1BB"></rect>
+      <g data-windows><rect x="66" y="48" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="85" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="142" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="237" y="48" width="13" height="10" fill="#2E3033" style=""></rect><rect x="66" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="85" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="64" width="13" height="10" fill="#FFC46A" style="animation: br-flicker 7s linear -5.3s infinite"></rect><rect x="142" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="64" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="237" y="64" width="13" height="10" fill="#2E3033" style=""></rect><rect x="66" y="80" width="13" height="10" fill="#FFC46A" style="animation: br-flicker 7s linear -5.2s infinite"></rect><rect x="85" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="142" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="237" y="80" width="13" height="10" fill="#2E3033" style=""></rect><rect x="66" y="96" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="85" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="142" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="96" width="13" height="10" fill="#2E3033" style=""></rect><rect x="237" y="96" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="66" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="85" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="112" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="142" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="112" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="237" y="112" width="13" height="10" fill="#2E3033" style=""></rect><rect x="66" y="128" width="13" height="10" fill="#2E3033" style=""></rect><rect x="85" y="128" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="128" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="128" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="142" y="128" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="128" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="180" y="128" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="199" y="128" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="128" width="13" height="10" fill="#2E3033" style=""></rect><rect x="237" y="128" width="13" height="10" fill="#2E3033" style=""></rect><rect x="66" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="85" y="144" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="104" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="142" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="144" width="13" height="10" fill="#2E3033" style=""></rect><rect x="237" y="144" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="66" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="85" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="123" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="142" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="237" y="160" width="13" height="10" fill="#2E3033" style=""></rect><rect x="66" y="176" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="85" y="176" width="13" height="10" fill="#2E3033" style=""></rect><rect x="104" y="176" width="13" height="10" fill="#FFC46A" style=""></rect><rect x="123" y="176" width="13" height="10" fill="#2E3033" style=""></rect><rect x="142" y="176" width="13" height="10" fill="#2E3033" style=""></rect><rect x="161" y="176" width="13" height="10" fill="#2E3033" style=""></rect><rect x="180" y="176" width="13" height="10" fill="#2E3033" style=""></rect><rect x="199" y="176" width="13" height="10" fill="#2E3033" style=""></rect><rect x="218" y="176" width="13" height="10" fill="#2E3033" style=""></rect><rect x="237" y="176" width="13" height="10" fill="#2E3033" style=""></rect></g>
+        <path d="M64 46 V194 M83 46 V194 M102 46 V194 M121 46 V194 M140 46 V194 M159 46 V194 M178 46 V194 M197 46 V194 M216 46 V194 M235 46 V194 " stroke="#8A8782" stroke-width="1.2" opacity="0.6"></path>
+        <!-- crown overhang -->
+        <rect x="40" y="26" width="120" height="16" fill="#C4C1BB"></rect>
+        <rect x="40" y="42" width="120" height="6" fill="#5C5A56" opacity="0.7"></rect>
+        <!-- stair core -->
+        <path d="M330 100 V20 L340 25 V100 Z" fill="#8A8782"></path>
+        <rect x="292" y="20" width="38" height="80" fill="#C4C1BB"></rect>
+        <rect x="309" y="30" width="4" height="60" fill="#2E3033"></rect>
+        <!-- cantilevered block -->
+        <rect x="220" y="160" width="180" height="10" fill="#5C5A56" opacity="0.65"></rect>
+        <path d="M400 160 V100 L412 106 V160 Z" fill="#8A8782"></path>
+        <rect x="220" y="100" width="180" height="60" fill="#C4C1BB"></rect>
+        <rect x="228" y="112" width="164" height="18" fill="#2E3033"></rect>
+        <rect x="228" y="136" width="164" height="14" fill="#2E3033"></rect>
+        <rect x="229.5" y="136" width="15" height="14" fill="#FFC46A" opacity="0.9" style=""></rect><rect x="247.5" y="136" width="15" height="14" fill="#FFC46A" opacity="0.9" style=""></rect><rect x="301.5" y="136" width="15" height="14" fill="#FFC46A" opacity="0.9" style=""></rect><rect x="319.5" y="112" width="15" height="18" fill="#FFC46A" opacity="0.9" style=""></rect><rect x="355.5" y="136" width="15" height="14" fill="#FFC46A" opacity="0.9" style=""></rect>
+        <path d="M228 110 V152 M246 110 V152 M264 110 V152 M282 110 V152 M300 110 V152 M318 110 V152 M336 110 V152 M354 110 V152 M372 110 V152 M390 110 V152 " stroke="#C4C1BB" stroke-width="3"></path>
+        <!-- podium on pilotis -->
+        <rect x="20" y="196" width="392" height="12" fill="#C4C1BB"></rect>
+        <rect x="20" y="208" width="392" height="5" fill="#5C5A56" opacity="0.7"></rect>
+        <rect x="30" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="30" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="72" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="72" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="114" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="114" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="156" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="156" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="198" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="198" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="240" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="240" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="282" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="282" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="324" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="324" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="366" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="366" y="208" width="3" height="28" fill="#C4C1BB"></rect><rect x="408" y="208" width="8" height="28" fill="#8A8782"></rect><rect x="408" y="208" width="3" height="28" fill="#C4C1BB"></rect>
+      </svg>
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" fill="#000" filter="url(#br-grit)" opacity="0.3"></rect></svg>
+    </div>
+    <!-- clock cast into a slab -->
+    <div style="position: relative; height: 128px; background: var(--slab); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.25), 8px 8px 0 var(--side), 16px 20px 22px rgba(0,0,0,0.32); display: flex; align-items: center; justify-content: space-between; padding: 0 22px 0 18px">
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.6"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-stain)" opacity="0.6"></rect></svg>
+      <div style="position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div>
+      <span style="position: relative; font-family: 'Archivo Black', sans-serif; font-size: 98px; line-height: 1; letter-spacing: -0.03em; color: var(--engraved); text-shadow: 1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.35)" data-clock="0">--:--</span>
+      <div style="position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 6px">
+        <span style="font-family: 'Archivo Black', sans-serif; font-size: 22px; line-height: 1; color: var(--engraved); text-shadow: 1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.35)" data-day3>&nbsp;</span>
+        <span style="font-weight: 600; font-size: 13px; letter-spacing: 0.1em; color: var(--sub)" data-daymon>&nbsp;</span>
+      </div>
+    </div>
+  </section>
+  <!-- ===== 01 PROCESSOR ===== -->
+  <section class="slab" data-section="cpu" style="position: relative; z-index: 1; background: var(--slab); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.25), 8px 8px 0 var(--side), 16px 20px 22px rgba(0,0,0,0.32); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 10px">
+    <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.6"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-stain)" opacity="0.6"></rect></svg>
+    <div style="position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div>
+    <div style="position: relative; display: flex; align-items: center; gap: 12px">
+      <span style="font-family: 'Archivo Black', sans-serif; font-size: 30px; line-height: 1; color: var(--accent); text-shadow: 2px 2px 0 var(--accent-side)">01</span>
+      <h2 style="margin: 0; flex: 1; font-weight: 600; font-size: 15px; letter-spacing: 0.24em; color: var(--ink)">PROCESSOR</h2>
+      <span style="padding: 3px 8px; border: 2px solid currentColor; font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: var(--sub)" data-state="5" data-need="5">NOMINAL</span>
+    </div>
+    <div style="position: relative; display: flex; align-items: center; gap: 16px">
+      <div data-need="5" style="position: relative; width: 180px; height: 180px; flex: none">
+        <svg data-dial="5" role="img" aria-label="CPU temperature dial" width="180" height="180" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0">
+          <circle cx="96" cy="96" r="56" fill="url(#br-well) #77746F"></circle>
+          <path d="M30.6 157.8 A90 90 0 0 1 13.8 132.7 L39.4 121.3 A62 62 0 0 0 51.0 138.6 Z " transform="translate(6 6)" class="blk side"></path><path d="M11.9 128.1 A90 90 0 0 1 6.0 98.5 L34.0 97.7 A62 62 0 0 0 38.1 118.1 Z " transform="translate(6 6)" class="blk side"></path><path d="M6.0 93.5 A90 90 0 0 1 11.9 63.9 L38.1 73.9 A62 62 0 0 0 34.0 94.3 Z " transform="translate(6 6)" class="blk side"></path><path d="M13.8 59.3 A90 90 0 0 1 30.6 34.2 L51.0 53.4 A62 62 0 0 0 39.4 70.7 Z " transform="translate(6 6)" class="blk side"></path><path d="M34.2 30.6 A90 90 0 0 1 59.3 13.8 L70.7 39.4 A62 62 0 0 0 53.4 51.0 Z " transform="translate(6 6)" class="blk side"></path><path d="M63.9 11.9 A90 90 0 0 1 93.5 6.0 L94.3 34.0 A62 62 0 0 0 73.9 38.1 Z " transform="translate(6 6)" class="blk side"></path><path d="M98.5 6.0 A90 90 0 0 1 128.1 11.9 L118.1 38.1 A62 62 0 0 0 97.7 34.0 Z " transform="translate(6 6)" class="blk side"></path><path d="M132.7 13.8 A90 90 0 0 1 157.8 30.6 L138.6 51.0 A62 62 0 0 0 121.3 39.4 Z " transform="translate(6 6)" class="blk side"></path><path d="M161.4 34.2 A90 90 0 0 1 178.2 59.3 L152.6 70.7 A62 62 0 0 0 141.0 53.4 Z " transform="translate(6 6)" class="blk side"></path><path d="M180.1 63.9 A90 90 0 0 1 186.0 93.5 L158.0 94.3 A62 62 0 0 0 153.9 73.9 Z " transform="translate(6 6)" class="blk side"></path><path d="M186.0 98.5 A90 90 0 0 1 180.1 128.1 L153.9 118.1 A62 62 0 0 0 158.0 97.7 Z " transform="translate(6 6)" class="blk side"></path><path d="M178.2 132.7 A90 90 0 0 1 161.4 157.8 L141.0 138.6 A62 62 0 0 0 152.6 121.3 Z " transform="translate(6 6)" class="blk side"></path>
+          <path d="M30.6 157.8 A90 90 0 0 1 13.8 132.7 L39.4 121.3 A62 62 0 0 0 51.0 138.6 Z " class="blk face"></path><path d="M11.9 128.1 A90 90 0 0 1 6.0 98.5 L34.0 97.7 A62 62 0 0 0 38.1 118.1 Z " class="blk face"></path><path d="M6.0 93.5 A90 90 0 0 1 11.9 63.9 L38.1 73.9 A62 62 0 0 0 34.0 94.3 Z " class="blk face"></path><path d="M13.8 59.3 A90 90 0 0 1 30.6 34.2 L51.0 53.4 A62 62 0 0 0 39.4 70.7 Z " class="blk face"></path><path d="M34.2 30.6 A90 90 0 0 1 59.3 13.8 L70.7 39.4 A62 62 0 0 0 53.4 51.0 Z " class="blk face"></path><path d="M63.9 11.9 A90 90 0 0 1 93.5 6.0 L94.3 34.0 A62 62 0 0 0 73.9 38.1 Z " class="blk face"></path><path d="M98.5 6.0 A90 90 0 0 1 128.1 11.9 L118.1 38.1 A62 62 0 0 0 97.7 34.0 Z " class="blk face"></path><path d="M132.7 13.8 A90 90 0 0 1 157.8 30.6 L138.6 51.0 A62 62 0 0 0 121.3 39.4 Z " class="blk face"></path><path d="M161.4 34.2 A90 90 0 0 1 178.2 59.3 L152.6 70.7 A62 62 0 0 0 141.0 53.4 Z " class="blk face"></path><path d="M180.1 63.9 A90 90 0 0 1 186.0 93.5 L158.0 94.3 A62 62 0 0 0 153.9 73.9 Z " class="blk face"></path><path d="M186.0 98.5 A90 90 0 0 1 180.1 128.1 L153.9 118.1 A62 62 0 0 0 158.0 97.7 Z " class="blk face"></path><path d="M178.2 132.7 A90 90 0 0 1 161.4 157.8 L141.0 138.6 A62 62 0 0 0 152.6 121.3 Z " class="blk face"></path>
+          <path d="M30.6 157.8 A90 90 0 0 1 13.8 132.7 L39.4 121.3 A62 62 0 0 0 51.0 138.6 Z M11.9 128.1 A90 90 0 0 1 6.0 98.5 L34.0 97.7 A62 62 0 0 0 38.1 118.1 Z M6.0 93.5 A90 90 0 0 1 11.9 63.9 L38.1 73.9 A62 62 0 0 0 34.0 94.3 Z M13.8 59.3 A90 90 0 0 1 30.6 34.2 L51.0 53.4 A62 62 0 0 0 39.4 70.7 Z M34.2 30.6 A90 90 0 0 1 59.3 13.8 L70.7 39.4 A62 62 0 0 0 53.4 51.0 Z M63.9 11.9 A90 90 0 0 1 93.5 6.0 L94.3 34.0 A62 62 0 0 0 73.9 38.1 Z M98.5 6.0 A90 90 0 0 1 128.1 11.9 L118.1 38.1 A62 62 0 0 0 97.7 34.0 Z M132.7 13.8 A90 90 0 0 1 157.8 30.6 L138.6 51.0 A62 62 0 0 0 121.3 39.4 Z M161.4 34.2 A90 90 0 0 1 178.2 59.3 L152.6 70.7 A62 62 0 0 0 141.0 53.4 Z M180.1 63.9 A90 90 0 0 1 186.0 93.5 L158.0 94.3 A62 62 0 0 0 153.9 73.9 Z M186.0 98.5 A90 90 0 0 1 180.1 128.1 L153.9 118.1 A62 62 0 0 0 158.0 97.7 Z M178.2 132.7 A90 90 0 0 1 161.4 157.8 L141.0 138.6 A62 62 0 0 0 152.6 121.3 Z " fill="#000" filter="url(#br-speck)" opacity="0.5"></path>
+          <path d="M51.0 138.6 L30.6 157.8 M38.1 118.1 L11.9 128.1 M34.0 94.3 L6.0 93.5 M39.4 70.7 L13.8 59.3 M53.4 51.0 L34.2 30.6 M73.9 38.1 L63.9 11.9 M97.7 34.0 L98.5 6.0 M121.3 39.4 L132.7 13.8 M141.0 53.4 L161.4 34.2 M153.9 73.9 L180.1 63.9 M158.0 97.7 L186.0 98.5 M152.6 121.3 L178.2 132.7 " fill="none" stroke="#FFF" stroke-width="1" opacity="0.35"></path>
+        </svg>
+        <div style="position: absolute; left: 0; top: 0; width: 173px; height: 173px; display: flex; flex-direction: column; align-items: center; justify-content: center">
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 40px; line-height: 1; color: #F2EFE9"><span data-num="5" data-places="0">--</span>°</span>
+          <span style="font-weight: 600; font-size: 10px; letter-spacing: 0.2em; color: #D2CFC9; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="4" data-default="PKG" data-upper>PKG</span>
+        </div>
+      </div>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+          <div data-need="9" style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--sub)">LOAD</span>
+              <span style="font-family: 'Archivo Black', sans-serif; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="9" data-places="0">--</span><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px; color: var(--sub)"> <span data-unit="10" data-default="%" data-upper>%</span></span></span>
+            </div>
+            <div style="position: relative; height: 16px; background: linear-gradient(135deg, var(--recess-2) 0%, var(--recess-1) 60%); box-shadow: inset 4px 4px 6px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.35)">
+              <div data-bar="9" data-max="11" data-unit-of="10" data-scale="100" style="position: absolute; left: 0; top: -3px; height: 15px; width: 0%; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side), inset 1px 1px 0 rgba(255,255,255,0.35)"></div>
+            </div>
+          </div>
+          <div data-need="13" style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--sub)">CLOCK</span>
+              <span style="font-family: 'Archivo Black', sans-serif; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="13" data-places="2" data-ghz>--</span><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px; color: var(--sub)"> <span data-unit="14" data-default="GHZ" data-upper data-ghz>GHZ</span></span></span>
+            </div>
+            <div style="position: relative; height: 16px; background: linear-gradient(135deg, var(--recess-2) 0%, var(--recess-1) 60%); box-shadow: inset 4px 4px 6px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.35)">
+              <div data-bar="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" style="position: absolute; left: 0; top: -3px; height: 15px; width: 0%; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side), inset 1px 1px 0 rgba(255,255,255,0.35)"></div>
+            </div>
+          </div>
+          <div data-need="17" style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--sub)">POWER</span>
+              <span style="font-family: 'Archivo Black', sans-serif; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="17" data-places="0">--</span><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px; color: var(--sub)"> <span data-unit="18" data-default="W" data-upper>W</span></span></span>
+            </div>
+            <div style="position: relative; height: 16px; background: linear-gradient(135deg, var(--recess-2) 0%, var(--recess-1) 60%); box-shadow: inset 4px 4px 6px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.35)">
+              <div data-bar="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" style="position: absolute; left: 0; top: -3px; height: 15px; width: 0%; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side), inset 1px 1px 0 rgba(255,255,255,0.35)"></div>
+            </div>
+          </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== 02 GRAPHICS ===== -->
+  <section class="slab" data-section="gpu" style="position: relative; z-index: 1; background: var(--slab); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.25), 8px 8px 0 var(--side), 16px 20px 22px rgba(0,0,0,0.32); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 10px">
+    <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.6"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-stain)" opacity="0.6"></rect></svg>
+    <div style="position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div>
+    <div style="position: relative; display: flex; align-items: center; gap: 12px">
+      <span style="font-family: 'Archivo Black', sans-serif; font-size: 30px; line-height: 1; color: var(--accent); text-shadow: 2px 2px 0 var(--accent-side)">02</span>
+      <h2 style="margin: 0; flex: 1; font-weight: 600; font-size: 15px; letter-spacing: 0.24em; color: var(--ink)">GRAPHICS</h2>
+      <span style="padding: 3px 8px; border: 2px solid currentColor; font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: var(--sub)" data-state="21" data-need="21">NOMINAL</span>
+    </div>
+    <div style="position: relative; display: flex; align-items: center; gap: 16px">
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+          <div data-need="25" style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--sub)">LOAD</span>
+              <span style="font-family: 'Archivo Black', sans-serif; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="25" data-places="0">--</span><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px; color: var(--sub)"> <span data-unit="26" data-default="%" data-upper>%</span></span></span>
+            </div>
+            <div style="position: relative; height: 16px; background: linear-gradient(135deg, var(--recess-2) 0%, var(--recess-1) 60%); box-shadow: inset 4px 4px 6px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.35)">
+              <div data-bar="25" data-max="27" data-unit-of="26" data-scale="100" style="position: absolute; left: 0; top: -3px; height: 15px; width: 0%; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side), inset 1px 1px 0 rgba(255,255,255,0.35)"></div>
+            </div>
+          </div>
+          <div data-need="29" style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--sub)">CLOCK</span>
+              <span style="font-family: 'Archivo Black', sans-serif; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="29" data-places="2" data-ghz>--</span><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px; color: var(--sub)"> <span data-unit="30" data-default="GHZ" data-upper data-ghz>GHZ</span></span></span>
+            </div>
+            <div style="position: relative; height: 16px; background: linear-gradient(135deg, var(--recess-2) 0%, var(--recess-1) 60%); box-shadow: inset 4px 4px 6px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.35)">
+              <div data-bar="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" style="position: absolute; left: 0; top: -3px; height: 15px; width: 0%; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side), inset 1px 1px 0 rgba(255,255,255,0.35)"></div>
+            </div>
+          </div>
+          <div data-need="33" style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--sub)">POWER</span>
+              <span style="font-family: 'Archivo Black', sans-serif; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="33" data-places="0">--</span><span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px; color: var(--sub)"> <span data-unit="34" data-default="W" data-upper>W</span></span></span>
+            </div>
+            <div style="position: relative; height: 16px; background: linear-gradient(135deg, var(--recess-2) 0%, var(--recess-1) 60%); box-shadow: inset 4px 4px 6px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.35)">
+              <div data-bar="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" style="position: absolute; left: 0; top: -3px; height: 15px; width: 0%; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side), inset 1px 1px 0 rgba(255,255,255,0.35)"></div>
+            </div>
+          </div>
+      </div>
+      <div data-need="21" style="position: relative; width: 180px; height: 180px; flex: none">
+        <svg data-dial="21" role="img" aria-label="GPU temperature dial" width="180" height="180" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0">
+          <circle cx="96" cy="96" r="56" fill="url(#br-well) #77746F"></circle>
+          <path d="M30.6 157.8 A90 90 0 0 1 13.8 132.7 L39.4 121.3 A62 62 0 0 0 51.0 138.6 Z " transform="translate(6 6)" class="blk side"></path><path d="M11.9 128.1 A90 90 0 0 1 6.0 98.5 L34.0 97.7 A62 62 0 0 0 38.1 118.1 Z " transform="translate(6 6)" class="blk side"></path><path d="M6.0 93.5 A90 90 0 0 1 11.9 63.9 L38.1 73.9 A62 62 0 0 0 34.0 94.3 Z " transform="translate(6 6)" class="blk side"></path><path d="M13.8 59.3 A90 90 0 0 1 30.6 34.2 L51.0 53.4 A62 62 0 0 0 39.4 70.7 Z " transform="translate(6 6)" class="blk side"></path><path d="M34.2 30.6 A90 90 0 0 1 59.3 13.8 L70.7 39.4 A62 62 0 0 0 53.4 51.0 Z " transform="translate(6 6)" class="blk side"></path><path d="M63.9 11.9 A90 90 0 0 1 93.5 6.0 L94.3 34.0 A62 62 0 0 0 73.9 38.1 Z " transform="translate(6 6)" class="blk side"></path><path d="M98.5 6.0 A90 90 0 0 1 128.1 11.9 L118.1 38.1 A62 62 0 0 0 97.7 34.0 Z " transform="translate(6 6)" class="blk side"></path><path d="M132.7 13.8 A90 90 0 0 1 157.8 30.6 L138.6 51.0 A62 62 0 0 0 121.3 39.4 Z " transform="translate(6 6)" class="blk side"></path><path d="M161.4 34.2 A90 90 0 0 1 178.2 59.3 L152.6 70.7 A62 62 0 0 0 141.0 53.4 Z " transform="translate(6 6)" class="blk side"></path><path d="M180.1 63.9 A90 90 0 0 1 186.0 93.5 L158.0 94.3 A62 62 0 0 0 153.9 73.9 Z " transform="translate(6 6)" class="blk side"></path><path d="M186.0 98.5 A90 90 0 0 1 180.1 128.1 L153.9 118.1 A62 62 0 0 0 158.0 97.7 Z " transform="translate(6 6)" class="blk side"></path><path d="M178.2 132.7 A90 90 0 0 1 161.4 157.8 L141.0 138.6 A62 62 0 0 0 152.6 121.3 Z " transform="translate(6 6)" class="blk side"></path>
+          <path d="M30.6 157.8 A90 90 0 0 1 13.8 132.7 L39.4 121.3 A62 62 0 0 0 51.0 138.6 Z " class="blk face"></path><path d="M11.9 128.1 A90 90 0 0 1 6.0 98.5 L34.0 97.7 A62 62 0 0 0 38.1 118.1 Z " class="blk face"></path><path d="M6.0 93.5 A90 90 0 0 1 11.9 63.9 L38.1 73.9 A62 62 0 0 0 34.0 94.3 Z " class="blk face"></path><path d="M13.8 59.3 A90 90 0 0 1 30.6 34.2 L51.0 53.4 A62 62 0 0 0 39.4 70.7 Z " class="blk face"></path><path d="M34.2 30.6 A90 90 0 0 1 59.3 13.8 L70.7 39.4 A62 62 0 0 0 53.4 51.0 Z " class="blk face"></path><path d="M63.9 11.9 A90 90 0 0 1 93.5 6.0 L94.3 34.0 A62 62 0 0 0 73.9 38.1 Z " class="blk face"></path><path d="M98.5 6.0 A90 90 0 0 1 128.1 11.9 L118.1 38.1 A62 62 0 0 0 97.7 34.0 Z " class="blk face"></path><path d="M132.7 13.8 A90 90 0 0 1 157.8 30.6 L138.6 51.0 A62 62 0 0 0 121.3 39.4 Z " class="blk face"></path><path d="M161.4 34.2 A90 90 0 0 1 178.2 59.3 L152.6 70.7 A62 62 0 0 0 141.0 53.4 Z " class="blk face"></path><path d="M180.1 63.9 A90 90 0 0 1 186.0 93.5 L158.0 94.3 A62 62 0 0 0 153.9 73.9 Z " class="blk face"></path><path d="M186.0 98.5 A90 90 0 0 1 180.1 128.1 L153.9 118.1 A62 62 0 0 0 158.0 97.7 Z " class="blk face"></path><path d="M178.2 132.7 A90 90 0 0 1 161.4 157.8 L141.0 138.6 A62 62 0 0 0 152.6 121.3 Z " class="blk face"></path>
+          <path d="M30.6 157.8 A90 90 0 0 1 13.8 132.7 L39.4 121.3 A62 62 0 0 0 51.0 138.6 Z M11.9 128.1 A90 90 0 0 1 6.0 98.5 L34.0 97.7 A62 62 0 0 0 38.1 118.1 Z M6.0 93.5 A90 90 0 0 1 11.9 63.9 L38.1 73.9 A62 62 0 0 0 34.0 94.3 Z M13.8 59.3 A90 90 0 0 1 30.6 34.2 L51.0 53.4 A62 62 0 0 0 39.4 70.7 Z M34.2 30.6 A90 90 0 0 1 59.3 13.8 L70.7 39.4 A62 62 0 0 0 53.4 51.0 Z M63.9 11.9 A90 90 0 0 1 93.5 6.0 L94.3 34.0 A62 62 0 0 0 73.9 38.1 Z M98.5 6.0 A90 90 0 0 1 128.1 11.9 L118.1 38.1 A62 62 0 0 0 97.7 34.0 Z M132.7 13.8 A90 90 0 0 1 157.8 30.6 L138.6 51.0 A62 62 0 0 0 121.3 39.4 Z M161.4 34.2 A90 90 0 0 1 178.2 59.3 L152.6 70.7 A62 62 0 0 0 141.0 53.4 Z M180.1 63.9 A90 90 0 0 1 186.0 93.5 L158.0 94.3 A62 62 0 0 0 153.9 73.9 Z M186.0 98.5 A90 90 0 0 1 180.1 128.1 L153.9 118.1 A62 62 0 0 0 158.0 97.7 Z M178.2 132.7 A90 90 0 0 1 161.4 157.8 L141.0 138.6 A62 62 0 0 0 152.6 121.3 Z " fill="#000" filter="url(#br-speck)" opacity="0.5"></path>
+          <path d="M51.0 138.6 L30.6 157.8 M38.1 118.1 L11.9 128.1 M34.0 94.3 L6.0 93.5 M39.4 70.7 L13.8 59.3 M53.4 51.0 L34.2 30.6 M73.9 38.1 L63.9 11.9 M97.7 34.0 L98.5 6.0 M121.3 39.4 L132.7 13.8 M141.0 53.4 L161.4 34.2 M153.9 73.9 L180.1 63.9 M158.0 97.7 L186.0 98.5 M152.6 121.3 L178.2 132.7 " fill="none" stroke="#FFF" stroke-width="1" opacity="0.35"></path>
+        </svg>
+        <div style="position: absolute; left: 0; top: 0; width: 173px; height: 173px; display: flex; flex-direction: column; align-items: center; justify-content: center">
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 40px; line-height: 1; color: #F2EFE9"><span data-num="21" data-places="0">--</span>°</span>
+          <span style="font-weight: 600; font-size: 10px; letter-spacing: 0.2em; color: #D2CFC9; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="20" data-default="EDGE" data-upper>EDGE</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== 03 COOLING: cast grilles ===== -->
+  <section class="slab" data-section="fans" style="position: relative; z-index: 1; background: var(--slab); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.25), 8px 8px 0 var(--side), 16px 20px 22px rgba(0,0,0,0.32); padding: 16px 14px 16px; display: flex; flex-direction: column; gap: 10px">
+    <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.6"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-stain)" opacity="0.6"></rect></svg>
+    <div style="position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div>
+    <div style="position: relative; display: flex; align-items: center; gap: 12px; padding: 0 6px">
+      <span style="font-family: 'Archivo Black', sans-serif; font-size: 30px; line-height: 1; color: var(--accent); text-shadow: 2px 2px 0 var(--accent-side)">03</span>
+      <h2 style="margin: 0; flex: 1; font-weight: 600; font-size: 15px; letter-spacing: 0.24em; color: var(--ink)">COOLING</h2>
+      <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: var(--sub)">RPM</span>
+    </div>
+    <div style="position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+        <div data-need="37" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88">
+            <circle r="40" fill="url(#br-well) #77746F"></circle>
+            <g data-rotor="37">
+              <path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(0)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(72)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(144)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(216)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(288)" fill="url(#br-steel) #5A5D62"></path>
+            </g>
+            <circle r="7" fill="url(#br-steel) #5A5D62"></circle>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" transform="translate(3 3)" fill="#8C8983" opacity="0.9"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#C8C5BF"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#000" filter="url(#br-speck)" opacity="0.5"></path>
+            <path d="M-44 -6 H-6 V-44 M6 -44 V-6 H44" fill="none" stroke="#FFF" stroke-width="1" opacity="0.4"></path>
+            <circle r="41" fill="none" stroke="#FFF" stroke-width="1" opacity="0.25" stroke-dasharray="64 194" stroke-dashoffset="-120"></circle>
+          </svg>
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 18px; line-height: 1; color: var(--ink)" data-num="37" data-places="0">--</span>
+          <span style="font-weight: 600; font-size: 10px; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis" data-cap="36" data-default="FAN 1" data-upper>FAN 1</span>
+        </div>
+        <div data-need="41" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88">
+            <circle r="40" fill="url(#br-well) #77746F"></circle>
+            <g data-rotor="41">
+              <path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(0)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(72)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(144)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(216)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(288)" fill="url(#br-steel) #5A5D62"></path>
+            </g>
+            <circle r="7" fill="url(#br-steel) #5A5D62"></circle>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" transform="translate(3 3)" fill="#8C8983" opacity="0.9"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#C8C5BF"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#000" filter="url(#br-speck)" opacity="0.5"></path>
+            <path d="M-44 -6 H-6 V-44 M6 -44 V-6 H44" fill="none" stroke="#FFF" stroke-width="1" opacity="0.4"></path>
+            <circle r="41" fill="none" stroke="#FFF" stroke-width="1" opacity="0.25" stroke-dasharray="64 194" stroke-dashoffset="-120"></circle>
+          </svg>
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 18px; line-height: 1; color: var(--ink)" data-num="41" data-places="0">--</span>
+          <span style="font-weight: 600; font-size: 10px; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis" data-cap="40" data-default="FAN 2" data-upper>FAN 2</span>
+        </div>
+        <div data-need="45" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88">
+            <circle r="40" fill="url(#br-well) #77746F"></circle>
+            <g data-rotor="45">
+              <path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(0)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(72)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(144)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(216)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(288)" fill="url(#br-steel) #5A5D62"></path>
+            </g>
+            <circle r="7" fill="url(#br-steel) #5A5D62"></circle>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" transform="translate(3 3)" fill="#8C8983" opacity="0.9"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#C8C5BF"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#000" filter="url(#br-speck)" opacity="0.5"></path>
+            <path d="M-44 -6 H-6 V-44 M6 -44 V-6 H44" fill="none" stroke="#FFF" stroke-width="1" opacity="0.4"></path>
+            <circle r="41" fill="none" stroke="#FFF" stroke-width="1" opacity="0.25" stroke-dasharray="64 194" stroke-dashoffset="-120"></circle>
+          </svg>
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 18px; line-height: 1; color: var(--ink)" data-num="45" data-places="0">--</span>
+          <span style="font-weight: 600; font-size: 10px; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis" data-cap="44" data-default="FAN 3" data-upper>FAN 3</span>
+        </div>
+        <div data-need="49" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88">
+            <circle r="40" fill="url(#br-well) #77746F"></circle>
+            <g data-rotor="49">
+              <path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(0)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(72)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(144)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(216)" fill="url(#br-steel) #5A5D62"></path><path d="M-5 -6 L-7 -33 Q0 -37 7 -33 L5 -6 Z" transform="rotate(288)" fill="url(#br-steel) #5A5D62"></path>
+            </g>
+            <circle r="7" fill="url(#br-steel) #5A5D62"></circle>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" transform="translate(3 3)" fill="#8C8983" opacity="0.9"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#C8C5BF"></path>
+            <path d="M-44 -6 H44 V6 H-44 Z M-6 -44 H6 V44 H-6 Z" fill="#000" filter="url(#br-speck)" opacity="0.5"></path>
+            <path d="M-44 -6 H-6 V-44 M6 -44 V-6 H44" fill="none" stroke="#FFF" stroke-width="1" opacity="0.4"></path>
+            <circle r="41" fill="none" stroke="#FFF" stroke-width="1" opacity="0.25" stroke-dasharray="64 194" stroke-dashoffset="-120"></circle>
+          </svg>
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 18px; line-height: 1; color: var(--ink)" data-num="49" data-places="0">--</span>
+          <span style="font-weight: 600; font-size: 10px; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis" data-cap="48" data-default="FAN 4" data-upper>FAN 4</span>
+        </div>
+    </div>
+  </section>
+  <!-- ===== 04 MEMORY: tower blocks ===== -->
+  <section class="slab" data-section="memory" style="position: relative; z-index: 1; background: var(--slab); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.25), 8px 8px 0 var(--side), 16px 20px 22px rgba(0,0,0,0.32); padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 8px">
+    <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.6"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-stain)" opacity="0.6"></rect></svg>
+    <div style="position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div>
+    <div style="position: relative; display: flex; align-items: center; gap: 12px; padding: 0 2px">
+      <span style="font-family: 'Archivo Black', sans-serif; font-size: 30px; line-height: 1; color: var(--accent); text-shadow: 2px 2px 0 var(--accent-side)">04</span>
+      <h2 style="margin: 0; flex: 1; font-weight: 600; font-size: 15px; letter-spacing: 0.24em; color: var(--ink)">MEMORY</h2>
+      <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: var(--sub)">OCCUPIED</span>
+    </div>
+    <div style="position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+        <div data-need="53" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+          <svg data-tower="53" data-max="55" aria-hidden="true" width="116" height="196" viewBox="0 0 116 196">
+            <rect x="0" y="0" width="116" height="190" fill="url(#br-well) #77746F" opacity="0.5"></rect>
+            <path d="M92 26 L104 32 V184 H92 Z" fill="#8A8782"></path>
+            <rect x="22" y="26" width="70" height="158" fill="#C4C1BB"></rect>
+            <rect x="34" y="14" width="34" height="12" fill="#C4C1BB"></rect>
+            <path d="M68 14 L74 17 V26 H68 Z" fill="#8A8782"></path>
+            <rect class="win" x="28" y="174" width="11" height="6"></rect><rect class="win" x="44" y="174" width="11" height="6"></rect><rect class="win" x="60" y="174" width="11" height="6"></rect><rect class="win" x="76" y="174" width="11" height="6"></rect><rect class="win" x="28" y="163" width="11" height="6"></rect><rect class="win" x="44" y="163" width="11" height="6"></rect><rect class="win" x="60" y="163" width="11" height="6"></rect><rect class="win" x="76" y="163" width="11" height="6"></rect><rect class="win" x="28" y="152" width="11" height="6"></rect><rect class="win" x="44" y="152" width="11" height="6"></rect><rect class="win" x="60" y="152" width="11" height="6"></rect><rect class="win" x="76" y="152" width="11" height="6"></rect><rect class="win" x="28" y="141" width="11" height="6"></rect><rect class="win" x="44" y="141" width="11" height="6"></rect><rect class="win" x="60" y="141" width="11" height="6"></rect><rect class="win" x="76" y="141" width="11" height="6"></rect><rect class="win" x="28" y="130" width="11" height="6"></rect><rect class="win" x="44" y="130" width="11" height="6"></rect><rect class="win" x="60" y="130" width="11" height="6"></rect><rect class="win" x="76" y="130" width="11" height="6"></rect><rect class="win" x="28" y="119" width="11" height="6"></rect><rect class="win" x="44" y="119" width="11" height="6"></rect><rect class="win" x="60" y="119" width="11" height="6"></rect><rect class="win" x="76" y="119" width="11" height="6"></rect><rect class="win" x="28" y="108" width="11" height="6"></rect><rect class="win" x="44" y="108" width="11" height="6"></rect><rect class="win" x="60" y="108" width="11" height="6"></rect><rect class="win" x="76" y="108" width="11" height="6"></rect><rect class="win" x="28" y="97" width="11" height="6"></rect><rect class="win" x="44" y="97" width="11" height="6"></rect><rect class="win" x="60" y="97" width="11" height="6"></rect><rect class="win" x="76" y="97" width="11" height="6"></rect><rect class="win" x="28" y="86" width="11" height="6"></rect><rect class="win" x="44" y="86" width="11" height="6"></rect><rect class="win" x="60" y="86" width="11" height="6"></rect><rect class="win" x="76" y="86" width="11" height="6"></rect><rect class="win" x="28" y="75" width="11" height="6"></rect><rect class="win" x="44" y="75" width="11" height="6"></rect><rect class="win" x="60" y="75" width="11" height="6"></rect><rect class="win" x="76" y="75" width="11" height="6"></rect><rect class="win" x="28" y="64" width="11" height="6"></rect><rect class="win" x="44" y="64" width="11" height="6"></rect><rect class="win" x="60" y="64" width="11" height="6"></rect><rect class="win" x="76" y="64" width="11" height="6"></rect><rect class="win" x="28" y="53" width="11" height="6"></rect><rect class="win" x="44" y="53" width="11" height="6"></rect><rect class="win" x="60" y="53" width="11" height="6"></rect><rect class="win" x="76" y="53" width="11" height="6"></rect><rect class="win" x="28" y="42" width="11" height="6"></rect><rect class="win" x="44" y="42" width="11" height="6"></rect><rect class="win" x="60" y="42" width="11" height="6"></rect><rect class="win" x="76" y="42" width="11" height="6"></rect><rect class="win" x="28" y="31" width="11" height="6"></rect><rect class="win" x="44" y="31" width="11" height="6"></rect><rect class="win" x="60" y="31" width="11" height="6"></rect><rect class="win" x="76" y="31" width="11" height="6"></rect>
+            <path d="M22 182 H92 M22 171 H92 M22 160 H92 M22 149 H92 M22 138 H92 M22 127 H92 M22 116 H92 M22 105 H92 M22 94 H92 M22 83 H92 M22 72 H92 M22 61 H92 M22 50 H92 M22 39 H92 M22 28 H92 " stroke="#5C5A56" stroke-width="1" opacity="0.55"></path>
+            <rect x="22" y="26" width="70" height="158" fill="#000" filter="url(#br-speck)" opacity="0.35"></rect>
+            <rect x="28" y="184" width="6" height="6" fill="#8A8782"></rect><rect x="54" y="184" width="6" height="6" fill="#8A8782"></rect><rect x="80" y="184" width="6" height="6" fill="#8A8782"></rect>
+            <rect x="0" y="190" width="116" height="4" fill="#8C8983"></rect>
+          </svg>
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 24px; line-height: 1; color: var(--ink)"><span data-pct="53" data-max="55">--</span>%</span>
+          <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--ink); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="52" data-default="MEMORY" data-upper>MEMORY</span>
+          <span style="font-size: 11px; color: var(--sub)"><span data-num="53" data-places="1" data-plain>--</span>/<span data-num="55" data-places="0" data-plain>--</span><span data-unit="54" data-default="GB" data-upper>GB</span></span>
+        </div>
+        <div data-need="57" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+          <svg data-tower="57" data-max="59" aria-hidden="true" width="116" height="196" viewBox="0 0 116 196">
+            <rect x="0" y="0" width="116" height="190" fill="url(#br-well) #77746F" opacity="0.5"></rect>
+            <path d="M92 26 L104 32 V184 H92 Z" fill="#8A8782"></path>
+            <rect x="22" y="26" width="70" height="158" fill="#C4C1BB"></rect>
+            <rect x="34" y="14" width="34" height="12" fill="#C4C1BB"></rect>
+            <path d="M68 14 L74 17 V26 H68 Z" fill="#8A8782"></path>
+            <rect class="win" x="28" y="174" width="11" height="6"></rect><rect class="win" x="44" y="174" width="11" height="6"></rect><rect class="win" x="60" y="174" width="11" height="6"></rect><rect class="win" x="76" y="174" width="11" height="6"></rect><rect class="win" x="28" y="163" width="11" height="6"></rect><rect class="win" x="44" y="163" width="11" height="6"></rect><rect class="win" x="60" y="163" width="11" height="6"></rect><rect class="win" x="76" y="163" width="11" height="6"></rect><rect class="win" x="28" y="152" width="11" height="6"></rect><rect class="win" x="44" y="152" width="11" height="6"></rect><rect class="win" x="60" y="152" width="11" height="6"></rect><rect class="win" x="76" y="152" width="11" height="6"></rect><rect class="win" x="28" y="141" width="11" height="6"></rect><rect class="win" x="44" y="141" width="11" height="6"></rect><rect class="win" x="60" y="141" width="11" height="6"></rect><rect class="win" x="76" y="141" width="11" height="6"></rect><rect class="win" x="28" y="130" width="11" height="6"></rect><rect class="win" x="44" y="130" width="11" height="6"></rect><rect class="win" x="60" y="130" width="11" height="6"></rect><rect class="win" x="76" y="130" width="11" height="6"></rect><rect class="win" x="28" y="119" width="11" height="6"></rect><rect class="win" x="44" y="119" width="11" height="6"></rect><rect class="win" x="60" y="119" width="11" height="6"></rect><rect class="win" x="76" y="119" width="11" height="6"></rect><rect class="win" x="28" y="108" width="11" height="6"></rect><rect class="win" x="44" y="108" width="11" height="6"></rect><rect class="win" x="60" y="108" width="11" height="6"></rect><rect class="win" x="76" y="108" width="11" height="6"></rect><rect class="win" x="28" y="97" width="11" height="6"></rect><rect class="win" x="44" y="97" width="11" height="6"></rect><rect class="win" x="60" y="97" width="11" height="6"></rect><rect class="win" x="76" y="97" width="11" height="6"></rect><rect class="win" x="28" y="86" width="11" height="6"></rect><rect class="win" x="44" y="86" width="11" height="6"></rect><rect class="win" x="60" y="86" width="11" height="6"></rect><rect class="win" x="76" y="86" width="11" height="6"></rect><rect class="win" x="28" y="75" width="11" height="6"></rect><rect class="win" x="44" y="75" width="11" height="6"></rect><rect class="win" x="60" y="75" width="11" height="6"></rect><rect class="win" x="76" y="75" width="11" height="6"></rect><rect class="win" x="28" y="64" width="11" height="6"></rect><rect class="win" x="44" y="64" width="11" height="6"></rect><rect class="win" x="60" y="64" width="11" height="6"></rect><rect class="win" x="76" y="64" width="11" height="6"></rect><rect class="win" x="28" y="53" width="11" height="6"></rect><rect class="win" x="44" y="53" width="11" height="6"></rect><rect class="win" x="60" y="53" width="11" height="6"></rect><rect class="win" x="76" y="53" width="11" height="6"></rect><rect class="win" x="28" y="42" width="11" height="6"></rect><rect class="win" x="44" y="42" width="11" height="6"></rect><rect class="win" x="60" y="42" width="11" height="6"></rect><rect class="win" x="76" y="42" width="11" height="6"></rect><rect class="win" x="28" y="31" width="11" height="6"></rect><rect class="win" x="44" y="31" width="11" height="6"></rect><rect class="win" x="60" y="31" width="11" height="6"></rect><rect class="win" x="76" y="31" width="11" height="6"></rect>
+            <path d="M22 182 H92 M22 171 H92 M22 160 H92 M22 149 H92 M22 138 H92 M22 127 H92 M22 116 H92 M22 105 H92 M22 94 H92 M22 83 H92 M22 72 H92 M22 61 H92 M22 50 H92 M22 39 H92 M22 28 H92 " stroke="#5C5A56" stroke-width="1" opacity="0.55"></path>
+            <rect x="22" y="26" width="70" height="158" fill="#000" filter="url(#br-speck)" opacity="0.35"></rect>
+            <rect x="28" y="184" width="6" height="6" fill="#8A8782"></rect><rect x="54" y="184" width="6" height="6" fill="#8A8782"></rect><rect x="80" y="184" width="6" height="6" fill="#8A8782"></rect>
+            <rect x="0" y="190" width="116" height="4" fill="#8C8983"></rect>
+          </svg>
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 24px; line-height: 1; color: var(--ink)"><span data-pct="57" data-max="59">--</span>%</span>
+          <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--ink); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="56" data-default="VIDEO" data-upper>VIDEO</span>
+          <span style="font-size: 11px; color: var(--sub)"><span data-num="57" data-places="1" data-plain>--</span>/<span data-num="59" data-places="0" data-plain>--</span><span data-unit="58" data-default="GB" data-upper>GB</span></span>
+        </div>
+        <div data-need="61" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+          <svg data-tower="61" data-max="63" aria-hidden="true" width="116" height="196" viewBox="0 0 116 196">
+            <rect x="0" y="0" width="116" height="190" fill="url(#br-well) #77746F" opacity="0.5"></rect>
+            <path d="M92 26 L104 32 V184 H92 Z" fill="#8A8782"></path>
+            <rect x="22" y="26" width="70" height="158" fill="#C4C1BB"></rect>
+            <rect x="34" y="14" width="34" height="12" fill="#C4C1BB"></rect>
+            <path d="M68 14 L74 17 V26 H68 Z" fill="#8A8782"></path>
+            <rect class="win" x="28" y="174" width="11" height="6"></rect><rect class="win" x="44" y="174" width="11" height="6"></rect><rect class="win" x="60" y="174" width="11" height="6"></rect><rect class="win" x="76" y="174" width="11" height="6"></rect><rect class="win" x="28" y="163" width="11" height="6"></rect><rect class="win" x="44" y="163" width="11" height="6"></rect><rect class="win" x="60" y="163" width="11" height="6"></rect><rect class="win" x="76" y="163" width="11" height="6"></rect><rect class="win" x="28" y="152" width="11" height="6"></rect><rect class="win" x="44" y="152" width="11" height="6"></rect><rect class="win" x="60" y="152" width="11" height="6"></rect><rect class="win" x="76" y="152" width="11" height="6"></rect><rect class="win" x="28" y="141" width="11" height="6"></rect><rect class="win" x="44" y="141" width="11" height="6"></rect><rect class="win" x="60" y="141" width="11" height="6"></rect><rect class="win" x="76" y="141" width="11" height="6"></rect><rect class="win" x="28" y="130" width="11" height="6"></rect><rect class="win" x="44" y="130" width="11" height="6"></rect><rect class="win" x="60" y="130" width="11" height="6"></rect><rect class="win" x="76" y="130" width="11" height="6"></rect><rect class="win" x="28" y="119" width="11" height="6"></rect><rect class="win" x="44" y="119" width="11" height="6"></rect><rect class="win" x="60" y="119" width="11" height="6"></rect><rect class="win" x="76" y="119" width="11" height="6"></rect><rect class="win" x="28" y="108" width="11" height="6"></rect><rect class="win" x="44" y="108" width="11" height="6"></rect><rect class="win" x="60" y="108" width="11" height="6"></rect><rect class="win" x="76" y="108" width="11" height="6"></rect><rect class="win" x="28" y="97" width="11" height="6"></rect><rect class="win" x="44" y="97" width="11" height="6"></rect><rect class="win" x="60" y="97" width="11" height="6"></rect><rect class="win" x="76" y="97" width="11" height="6"></rect><rect class="win" x="28" y="86" width="11" height="6"></rect><rect class="win" x="44" y="86" width="11" height="6"></rect><rect class="win" x="60" y="86" width="11" height="6"></rect><rect class="win" x="76" y="86" width="11" height="6"></rect><rect class="win" x="28" y="75" width="11" height="6"></rect><rect class="win" x="44" y="75" width="11" height="6"></rect><rect class="win" x="60" y="75" width="11" height="6"></rect><rect class="win" x="76" y="75" width="11" height="6"></rect><rect class="win" x="28" y="64" width="11" height="6"></rect><rect class="win" x="44" y="64" width="11" height="6"></rect><rect class="win" x="60" y="64" width="11" height="6"></rect><rect class="win" x="76" y="64" width="11" height="6"></rect><rect class="win" x="28" y="53" width="11" height="6"></rect><rect class="win" x="44" y="53" width="11" height="6"></rect><rect class="win" x="60" y="53" width="11" height="6"></rect><rect class="win" x="76" y="53" width="11" height="6"></rect><rect class="win" x="28" y="42" width="11" height="6"></rect><rect class="win" x="44" y="42" width="11" height="6"></rect><rect class="win" x="60" y="42" width="11" height="6"></rect><rect class="win" x="76" y="42" width="11" height="6"></rect><rect class="win" x="28" y="31" width="11" height="6"></rect><rect class="win" x="44" y="31" width="11" height="6"></rect><rect class="win" x="60" y="31" width="11" height="6"></rect><rect class="win" x="76" y="31" width="11" height="6"></rect>
+            <path d="M22 182 H92 M22 171 H92 M22 160 H92 M22 149 H92 M22 138 H92 M22 127 H92 M22 116 H92 M22 105 H92 M22 94 H92 M22 83 H92 M22 72 H92 M22 61 H92 M22 50 H92 M22 39 H92 M22 28 H92 " stroke="#5C5A56" stroke-width="1" opacity="0.55"></path>
+            <rect x="22" y="26" width="70" height="158" fill="#000" filter="url(#br-speck)" opacity="0.35"></rect>
+            <rect x="28" y="184" width="6" height="6" fill="#8A8782"></rect><rect x="54" y="184" width="6" height="6" fill="#8A8782"></rect><rect x="80" y="184" width="6" height="6" fill="#8A8782"></rect>
+            <rect x="0" y="190" width="116" height="4" fill="#8C8983"></rect>
+          </svg>
+          <span style="font-family: 'Archivo Black', sans-serif; font-size: 24px; line-height: 1; color: var(--ink)"><span data-pct="61" data-max="63">--</span>%</span>
+          <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.18em; color: var(--ink); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="60" data-default="DISK" data-upper>DISK</span>
+          <span style="font-size: 11px; color: var(--sub)"><span data-num="61" data-places="1" data-plain>--</span>/<span data-num="63" data-places="0" data-plain>--</span><span data-unit="62" data-default="GB" data-upper>GB</span></span>
+        </div>
+    </div>
+  </section>
+  <!-- ===== 05 NETWORK: concrete column skyline ===== -->
+  <section class="slab" data-section="network" style="position: relative; z-index: 1; background: var(--slab); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.25), 8px 8px 0 var(--side), 16px 20px 22px rgba(0,0,0,0.32); padding: 16px 20px 14px; display: flex; flex-direction: column; gap: 10px">
+    <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.6"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-stain)" opacity="0.6"></rect></svg>
+    <div style="position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; top: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div><div style="position: absolute; bottom: 10px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 42% 38%, rgba(0,0,0,0.75), rgba(0,0,0,0.35) 70%, rgba(0,0,0,0) 100%)"></div>
+    <div style="position: relative; display: flex; align-items: center; gap: 12px">
+      <span style="font-family: 'Archivo Black', sans-serif; font-size: 30px; line-height: 1; color: var(--accent); text-shadow: 2px 2px 0 var(--accent-side)">05</span>
+      <h2 style="margin: 0; flex: 1; font-weight: 600; font-size: 15px; letter-spacing: 0.24em; color: var(--ink)">NETWORK</h2>
+      <span style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: var(--sub)" data-unit="66" data-default="MB/S" data-upper>MB/S</span>
+    </div>
+    <div style="position: relative; display: flex; gap: 22px; align-items: baseline">
+      <span data-need="65" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: var(--sub)">IN <span style="font-family: 'Archivo Black', sans-serif; font-size: 28px; letter-spacing: 0; color: var(--ink)" data-num="65" data-places="1">--</span></span>
+      <span data-need="69" style="font-weight: 600; font-size: 11px; letter-spacing: 0.16em; color: var(--sub)">OUT <span style="font-family: 'Archivo Black', sans-serif; font-size: 28px; letter-spacing: 0; color: var(--ink)" data-num="69" data-places="1">--</span></span>
+    </div>
+    <div style="position: relative; height: 116px; background: linear-gradient(135deg, var(--recess-2) 0%, var(--recess-1) 60%); box-shadow: inset 4px 4px 6px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.35)">
+      <svg data-chart role="img" aria-label="Network traffic over the last minute" width="100%" height="116" style="position: absolute; top: 0; left: 0">
+        <path data-rules="dark" d="" stroke="#000" stroke-width="1" opacity="0.25"></path><path data-rules="light" d="" stroke="#FFF" stroke-width="1" opacity="0.12"></path>
+        <g data-columns></g>
+        <path data-line="out" d="" fill="none" stroke="#1E1E1C" stroke-width="1.6" stroke-linejoin="miter"></path>
+        <g data-marks><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect><rect hidden x="0" y="0" width="4" height="4" fill="#1E1E1C"></rect></g>
+      </svg>
+    </div>
+    <div style="position: relative; display: flex; justify-content: space-between; font-weight: 600; font-size: 10px; letter-spacing: 0.16em; color: var(--sub)"><span>T−60S</span><span>NOW</span></div>
+  </section>
+  </div>
+  <!-- ===== FOOTER: lintel ===== -->
+  <footer data-need="73" style="position: relative; z-index: 1; height: 44px; background: var(--slab); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.25), 8px 8px 0 var(--side), 16px 20px 22px rgba(0,0,0,0.32); display: flex; align-items: center; justify-content: space-between; padding: 0 22px">
+    <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#br-grit)" opacity="0.6"></rect></svg>
+    <span style="position: relative; font-weight: 600; font-size: 12px; letter-spacing: 0.2em; color: var(--sub)">UPTIME</span>
+    <span style="position: relative; font-family: 'Archivo Black', sans-serif; font-size: 20px; color: var(--engraved); text-shadow: 1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.35)" data-uptime="73">--</span>
+    <span style="position: relative; display: inline-block; width: 28px; height: 10px; background: var(--accent); box-shadow: 3px 3px 0 var(--accent-side)"></span>
+  </footer>
+</div>
+</div>
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "finish", "label": "Finish", "type": "choice", "var": "--finish", "default": "raw", "choices": [{"value": "raw", "label": "Raw Concrete"}, {"value": "night", "label": "Night"}, {"value": "corten", "label": "Corten"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Network chart full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"},
+    "90": {"hint": "Clock - Year", "source": "clock", "instance": 1, "field": "year", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100, WARM = 72, HOT = 85;
+  var SAMPLES = 32, SAMPLE_MS = 1875;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+  var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  // The finish is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-finish', (css.getPropertyValue('--finish') || 'raw').trim() || 'raw');
+  // A steady pseudo-random share: the same windows are dark on every load.
+  function chance(i, percent) { return (i * 7919 + 13) * 31 % 100 < percent; }
+  // The megastructure's windows: the design's own for Raw Concrete, else the
+  // finish's share of them lit (the few that flicker stay lit).
+  (function () {
+    var lit = cssNum('--lit-share', 12);
+    if (lit === 12) return;
+    each('[data-windows] rect', function (el, i) {
+      if (el.style.animationName) return;
+      el.setAttribute('fill', chance(i, lit) ? '#FFC46A' : '#2E3033');
+    });
+  })();
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  // A clock given in MHz is shown, and scaled, in GHz.
+  function inGhz(el, v, id) { return el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[id] || '')); }
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var seq = 0;                           // samples taken so far: a marker sits on every fourth
+  var STORE = 'rg-brutalist-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+      seq = saved.seq > 0 ? saved.seq : hist.down.length;
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  // The value the top of the chart stands for, shared by both lines. `peak`
+  // is the largest sample of the last minute, `fixed` the Network chart full
+  // scale option (0 when it is left to follow the peak).
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    // Follow the peak in steps (1, 2, 4, 8, 16 ...), so the curves do not
+    // rescale each time the peak moves a little.
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+
+  // Inbound as a skyline of extruded concrete columns (a face, a top and a
+  // side each), the newest in the accent; outbound as a steel line with a
+  // square marker on every fourth sample. The chart is as wide as its
+  // channel, so it is drawn in the channel's own pixels.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var W = svg.clientWidth || 392;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var pitch = (W - 8) / SAMPLES, wide = Math.max(pitch - 3, 2), FLOOR = 112;
+    function x0(i, n) { return 8 + (SAMPLES - n + i) * pitch; }
+    attr(svg.querySelector('[data-rules="dark"]'), 'd', [30.5, 58.5, 86.5].map(function (y) { return 'M4 ' + y + ' H' + (W - 4); }).join(' '));
+    attr(svg.querySelector('[data-rules="light"]'), 'd', [31.5, 59.5, 87.5].map(function (y) { return 'M4 ' + y + ' H' + (W - 4); }).join(' '));
+    var cols = '', n = hist.down.length;
+    hist.down.forEach(function (v, i) {
+      var x = x0(i, n), y = FLOOR - Math.max(clamp01(v / full) * 80, 2), r = x + wide, now = i === n - 1 ? ' now' : '';
+      var f = function (k) { return k.toFixed(1); };
+      cols += '<path class="col side' + now + '" d="M' + f(r) + ' ' + f(y) + ' l3 -3 V' + (FLOOR - 3) + ' l-3 3 Z"></path>' +
+              '<path class="col top' + now + '" d="M' + f(x) + ' ' + f(y) + ' l3 -3 H' + f(r + 3) + ' l-3 3 Z"></path>' +
+              '<rect class="col face' + now + '" x="' + f(x) + '" y="' + f(y) + '" width="' + f(wide) + '" height="' + f(FLOOR - y) + '"></rect>';
+    });
+    var holder = svg.querySelector('[data-columns]');
+    if (holder.getAttribute('data-drawn') !== cols) { holder.innerHTML = cols; holder.setAttribute('data-drawn', cols); }
+    var m = hist.up.length, pts = hist.up.map(function (v, i) {
+      return [x0(i, m) + wide / 2, FLOOR - 4 - clamp01(v / full) * 80];
+    });
+    attr(svg.querySelector('[data-line="out"]'), 'd', pts.length > 1 ? 'M' + pts.map(function (p) { return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' L') : '');
+    var marks = svg.querySelectorAll('[data-marks] rect'), used = 0;
+    for (var i = 0; i < pts.length && used < marks.length; i++) {
+      if ((seq - m + i) % 4 !== 0) continue;
+      attr(marks[used], 'x', (pts[i][0] - 2).toFixed(1)); attr(marks[used], 'y', (pts[i][1] - 2).toFixed(1));
+      hide(marks[used], false);
+      used++;
+    }
+    for (; used < marks.length; used++) hide(marks[used], true);
+  }
+  window.addEventListener('resize', drawChart);
+  window.addEventListener('rg-layout', function () { setTimeout(drawChart, 0); });
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    seq++;
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist, seq: seq })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
+    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
+    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
+    var day = num(v['2']), month = MONTHS.indexOf(String(v['3'] || '').slice(0, 3).toLowerCase()) + 1, year = num(v['90']);
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    each('[data-day3]', function (el) {      // FRI
+      text(el, known(v['1']) ? String(v['1']).slice(0, 3).toUpperCase() : '\u00a0');
+    });
+    each('[data-daymon]', function (el) {    // 13 NOV
+      text(el, [isFinite(day) ? String(Math.round(day)) : '', known(v['3']) ? String(v['3']).slice(0, 3).toUpperCase() : ''].filter(Boolean).join(' ') || '\u00a0');
+    });
+    each('[data-dmy]', function (el) {       // 13.11.2026
+      text(el, [isFinite(day) ? two(Math.round(day)) : '', month ? two(month) : '', isFinite(year) ? String(Math.round(year)) : '']
+        .filter(Boolean).join('.') || '\u00a0');
+    });
+
+    each('[data-num]', function (el) {
+      var id = el.getAttribute('data-num'), n = num(v[id]);
+      if (inGhz(el, v, +id + 1)) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      var shown = inGhz(el, v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? shown.toUpperCase() : shown);
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      var name = known(c) ? String(c) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? name.toUpperCase() : name);
+    });
+    each('[data-uptime]', function (el) {    // 04D 07H
+      var sec = num(v[el.getAttribute('data-uptime')]), shown = '--';
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        shown = d > 0 ? two(d) + 'D ' + two(hr) + 'H' : two(hr) + 'H ' + two(mn) + 'M';
+      }
+      text(el, shown);
+    });
+
+    // Dials: 12 extruded blocks over 20 to 100 degrees. The blocks up to
+    // the reading take the accent; from 85 degrees the lit blocks from the
+    // tenth on turn critical and blink.
+    each('[data-dial]', function (el) {
+      var t = num(v[el.getAttribute('data-dial')]);
+      var lit = isFinite(t) ? Math.round(clamp01((t - T_MIN) / (T_MAX - T_MIN)) * 12) : 0;
+      [el.querySelectorAll('.blk.side'), el.querySelectorAll('.blk.face')].forEach(function (blocks) {
+        for (var i = 0; i < blocks.length; i++) {
+          flag(blocks[i], 'lit', i < lit);
+          flag(blocks[i], 'crit', i < lit && i >= 9 && t >= HOT);
+        }
+      });
+    });
+    each('[data-state]', function (el) {
+      var t = num(v[el.getAttribute('data-state')]);
+      text(el, t >= HOT ? 'CRITICAL' : t >= WARM ? 'ELEVATED' : 'NOMINAL');
+      flag(el, 'hot', t >= HOT);
+      flag(el, 'warm', t >= WARM && t < HOT);
+    });
+
+    // Bars: a raised block in a channel, against the sensor's own maximum,
+    // else the limit in the stylesheet (a number, or the name of a custom
+    // property).
+    each('[data-bar]', function (el) {
+      var val = num(v[el.getAttribute('data-bar')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (scale.indexOf('clock') > 0 && /^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { val /= 1000; max /= 1000; }
+      style(el, 'width', (share(val, max, fallback) * 100).toFixed(1) + '%');
+    });
+    each('[data-rotor]', function (el) {
+      var rpm = num(v[el.getAttribute('data-rotor')]);
+      fanRpm[el.getAttribute('data-rotor')] = isFinite(rpm) ? rpm : 0;
+    });
+    // Towers: 14 floors of four windows, lit from the ground up to the
+    // share in use; about one window in twelve of a lit floor stays dark.
+    each('[data-tower]', function (el) {
+      var f = share(num(v[el.getAttribute('data-tower')]), num(v[el.getAttribute('data-max')]), 100);
+      var floors = Math.round(f * 14);
+      each('.win', function (w, i) { flag(w, 'lit', Math.floor(i / 4) < floors && !chance(i + 3, 8)); }, el);
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a dial that cools cancels its blocks'
+    // animations, and stepping a cancelled one would bring it back.
+    anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    // Rotors: one turn every 2400 / RPM seconds, but never more than about
+    // 26 degrees a frame. Five blades repeat every 72 degrees, so a bigger
+    // step would read as standing still or turning backwards.
+    each('[data-rotor]', function (el) {
+      var id = el.getAttribute('data-rotor'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(360 / 2400 * rpm * dt * speed, 26 * (1 - Math.exp(-rpm / 1200)));
+      rotorAngle[id] = ((rotorAngle[id] || 0) + step) % 360;
+      el.setAttribute('transform', 'rotate(' + rotorAngle[id].toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still-motion', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // dials and towers in their empty state before the first values arrive
+})();
+</script>
+</body>
+</html>

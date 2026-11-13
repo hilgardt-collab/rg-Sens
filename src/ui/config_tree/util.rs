@@ -655,7 +655,7 @@ mod css_template_setup_tests {
         assert_eq!(by_index(91).slot_prefix, by_index(0).slot_prefix);
         assert_eq!(by_index(91).field, "alarm_enabled");
 
-        // The Victorian, Mughal Peacock, Bauhaus, Gothic and Japandi panels'
+        // The Victorian, Mughal Peacock, Bauhaus, Gothic, Japandi and Brutalist panels'
         // year comes from the clock they already have.
         for html in [
             include_str!("../../../examples/victorian_panel.html"),
@@ -663,6 +663,7 @@ mod css_template_setup_tests {
             include_str!("../../../examples/bauhaus_panel.html"),
             include_str!("../../../examples/gothic_panel.html"),
             include_str!("../../../examples/japandi_panel.html"),
+            include_str!("../../../examples/brutalist_panel.html"),
         ] {
             let (placeholders, defaults) = (
                 detect_placeholders(html),

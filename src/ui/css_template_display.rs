@@ -1399,6 +1399,10 @@ mod tests {
                 include_str!("../../examples/filigree_panel.html"),
                 include_str!("../../examples/filigree_panel.css"),
             ),
+            (
+                include_str!("../../examples/brutalist_panel.html"),
+                include_str!("../../examples/brutalist_panel.css"),
+            ),
         ];
         for (html, css) in panels {
             assert!(html.contains(r#"<meta name="rg-design-size" content="480x1920">"#));
