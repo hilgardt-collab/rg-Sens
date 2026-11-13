@@ -450,8 +450,11 @@ mod css_template_setup_tests {
         auto_map, detect_placeholders, extract_placeholder_defaults, wanted_slots,
     };
 
-    const PANELS: [&str; 6] = [
+    const PANELS: [&str; 9] = [
         include_str!("../../../examples/art_deco_panel.html"),
+        include_str!("../../../examples/western_panel.html"),
+        include_str!("../../../examples/gumdrop_panel.html"),
+        include_str!("../../../examples/filigree_panel.html"),
         include_str!("../../../examples/leather_wood_panel.html"),
         include_str!("../../../examples/warrior_panel.html"),
         include_str!("../../../examples/art_nouveau_panel.html"),
@@ -652,13 +655,14 @@ mod css_template_setup_tests {
         assert_eq!(by_index(91).slot_prefix, by_index(0).slot_prefix);
         assert_eq!(by_index(91).field, "alarm_enabled");
 
-        // The Victorian, Mughal Peacock, Bauhaus and Gothic panels' year
-        // comes from the clock they already have.
+        // The Victorian, Mughal Peacock, Bauhaus, Gothic and Japandi panels'
+        // year comes from the clock they already have.
         for html in [
             include_str!("../../../examples/victorian_panel.html"),
             include_str!("../../../examples/mughal_peacock_panel.html"),
             include_str!("../../../examples/bauhaus_panel.html"),
             include_str!("../../../examples/gothic_panel.html"),
+            include_str!("../../../examples/japandi_panel.html"),
         ] {
             let (placeholders, defaults) = (
                 detect_placeholders(html),

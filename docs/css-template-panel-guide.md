@@ -397,31 +397,109 @@ A template drawn for one size can be scaled to any panel. State the size:
 
 rg-Sens then scales the page to the panel and centres it. `--rg-fit` chooses
 how: `cover` (the default: fill the panel, cropping what does not fit),
-`contain` (everything visible, with empty bands) or `stretch`. A template without the tag is left exactly as it is, so a template
-that is already responsive needs nothing.
+`contain` (everything visible, with empty bands), `stretch` (distorted to the
+panel) or `fill` (below). A template without the tag is left exactly as it
+is, so a template that is already responsive needs nothing.
 
-A design can also offer other arrangements of itself for other shapes:
+#### Re-arranging for the panel's shape
+
+A design can offer other arrangements of itself. List the size it needs with
+each number of columns, narrowest first:
 
 ```html
-<meta name="rg-layouts" content="480x1920 960x1070 1440x720">
+<meta name="rg-layouts" content="480x1920 960x1060 1440x775 2880x450">
 ```
 
-The arrangement that fills the panel best is chosen (or the Nth, when
-`--rg-columns` is N), and the page is told through `--rg-w` / `--rg-h` and
-`data-rg-columns` on `<html>` (and an `rg-layout` event). A column of
-sections becomes columns with a few lines of CSS:
+An arrangement's column count is its width over the first one's: one, two,
+three and six columns above, which for six groups is 1x6, 2x3, 3x2 and 6x1.
+The arrangement that can be shown largest is chosen (or the one with N
+columns, when `--rg-columns` is N), and the page is told through:
+
+| On `<html>` | Meaning |
+|---|---|
+| `--rg-w`, `--rg-h` | the box the design has, in its own pixels |
+| `--rg-cols` | the number of columns, as a number for `repeat()` |
+| `data-rg-columns` | the same, for selectors |
+
+An `rg-layout` event (`detail: {columns, width, height}`) fires as well.
+
+With `--rg-fit: fill` the box is not the arrangement's listed size but the
+panel's own proportions, at least as large as the listed size. Nothing is
+cropped, banded or distorted: the page's CSS takes up the slack. The whole
+of it is a grid:
 
 ```css
-.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px);
-         display: flex; flex-flow: column wrap; align-content: space-between; }
-.panel > section { width: 432px; }
+.panel  { width: var(--rg-w, 480px); height: var(--rg-h, 1920px);
+          display: flex; flex-direction: column; gap: 14px; }
+.groups { flex: 1; min-height: 0; display: grid; gap: 14px 22px;
+          grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr));
+          align-content: stretch; }           /* rows share the spare height */
+.groups > section { display: flex; flex-direction: column; }
+.groups > section > .card { flex: 1; }       /* a card fills its cell */
 ```
 
-Give each arrangement a height in which whole sections fit under one another.
-The Neon and LCARS-style examples do this; the Art Deco, Art Nouveau,
-Steampunk, Warrior, Leather & Wood, LCD, Victorian, Mughal Peacock, Bauhaus and
-Gothic examples are drawn as one 480x1920 picture and only scale. All twelve declare a `fit` option (and the two a
-`columns` option) for the Display tab.
+Keep a title strip and a footer outside `.groups`, so they span the width.
+What to watch:
+
+- **Listed heights.** A grid row is as tall as its tallest group, so each
+  arrangement needs its own height. Too small crops; too large only costs a
+  little scale. Lay the page out at each column count with its height left
+  free and read the height.
+- **Full-page artwork** (a wall, a frame, a wallpaper) must cover the box,
+  not 480x1920: a CSS background, an SVG `<pattern>`, or `width="100%"
+  height="100%"` without a `viewBox`.
+- **Things that grow with their column** (a square with `aspect-ratio`)
+  make a group taller in a wide cell than the listed height allows; cap
+  their width.
+- **Fixed-size drawings** (a gauge, a chart) stay their size; centre them.
+
+Every example but Steampunk works this way and declares `fill` as its default
+fit, with a Layout option for the column count. How each one's full-page
+artwork follows the box is worth copying:
+
+| Artwork | How it follows the box | Examples |
+|---|---|---|
+| Repeating texture | CSS background or SVG `<pattern>` | LCD, Victorian, Gothic, Mughal Peacock, Western, Japandi (daylight bands), Filigree (side stems: one 80px period, the strip's height rounded down to whole periods) |
+| Scattered pieces | placed by percentage (glows), or in a strip down each side margin with percentage heights (bubbles) | Glass & Gumdrop |
+| Rails with evenly spaced beads | CSS backgrounds, the beads with `background-repeat: space` | Filigree |
+| Strips down the sides | an SVG per side, `height="100%"`, `preserveAspectRatio="xMinYMin slice"` (cut off, not squeezed), the right one mirrored | Art Deco, Art Nouveau, Gothic, Mughal Peacock |
+| Corner pieces | an SVG per corner, placed by CSS | Art Deco, Gothic, Filigree |
+| A rim or inlay | a CSS border | Art Nouveau, Leather & Wood |
+| A frame with notches | drawn by the script on the `rg-layout` event | Warrior |
+| Wood grain | one SVG stretched to the box (`preserveAspectRatio="none"`) | Leather & Wood |
+
+LCARS has three frames, not six groups, so it lists one, two and three
+columns and its frames stretch. Filigree's pieces keep their size, because each
+frame is a wire drawing with a gap for its title, and sit in the middle of
+their cells; Leather & Wood's pads keep their height. Steampunk's background is one composed
+picture (plates, a pipe frame, gears and gauges at fixed spots); it lists no
+arrangements and only scales. Every example declares a `fit` option for the
+Display tab.
+
+### Noise Textures: Bake Them
+
+WebKit recomputes an SVG filter over its whole region every time anything
+over or under it repaints. A full-page noise texture (`feTurbulence` on a
+100% rectangle: plaster, velvet, paper grain) therefore costs a full render
+on every value update: measured with values changing once a second and
+motion off, the Western example's web process used about 40% of a core, and
+under 2% once its textures were baked.
+
+Mark such an element and rg-Sens draws it once into a bitmap that takes its
+place, and again only when its `<svg>` changes size:
+
+```html
+<svg width="100%" height="100%" style="position: absolute; top: 0; left: 0">
+  <rect data-rg-bake width="100%" height="100%" filter="url(#noise)"></rect>
+</svg>
+```
+
+Only the element and its filter go into the bitmap, so mark plain shapes
+whose look comes from the filter (a fill colour from the stylesheet is
+carried over), and keep them the first drawn content of their `<svg>`: the
+bitmap is put where the first marked element was. Small filtered shapes
+inside a card are not worth marking. Opened in a browser, the attribute does
+nothing. The Japandi, Gothic, Western and Filigree examples use it.
 
 ### Memory Usage
 
@@ -513,8 +591,12 @@ CSS Template panels are enabled by default; start rg-Sens with
   [LCD](../examples/lcd_panel.html),
   [Victorian](../examples/victorian_panel.html),
   [Mughal Peacock](../examples/mughal_peacock_panel.html),
-  [Bauhaus](../examples/bauhaus_panel.html) and
-  [Gothic](../examples/gothic_panel.html) panel examples - full 480x1920
+  [Bauhaus](../examples/bauhaus_panel.html),
+  [Gothic](../examples/gothic_panel.html),
+  [Western](../examples/western_panel.html),
+  [Japandi](../examples/japandi_panel.html),
+  [Glass & Gumdrop](../examples/gumdrop_panel.html) and
+  [Filigree](../examples/filigree_panel.html) panel examples - full 480x1920
   panels sharing one placeholder mapping: gauges, fan meters, bars, sections
   that hide when unmapped; setup steps are in the comment at the top of each.
   They load their fonts from `examples/fonts/` (SIL Open Font License; Special

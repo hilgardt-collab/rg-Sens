@@ -1,0 +1,116 @@
+/* Glass & Gumdrop Sensor Panel: stylesheet for gumdrop_panel.html (rg-Sens
+   CSS Template displayer). Flavours, the font, the gel recipe, the grid of
+   groups and the few classes the page's script switches; the drawing itself
+   is inline in the HTML. Setup notes are at the top of the HTML file. */
+
+/* Bundled font: Nunito, SIL Open Font License (OFL.txt in its folder). Keep
+   the fonts folder next to this file; without it the page falls back to
+   system fonts. */
+@font-face { font-family: "Nunito"; font-weight: 200 1000; font-style: normal;
+  src: local("Nunito"), url("fonts/nunito/Nunito%5Bwght%5D.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Flavour: candy, aqua or graphite. */
+  --flavour: candy;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Network chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  /* Candy: cherry, lime, grape, tangerine, blueberry */
+  --sky-1: #EEF5FC;
+  --sky-2: #CFE2F3;
+  --ink: #1D2A3A;
+  --sub: #56677D;
+  --gel0: #F0284A;
+  --gel1: #5CC21E;
+  --gel2: #8A4BEA;
+  --gel3: #FF8A00;
+  --gel4: #1E7BF0;
+  --title: var(--gel4);
+  --cpu-bar: var(--gel4);
+  --gpu-bar: var(--gel2);
+  --net-in: var(--gel4);
+  --net-out: var(--gel3);
+  --glow: 0.55;
+  /* Temperature colour at 20, 55, 68, 80 and 92 degrees (six-digit hex). */
+  --temp-0: #1E8CF5;
+  --temp-1: #14C2D8;
+  --temp-2: #62CC2E;
+  --temp-3: #FF9A14;
+  --temp-4: #F0284A;
+}
+:root[data-flavour="aqua"] {
+  --sky-1: #EAF4FD; --sky-2: #C4DDF4; --ink: #14304F; --sub: #4E6A8A;
+  --gel0: #1E7BF0; --gel1: #1FB2E8; --gel2: #18C7C2; --gel3: #4A64F0; --gel4: #62B8FF;
+  --title: var(--gel0); --cpu-bar: var(--gel0); --gpu-bar: var(--gel1); --net-in: var(--gel0); --net-out: var(--gel2);
+  --glow: 0.5;
+}
+:root[data-flavour="graphite"] {
+  --sky-1: #F1F2F4; --sky-2: #D3D7DD; --ink: #20262E; --sub: #5E6773;
+  --gel0: #6E7A89; --gel1: #8C97A6; --gel2: #525C6A; --gel3: #A7B0BC; --gel4: #7A8594;
+  --title: var(--gel2); --cpu-bar: var(--gel0); --gpu-bar: var(--gel2); --net-in: var(--gel2); --net-out: var(--gel1);
+  --glow: 0.45;
+  --temp-0: #4F86C9; --temp-1: #4FA9B8; --temp-2: #7DAE5A; --temp-3: #E3A23A; --temp-4: #D9475A;
+}
+html, body { margin: 0; background: var(--sky-2); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* The gel recipe: one colour, --b. Darker under the highlight, glowing at
+   the base, a white highlight over the top half, a dark inner edge and a
+   coloured shadow. */
+.gel { --d: color-mix(in srgb, var(--b), #000 30%); --l: color-mix(in srgb, var(--b), #fff 55%);
+  background: linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.22) 100%) center 2px / calc(100% - 10px) 46% no-repeat,
+    linear-gradient(180deg, var(--d) 0%, var(--b) 45%, var(--b) 65%, var(--l) 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--d) 55%, transparent), inset 0 -3px 6px color-mix(in srgb, var(--l) 60%, transparent),
+    0 3px 6px color-mix(in srgb, var(--b) 40%, transparent); }
+.gel.dot { box-shadow: 0 1px 2px rgba(20,40,80,0.3); }
+.gel.badge { --b: var(--temp-0); }
+/* The clock: gel-filled numerals in the title colour. */
+.clockface { background: linear-gradient(180deg, #FFFFFF 0%, color-mix(in srgb, var(--title), #fff 55%) 22%, var(--title) 52%,
+    color-mix(in srgb, var(--title), #000 30%) 78%, color-mix(in srgb, var(--title), #fff 55%) 100%);
+  -webkit-background-clip: text; background-clip: text; white-space: nowrap; }
+/* A globe's gel colour, --orb, is set by the script from the temperature. */
+[data-globe] { --orb: var(--temp-0); --orb-d: color-mix(in srgb, var(--orb), #000 30%); --orb-l: color-mix(in srgb, var(--orb), #fff 55%); }
+
+@keyframes gl-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+@keyframes gl-stripes { from { background-position: 0 0; } to { background-position: 28px 0; } }
+@keyframes gl-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes gl-slosh { 0%,100% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still-motion * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* Background: blurred candy glows at the same share of any box, and glass
+   bubbles down the two side margins. */
+.glows { opacity: var(--glow); }
+.bubbles { position: absolute; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.bubbles.left { left: 0; }
+.bubbles.right { right: 0; }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over, so every
+   card stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 14px 28px; align-content: stretch; }
+.groups > .clock { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.groups > section[data-section] { min-width: 0; }
+/* A stretched card keeps its title at the top and centres the rest (the
+   first child is the card's sheen, the second its title row). */
+.groups > section[data-section] > :nth-child(3) { margin-top: auto; }
+.groups > section[data-section] > :last-child { margin-bottom: auto; }
+/* The gumdrops perched on the clock card's top edge, three at each corner. */
+.perch { position: absolute; top: -22px; z-index: 2; overflow: visible; }

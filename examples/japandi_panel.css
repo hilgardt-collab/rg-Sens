@@ -1,0 +1,148 @@
+/* Japandi Sensor Panel: stylesheet for japandi_panel.html (rg-Sens CSS Template displayer).
+   Palette, fonts, the grid of groups and the few classes the page's script
+   switches; the drawing itself is inline in the HTML. Setup notes are at the
+   top of the HTML file. */
+
+/* Bundled fonts: Shippori Mincho and Manrope, both SIL Open Font License
+   (OFL.txt in each folder). Shippori Mincho is a Latin-only subset of the
+   original files. Keep the fonts folder next to this file; without it the
+   page falls back to system fonts. */
+@font-face { font-family: "Shippori Mincho"; font-weight: 400; font-style: normal;
+  src: local("Shippori Mincho"), url("fonts/shippori-mincho/ShipporiMincho-Regular-Latin.ttf") format("truetype"); }
+@font-face { font-family: "Shippori Mincho"; font-weight: 500; font-style: normal;
+  src: local("Shippori Mincho Medium"), url("fonts/shippori-mincho/ShipporiMincho-Medium-Latin.ttf") format("truetype"); }
+@font-face { font-family: "Manrope"; font-weight: 200 800; font-style: normal;
+  src: local("Manrope"), url("fonts/manrope/Manrope%5Bwght%5D.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Palette: oak (Oak & Sage), charcoal or terracotta. */
+  --palette: oak;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Network chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  /* Oak & Sage */
+  --wall-1: #EEE8DE;
+  --wall-2: #E1D9CC;
+  --card: #F7F3EC;
+  --ink: #36322D;
+  --sub: #8A8278;
+  --faint: #DED6C9;
+  --cool: #87977B;
+  --hot: #C2805C;
+  --oak-1: #E4C79E;
+  --oak-2: #CBA676;
+  --oak-3: #A9844F;
+  --stone-1: #DCD6CD;
+  --stone-2: #B9B2A8;
+  --stone-3: #8E877D;
+  --on-stone: #2E2A26;
+  --on-stone-sub: #55504A;
+  --vase-1: #F3EEE6;
+  --vase-2: #DCD3C5;
+  --vase-3: #B2A796;
+  --leaf-1: #86967A;
+  --leaf-2: #64735A;
+  --clay-1: #E2D3BE;
+  --clay-2: #C2AE8F;
+  --glaze-1: #8FA38A;
+  --glaze-2: #C49A5C;
+  --glaze-3: #4E3A2E;
+  --shade: rgba(70, 50, 30, 0.10);
+  --shade-2: rgba(70, 50, 30, 0.2);
+  --daylight: 0.6;
+}
+:root[data-palette="charcoal"] {
+  --wall-1: #2F2D2B; --wall-2: #232120; --card: #363330;
+  --ink: #EDE7DD; --sub: #A29A8F; --faint: #4C4844; --cool: #9BAD8E; --hot: #D2916C;
+  --oak-1: #7A6048; --oak-2: #5A4431; --oak-3: #3C2C1F;
+  --stone-1: #7C766F; --stone-2: #5A5550; --stone-3: #3A3632; --on-stone: #F2EDE4; --on-stone-sub: #CFC8BD;
+  --vase-1: #504C48; --vase-2: #383532; --vase-3: #1F1D1C; --leaf-1: #8E9A7E; --leaf-2: #6A7560;
+  --clay-1: #8E7F6B; --clay-2: #665847; --glaze-1: #7F9A86; --glaze-2: #B98A4E; --glaze-3: #D3CCC0;
+  --shade: rgba(0, 0, 0, 0.3); --shade-2: rgba(0, 0, 0, 0.45); --daylight: 0.28;
+}
+:root[data-palette="terracotta"] {
+  --wall-1: #EFE3D5; --wall-2: #E2D0BD; --card: #F8F0E6;
+  --ink: #3D2E25; --sub: #8F7867; --faint: #E2D1BF; --cool: #7C8A6A; --hot: #B8693F;
+  --oak-1: #E6C9A0; --oak-2: #CDA77A; --oak-3: #AE8554;
+  --stone-1: #E2D4C6; --stone-2: #C4B2A2; --stone-3: #9A8676; --on-stone: #33251D; --on-stone-sub: #5E4C40;
+  --vase-1: #D29270; --vase-2: #B46F4B; --vase-3: #844C30; --leaf-1: #8C9474; --leaf-2: #6A7256;
+  --clay-1: #E6CFB6; --clay-2: #C7A98A; --glaze-1: #B8693F; --glaze-2: #E8DCC8; --glaze-3: #5E4434;
+  --shade: rgba(90, 50, 30, 0.10); --shade-2: rgba(90, 50, 30, 0.2); --daylight: 0.55;
+}
+html, body { margin: 0; background: var(--wall-1); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* The drawing's shapes carry Oak & Sage as attributes; these follow the palette. */
+[stop-color="#E4C79E"] { stop-color: var(--oak-1); }
+[stop-color="#CBA676"] { stop-color: var(--oak-2); }
+[stop-color="#A9844F"] { stop-color: var(--oak-3); }
+[stop-color="#DCD6CD"] { stop-color: var(--stone-1); }
+[stop-color="#B9B2A8"] { stop-color: var(--stone-2); }
+[stop-color="#8E877D"] { stop-color: var(--stone-3); }
+[stop-color="#F3EEE6"] { stop-color: var(--vase-1); }
+[stop-color="#DCD3C5"] { stop-color: var(--vase-2); }
+[stop-color="#B2A796"] { stop-color: var(--vase-3); }
+[stop-color="#E2D3BE"] { stop-color: var(--clay-1); }
+[stop-color="#C2AE8F"] { stop-color: var(--clay-2); }
+[stop-color="#87977B"] { stop-color: var(--cool); }
+[fill="#B2A796"] { fill: var(--vase-3); }
+[fill="#86967A"] { fill: var(--leaf-1); }
+[fill="#64735A"] { fill: var(--leaf-2); }
+[fill="#E2D3BE"] { fill: var(--clay-1); }
+[fill="#8FA38A"] { fill: var(--glaze-1); }
+[fill="#C49A5C"] { fill: var(--glaze-2); }
+[fill="#4E3A2E"] { fill: var(--glaze-3); }
+[fill="#36322D"] { fill: var(--ink); }
+[fill="#8A8278"] { fill: var(--sub); }
+[fill="rgba(70,50,30,0.2)"] { fill: var(--shade-2); }
+[stroke="#DED6C9"] { stroke: var(--faint); }
+[stroke="#8A8278"] { stroke: var(--sub); }
+[stroke="#36322D"] { stroke: var(--ink); }
+[stroke="#C2805C"] { stroke: var(--hot); }
+[stroke="#F7F3EC"] { stroke: var(--card); }
+[stroke="rgba(70,50,30,0.10)"] { stroke: var(--shade); }
+
+@keyframes jp-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes jp-sway { 0%,100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
+@keyframes jp-breathe { 0%,100% { opacity: var(--daylight); } 50% { opacity: calc(var(--daylight) * 0.7); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still-motion * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* Daylight through window slats: soft diagonal bands over the upper part of
+   any box, blended into the wall and the cards. */
+.daylight { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 2; pointer-events: none;
+  mix-blend-mode: soft-light; opacity: var(--daylight); animation: jp-breathe 14s ease-in-out infinite;
+  background: repeating-linear-gradient(120.7deg, rgba(255,247,232,0) 0px, rgba(255,247,232,0.85) 20px,
+    rgba(255,247,232,0.85) 28px, rgba(255,247,232,0) 48px, rgba(255,247,232,0) 63.6px);
+  -webkit-mask-image: linear-gradient(160deg, #000 0%, #000 35%, transparent 70%);
+          mask-image: linear-gradient(160deg, #000 0%, #000 35%, transparent 70%); }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over, so every
+   card stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 14px 28px; align-content: stretch; }
+.groups > .still { display: flex; align-items: center; justify-content: center; }
+.groups > section[data-section] { justify-content: space-around; min-width: 0; }
+
+/* The word at a card's top right: calm, warm, hot. */
+[data-state].warm { color: color-mix(in srgb, var(--cool), var(--hot) 60%) !important; }
+[data-state].hot { color: var(--hot) !important; }
+/* A hot dial's end dot pulses. */
+[data-end].hot { animation: jp-pulse 2s ease-in-out infinite; }

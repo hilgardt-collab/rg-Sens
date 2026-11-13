@@ -10,9 +10,10 @@
   src: local("Space Grotesk"), url("fonts/space-grotesk/SpaceGrotesk%5Bwght%5D.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch) and how many
-     columns its sections take (0 chooses by the panel's shape). */
-  --rg-fit: cover;
+  /* How the design fits the panel (fill: the groups re-arrange and stretch
+     to the panel's shape; or cover, contain, stretch) and how many columns
+     the groups take (0 chooses by the panel's shape). */
+  --rg-fit: fill;
   --rg-columns: 0;
   /* Palette: a pair of neon colours. Every tint is derived from them.
        Cyan + Magenta  #22E4FF  #FF2BD6   (default)
@@ -60,15 +61,18 @@ html, body { margin: 0; background: var(--bg); }
 .still * { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 
-/* rg-Sens sets --rg-w / --rg-h to the arrangement that suits the panel's
-   shape (the rg-layouts list in the HTML): one, two or three columns of
-   432px cards. The cards wrap into the next column when one is full. */
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns: the six
+   groups stand in a grid whose rows share the height left over. */
 .panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
   background: var(--bg); font-family: "Space Grotesk", sans-serif; color: var(--title);
-  padding: 34px 24px 30px; display: flex; flex-flow: column wrap; justify-content: space-between; align-content: space-between; }
-.panel > header, .panel > section, .panel > footer { position: relative; z-index: 1; width: 432px; }
-/* Side by side, the columns read better packed from the top with even gaps. */
-:root:not([data-rg-columns="1"])[data-rg-columns] .panel { justify-content: space-around; }
+  padding: 34px 24px 30px; display: flex; flex-direction: column; gap: 16px; }
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 16px 24px; align-content: stretch; }
+.groups > header { align-self: center; justify-self: center; }
+.groups > .card { display: flex; flex-direction: column; }
+.groups > .card > .card-in { flex: 1; justify-content: space-around; }
+.panel > footer { position: relative; z-index: 1; }
 .uni { font-family: "Unbounded", sans-serif; }
 .defs { position: absolute; top: 0; left: 0; }
 .stop-a { stop-color: var(--a); }
@@ -88,8 +92,8 @@ html, body { margin: 0; background: var(--bg); }
 .glow.g1 { --c: color-mix(in srgb, var(--a) 26%, transparent); left: -190px; top: -150px; width: 520px; height: 520px; animation: nn-float 22s ease-in-out 0s infinite; }
 .glow.g2 { --c: color-mix(in srgb, var(--b) 22%, transparent); right: -210px; top: 570px; width: 560px; height: 560px; animation: nn-float 28s ease-in-out -7s infinite; }
 /* In the wide arrangements the lower glows move up into view. */
-[data-rg-columns="2"] .glow.g2, [data-rg-columns="3"] .glow.g2 { top: 380px; }
-[data-rg-columns="2"] .glow.g3, [data-rg-columns="3"] .glow.g3 { top: 120px; left: 46%; }
+:root:not([data-rg-columns="1"])[data-rg-columns] .glow.g2 { top: 380px; }
+:root:not([data-rg-columns="1"])[data-rg-columns] .glow.g3 { top: 120px; left: 46%; }
 .glow.g3 { --c: color-mix(in srgb, var(--a) 17%, transparent); left: -230px; top: 1190px; width: 540px; height: 540px; animation: nn-float 34s ease-in-out -14s infinite; }
 .floor { left: 0; right: 0; bottom: 0; height: 420px; overflow: hidden; perspective: 320px;
   -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 90%);

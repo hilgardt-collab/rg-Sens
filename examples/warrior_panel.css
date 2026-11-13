@@ -16,8 +16,11 @@
   src: local("Saira Condensed Bold"), url("fonts/saira-condensed/SairaCondensed-Bold.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch). */
-  --rg-fit: cover;
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
   /* Palette. Every metal shade is derived from --metal.
        Blood Red   #E0262E #5E0A0E #FF7A1A #FFE3B0  bronze #B07A40   (default)
        Molten      #FF5A14 #5E1E05 #FFC23A #FFF1C8  #B8864A
@@ -80,3 +83,10 @@ html, body { margin: 0; background: var(--bg); }
   clip-path: polygon(0 0, 70% 0, 100% 50%, 70% 100%, 0 100%, 30% 50%); }
 [data-chev] i.tip { background: var(--value) !important; }
 [data-state].crit { color: var(--white-hot) !important; }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over. A group is
+   centred in its cell; the footer stays below the grid. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 10px 28px; align-content: stretch; }
+.groups > * { justify-content: center; min-width: 0; }

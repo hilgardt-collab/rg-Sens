@@ -15,8 +15,11 @@
   src: local("Lato Bold"), url("fonts/lato/Lato-Bold.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch). */
-  --rg-fit: cover;
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
   /* Three materials, chosen independently (the panel's Display tab lists them).
      Wood: base, highlight, shadow, grain line, light streak.
        Walnut     #4A2C18 #6E4426 #2A170C #1A0C05 #E0A870   (default)
@@ -70,3 +73,19 @@ html, body { margin: 0; background: var(--w-sh); }
 * { animation-play-state: paused !important; }
 .still * { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over. A group is
+   centred in its cell; the footer stays below the grid. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 10px 28px; align-content: stretch; }
+.groups > * { justify-content: center; min-width: 0; }
+
+/* The metal inlay round the panel, with its inner hairline. */
+.inlay { position: absolute; top: 12px; right: 13px; bottom: 13px; left: 12px; z-index: 0; pointer-events: none;
+  border: 2px solid var(--mt-mid); border-radius: 22px; box-shadow: 0.5px 0.5px 0 2px rgba(0,0,0,0.35); }
+.inlay::after { content: ""; position: absolute; top: 3px; right: 3px; bottom: 3px; left: 3px;
+  border: 0.8px solid color-mix(in srgb, var(--mt-mid) 55%, transparent); border-radius: 18px; }
+/* The pads keep their own height, so the wood shows between them: spare
+   height goes to the gaps, and pads in one row are made equally tall. */
+.groups { align-content: space-between; }

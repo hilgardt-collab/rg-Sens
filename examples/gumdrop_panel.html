@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1700 960x990 1440x730 2880x470">
+<title>Glass &amp; Gumdrop Sensor Panel</title>
+<!--
+  Glass & Gumdrop sensor panel for the rg-Sens CSS Template displayer, drawn
+  for 480x1920 portrait: frosted glass cards over a pinstriped sky, with gel
+  pills and bars, glass globes of coloured gel, candy pinwheels and jars of
+  gumdrops. A sibling of the other example panels: the same placeholders
+  0-73 and the same setup.
+
+  The look is glossy, translucent candy gel on frosted glass. It is an
+  original design: keep it free of any real operating system's window
+  controls, logos and names when editing.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two globes ("PACKAGE", "EDGE"), the fans and the jars;
+  set them on the sensors.
+
+  Anything left unbound is hidden: a row, a globe, a whole card. The
+  processor's power row has no rg-Sens source and stays hidden unless you bind
+  a sensor to it by hand on the Bindings tab.
+
+  A globe fills with gel from 20 to 100 degrees; the gel's colour runs from
+  blue through teal, green and orange to cherry (the --temp stops in the
+  stylesheet). The badge reads Cool, Warm (from 72) or Hot! (from 85). A jar
+  holds 28 gumdrops and shows the share of its pool that is in use.
+
+  The gel recipe: every gel surface has class "gel" and one colour, --b; the
+  stylesheet derives its dark top, glowing base, highlight and coloured
+  shadow from that.
+
+  The network chart keeps the last minute (40 samples) of in and out speed
+  in the page, on one shared scale. It starts empty and survives a reload of
+  the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of gumdrop_panel.css): flavour
+  (Candy, Aqua, Graphite), how the design fits the panel, the layout, the
+  frame rate, and the full scale of the bars and of the network chart.
+
+  Size: the design is drawn for 480x1920, but its six groups (the clock card
+  and the five sensor cards) re-arrange to suit the panel: one column of
+  six, two of three, three of two or six side by side (the rg-layouts list
+  gives the size each needs), and the cards then stretch to the panel's
+  exact shape. The sky, the glows and the bubbles cover any size. The Layout
+  option fixes the column count; the Fit option can crop, letterbox or
+  distort instead.
+
+  Motion: the pinwheels turn with RPM, the bar stripes scroll, the gel in
+  the globes sloshes, the bubbles bob and the bead at the newest sample
+  pulses, at --motion-fps frames a second. 0 turns motion off, as do the
+  panel's Animation switch and the system's reduced-motion setting.
+
+  Font: Nunito, loaded from the fonts folder next to this file; copy that
+  folder along with the template. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="gumdrop_panel.css">
+</head>
+<body>
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.45) 0px, rgba(255,255,255,0.45) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 4px), linear-gradient(175deg, var(--sky-1) 0%, var(--sky-2) 100%); font-family: Nunito, 'Helvetica Neue', sans-serif; font-variant-numeric: tabular-nums; color: var(--ink); padding: 26px 28px 24px; display: flex; flex-direction: column; gap: 16px">
+  <!-- ===== BACKGROUND: candy glow behind the glass (z 0) ===== -->
+  <svg aria-hidden="true" width="100%" height="100%" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none">
+    <defs>
+      <filter id="gl-blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="38"></feGaussianBlur></filter>
+      <filter id="gl-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"></feGaussianBlur></filter>
+      <linearGradient id="gl-gel0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: color-mix(in srgb, var(--gel0), #000 30%)"></stop><stop offset="0.42" style="stop-color: var(--gel0)"></stop><stop offset="0.7" style="stop-color: var(--gel0)"></stop><stop offset="1" style="stop-color: color-mix(in srgb, var(--gel0), #fff 55%)"></stop></linearGradient>
+      <linearGradient id="gl-gel1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: color-mix(in srgb, var(--gel1), #000 30%)"></stop><stop offset="0.42" style="stop-color: var(--gel1)"></stop><stop offset="0.7" style="stop-color: var(--gel1)"></stop><stop offset="1" style="stop-color: color-mix(in srgb, var(--gel1), #fff 55%)"></stop></linearGradient>
+      <linearGradient id="gl-gel2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: color-mix(in srgb, var(--gel2), #000 30%)"></stop><stop offset="0.42" style="stop-color: var(--gel2)"></stop><stop offset="0.7" style="stop-color: var(--gel2)"></stop><stop offset="1" style="stop-color: color-mix(in srgb, var(--gel2), #fff 55%)"></stop></linearGradient>
+      <linearGradient id="gl-gel3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: color-mix(in srgb, var(--gel3), #000 30%)"></stop><stop offset="0.42" style="stop-color: var(--gel3)"></stop><stop offset="0.7" style="stop-color: var(--gel3)"></stop><stop offset="1" style="stop-color: color-mix(in srgb, var(--gel3), #fff 55%)"></stop></linearGradient>
+      <linearGradient id="gl-gel4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: color-mix(in srgb, var(--gel4), #000 30%)"></stop><stop offset="0.42" style="stop-color: var(--gel4)"></stop><stop offset="0.7" style="stop-color: var(--gel4)"></stop><stop offset="1" style="stop-color: color-mix(in srgb, var(--gel4), #fff 55%)"></stop></linearGradient>
+      <linearGradient id="gl-hi" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"></stop><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.12"></stop></linearGradient>
+      <radialGradient id="gl-glassBall" cx="0.5" cy="0.4" r="0.6"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.35"></stop><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"></stop></radialGradient>
+      <clipPath id="gl-ball"><circle cx="85" cy="85" r="74"></circle></clipPath>
+      <linearGradient id="gl-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-opacity="0.45" style="stop-color: var(--net-in)"></stop><stop offset="1" stop-opacity="0.04" style="stop-color: var(--net-in)"></stop></linearGradient>
+    </defs>
+    <g class="glows"><circle cx="12.5%" cy="8.3%" r="120" filter="url(#gl-blur)" style="fill: var(--gel0)"></circle><circle cx="87.5%" cy="6.2%" r="110" filter="url(#gl-blur)" style="fill: var(--gel4)"></circle><circle cx="89.6%" cy="29.2%" r="120" filter="url(#gl-blur)" style="fill: var(--gel2)"></circle><circle cx="8.3%" cy="39.6%" r="120" filter="url(#gl-blur)" style="fill: var(--gel3)"></circle><circle cx="87.5%" cy="54.2%" r="110" filter="url(#gl-blur)" style="fill: var(--gel1)"></circle><circle cx="14.6%" cy="67.7%" r="130" filter="url(#gl-blur)" style="fill: var(--gel0)"></circle><circle cx="87.5%" cy="76.0%" r="120" filter="url(#gl-blur)" style="fill: var(--gel2)"></circle><circle cx="12.5%" cy="91.7%" r="120" filter="url(#gl-blur)" style="fill: var(--gel4)"></circle><circle cx="87.5%" cy="95.8%" r="100" filter="url(#gl-blur)" style="fill: var(--gel3)"></circle><circle cx="50.0%" cy="45.8%" r="90" filter="url(#gl-blur)" style="fill: var(--gel1)"></circle></g>
+  </svg>
+  <svg aria-hidden="true" class="bubbles left" width="48" height="100%">
+    <svg x="22" y="21.9%" overflow="visible"><g style="animation: gl-bob 5.0s ease-in-out -0.7s infinite"><circle r="6" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-2.7" rx="3.6" ry="2.1" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="18" y="51.0%" overflow="visible"><g style="animation: gl-bob 7.0s ease-in-out -2.1s infinite"><circle r="10" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-4.5" rx="6.0" ry="3.5" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="20" y="81.2%" overflow="visible"><g style="animation: gl-bob 5.0s ease-in-out -3.5s infinite"><circle r="8" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-3.6" rx="4.8" ry="2.8" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="26" y="97.9%" overflow="visible"><g style="animation: gl-bob 7.0s ease-in-out -4.9s infinite"><circle r="6" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-2.7" rx="3.6" ry="2.1" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="30" y="3.1%" overflow="visible"><g style="animation: gl-bob 5.0s ease-in-out -6.3s infinite"><circle r="5" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-2.3" rx="3.0" ry="1.8" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="16" y="61.5%" overflow="visible"><g style="animation: gl-bob 7.0s ease-in-out -7.7s infinite"><circle r="6" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-2.7" rx="3.6" ry="2.1" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+  </svg>
+  <svg aria-hidden="true" class="bubbles right" width="48" height="100%">
+    <svg x="20" y="15.6%" overflow="visible"><g style="animation: gl-bob 4.0s ease-in-out 0.0s infinite"><circle r="9" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-4.0" rx="5.4" ry="3.1" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="26" y="35.9%" overflow="visible"><g style="animation: gl-bob 6.0s ease-in-out -1.4s infinite"><circle r="7" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-3.1" rx="4.2" ry="2.4" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="30" y="63.5%" overflow="visible"><g style="animation: gl-bob 4.0s ease-in-out -2.8s infinite"><circle r="6" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-2.7" rx="3.6" ry="2.1" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="24" y="88.5%" overflow="visible"><g style="animation: gl-bob 6.0s ease-in-out -4.2s infinite"><circle r="11" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-5.0" rx="6.6" ry="3.8" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="18" y="2.1%" overflow="visible"><g style="animation: gl-bob 4.0s ease-in-out -5.6s infinite"><circle r="7" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-3.1" rx="4.2" ry="2.4" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+    <svg x="30" y="46.9%" overflow="visible"><g style="animation: gl-bob 6.0s ease-in-out -7.0s infinite"><circle r="5" fill="url(#gl-glassBall) rgba(255,255,255,0.2)" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="1"></circle><ellipse cx="0" cy="-2.3" rx="3.0" ry="1.8" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></ellipse></g></svg>
+  </svg>
+  <!-- ===== HEADER ===== -->
+  <header style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 16px">
+    <div class="gel" style="display: inline-flex; align-items: center; height: 40px; padding: 0 28px; border-radius: 20px; --b: var(--title)">
+      <h1 style="margin: 0; font-weight: 900; font-size: 20px; line-height: 1; letter-spacing: 0.02em; color: #FFFFFF; text-shadow: 0 -1px 0 rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.25); white-space: nowrap">System Sensors</h1>
+    </div>
+  </header>
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
+  <section class="clock">
+    <svg aria-hidden="true" class="perch" width="120" height="40" viewBox="0 0 120 40" style="left: 0">
+          <g transform="translate(42 22)" style="filter: drop-shadow(0 3px 2px color-mix(in srgb, color-mix(in srgb, var(--gel0), #000 30%) 45%, transparent))">
+            <path d="M-13 0 C-13 -13 -8 -19 0 -19 C8 -19 13 -13 13 0 C13 2 11 3 0 3 C-11 3 -13 2 -13 0 Z" fill="url(#gl-gel0) #F0284A"></path>
+            <path d="M-8 -9 C-8 -14 -4 -16 0 -16 C4 -16 8 -14 8 -9 C8 -7 4 -7 0 -7 C-4 -7 -8 -7 -8 -9 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></path>
+          </g>
+          <g transform="translate(70 22)" style="filter: drop-shadow(0 3px 2px color-mix(in srgb, color-mix(in srgb, var(--gel1), #000 30%) 45%, transparent))">
+            <path d="M-13 0 C-13 -13 -8 -19 0 -19 C8 -19 13 -13 13 0 C13 2 11 3 0 3 C-11 3 -13 2 -13 0 Z" fill="url(#gl-gel1) #5CC21E"></path>
+            <path d="M-8 -9 C-8 -14 -4 -16 0 -16 C4 -16 8 -14 8 -9 C8 -7 4 -7 0 -7 C-4 -7 -8 -7 -8 -9 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></path>
+          </g>
+          <g transform="translate(98 22) scale(0.85)" style="filter: drop-shadow(0 3px 2px color-mix(in srgb, color-mix(in srgb, var(--gel2), #000 30%) 45%, transparent))">
+            <path d="M-13 0 C-13 -13 -8 -19 0 -19 C8 -19 13 -13 13 0 C13 2 11 3 0 3 C-11 3 -13 2 -13 0 Z" fill="url(#gl-gel2) #8A4BEA"></path>
+            <path d="M-8 -9 C-8 -14 -4 -16 0 -16 C4 -16 8 -14 8 -9 C8 -7 4 -7 0 -7 C-4 -7 -8 -7 -8 -9 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></path>
+          </g>
+    </svg>
+    <svg aria-hidden="true" class="perch" width="120" height="40" viewBox="304 0 120 40" style="right: 0">
+          <g transform="translate(326 22) scale(0.85)" style="filter: drop-shadow(0 3px 2px color-mix(in srgb, color-mix(in srgb, var(--gel3), #000 30%) 45%, transparent))">
+            <path d="M-13 0 C-13 -13 -8 -19 0 -19 C8 -19 13 -13 13 0 C13 2 11 3 0 3 C-11 3 -13 2 -13 0 Z" fill="url(#gl-gel3) #FF8A00"></path>
+            <path d="M-8 -9 C-8 -14 -4 -16 0 -16 C4 -16 8 -14 8 -9 C8 -7 4 -7 0 -7 C-4 -7 -8 -7 -8 -9 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></path>
+          </g>
+          <g transform="translate(354 22)" style="filter: drop-shadow(0 3px 2px color-mix(in srgb, color-mix(in srgb, var(--gel4), #000 30%) 45%, transparent))">
+            <path d="M-13 0 C-13 -13 -8 -19 0 -19 C8 -19 13 -13 13 0 C13 2 11 3 0 3 C-11 3 -13 2 -13 0 Z" fill="url(#gl-gel4) #1E7BF0"></path>
+            <path d="M-8 -9 C-8 -14 -4 -16 0 -16 C4 -16 8 -14 8 -9 C8 -7 4 -7 0 -7 C-4 -7 -8 -7 -8 -9 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></path>
+          </g>
+          <g transform="translate(382 22)" style="filter: drop-shadow(0 3px 2px color-mix(in srgb, color-mix(in srgb, var(--gel0), #000 30%) 45%, transparent))">
+            <path d="M-13 0 C-13 -13 -8 -19 0 -19 C8 -19 13 -13 13 0 C13 2 11 3 0 3 C-11 3 -13 2 -13 0 Z" fill="url(#gl-gel0) #F0284A"></path>
+            <path d="M-8 -9 C-8 -14 -4 -16 0 -16 C4 -16 8 -14 8 -9 C8 -7 4 -7 0 -7 C-4 -7 -8 -7 -8 -9 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></path>
+          </g>
+      </svg>
+      <div style="position: relative; flex: 1; min-height: 236px; border-radius: 28px; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.28) 100%); backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 0 0 1px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(255,255,255,0.35), 0 12px 30px rgba(20,40,80,0.16), 0 2px 6px rgba(20,40,80,0.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; overflow: hidden">
+        <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 46%; background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.08) 100%); border-radius: 28px 28px 50% 50% / 28px 28px 22px 22px"></div>
+        <span style="position: relative; font-weight: 900; font-size: 104px; line-height: 0.95; letter-spacing: -0.02em; color: transparent; -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 4px 4px rgba(30,60,120,0.35))" class="clockface" data-clock="0">--:--</span>
+        <div style="position: relative; display: inline-flex; align-items: center; height: 30px; padding: 0 18px; border-radius: 15px; background: rgba(255,255,255,0.55); box-shadow: inset 0 1px 0 #FFFFFF, inset 0 -1px 2px rgba(0,0,0,0.08), 0 2px 6px rgba(20,40,80,0.12)">
+          <span style="font-weight: 800; font-size: 15px; color: var(--sub); white-space: nowrap" data-fulldate>&nbsp;</span>
+        </div>
+      </div>
+  </section>
+  <!-- ===== PROCESSOR ===== -->
+  <section data-section="cpu" style="position: relative; z-index: 1; border-radius: 26px; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.28) 100%); backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 0 0 1px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(255,255,255,0.35), 0 12px 30px rgba(20,40,80,0.16), 0 2px 6px rgba(20,40,80,0.08); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 60px; background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 100%)"></div>
+    <div style="position: relative; display: flex; justify-content: space-between; align-items: center">
+      <h2 style="margin: 0; font-weight: 900; font-size: 22px; line-height: 1; color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.8)">Processor</h2>
+      <span class="gel badge" data-state="5" data-need="5" style="display: inline-flex; align-items: center; height: 24px; padding: 0 12px; border-radius: 12px; font-weight: 900; font-size: 12px; color: #FFFFFF; text-shadow: 0 -1px 0 rgba(0,0,0,0.25)">Cool</span>
+    </div>
+    <div style="position: relative; display: flex; align-items: center; gap: 18px">
+      <div data-need="5" data-globe="5" style="position: relative; width: 168px; height: 176px; flex: none">
+        <svg aria-hidden="true" width="168" height="176" viewBox="0 0 170 178" style="position: absolute; top: 0; left: 0; overflow: visible">
+          <defs>
+            <linearGradient id="gl-orb-cpu" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--orb)"></stop><stop offset="0.55" style="stop-color: var(--orb)"></stop><stop offset="0.85" style="stop-color: var(--orb-d)"></stop><stop offset="1" style="stop-color: var(--orb-l)"></stop></linearGradient>
+          </defs>
+          <ellipse cx="85" cy="168" rx="56" ry="8" style="fill: var(--orb)" opacity="0.4" filter="url(#gl-soft)"></ellipse>
+          <circle cx="85" cy="85" r="76" fill="url(#gl-glassBall) rgba(255,255,255,0.2)"></circle>
+          <g clip-path="url(#gl-ball)">
+          <g style="animation: gl-slosh 5s ease-in-out infinite">
+            <rect data-gel x="-10" y="88.7" width="190" height="70.3" fill="url(#gl-orb-cpu)"></rect>
+            <ellipse data-surface cx="85" cy="88.7" rx="71.9" ry="5" style="fill: var(--orb-l)" opacity="0.9"></ellipse>
+          </g>
+          </g>
+          <ellipse cx="85" cy="150" rx="40" ry="10" fill="#FFFFFF" opacity="0.4" filter="url(#gl-soft)"></ellipse>
+          <circle cx="85" cy="85" r="76" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.9"></circle>
+          <circle cx="85" cy="85" r="75" fill="none" stroke="#3A6EA8" stroke-width="1" opacity="0.4"></circle>
+          <ellipse cx="85" cy="40" rx="50" ry="28" fill="url(#gl-hi) #FFFFFF" opacity="0.9"></ellipse>
+          <ellipse cx="128" cy="96" rx="5" ry="16" transform="rotate(-18 128 96)" fill="#FFFFFF" opacity="0.45"></ellipse>
+        </svg>
+        <div style="position: absolute; left: 0; right: 0; top: 66px; display: flex; flex-direction: column; align-items: center">
+          <span style="font-weight: 900; font-size: 46px; line-height: 1; color: #FFFFFF; text-shadow: 0 2px 3px var(--orb-d), 0 0 1px var(--orb-d)"><span data-num="5" data-places="0">--</span>°</span>
+          <span style="font-weight: 800; font-size: 11px; letter-spacing: 0.1em; color: #FFFFFF; text-shadow: 0 1px 2px var(--orb-d); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="4" data-default="PACKAGE" data-upper>PACKAGE</span>
+        </div>
+      </div>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+          <div data-need="9" style="display: flex; flex-direction: column; gap: 5px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 800; font-size: 13px; color: var(--sub)">Load</span>
+              <span style="font-weight: 900; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="9" data-places="0">--</span><span style="font-weight: 800; font-size: 12px; color: var(--sub)"> <span data-unit="10" data-default="%">%</span></span></span>
+            </div>
+            <div style="position: relative; height: 18px; border-radius: 9px; background: linear-gradient(180deg, rgba(160,175,195,0.55) 0%, rgba(255,255,255,0.75) 100%); box-shadow: inset 0 1px 3px rgba(20,40,80,0.35), 0 1px 0 rgba(255,255,255,0.9)">
+              <div class="gel fill" data-bar="9" data-max="11" data-unit-of="10" data-scale="100" style="position: absolute; left: 1px; top: 1px; bottom: 1px; width: 20px; border-radius: 8px; overflow: hidden; --b: var(--cpu-bar)">
+                <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: repeating-linear-gradient(-45deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 7px, rgba(255,255,255,0) 7px, rgba(255,255,255,0) 14px); animation: gl-stripes 1.1s linear infinite"></div>
+                <div style="position: absolute; left: 4px; right: 4px; top: 1px; height: 45%; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.25) 100%)"></div>
+              </div>
+            </div>
+          </div>
+          <div data-need="13" style="display: flex; flex-direction: column; gap: 5px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 800; font-size: 13px; color: var(--sub)">Clock</span>
+              <span style="font-weight: 900; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="13" data-places="2" data-ghz>--</span><span style="font-weight: 800; font-size: 12px; color: var(--sub)"> <span data-unit="14" data-default="GHz" data-ghz>GHz</span></span></span>
+            </div>
+            <div style="position: relative; height: 18px; border-radius: 9px; background: linear-gradient(180deg, rgba(160,175,195,0.55) 0%, rgba(255,255,255,0.75) 100%); box-shadow: inset 0 1px 3px rgba(20,40,80,0.35), 0 1px 0 rgba(255,255,255,0.9)">
+              <div class="gel fill" data-bar="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" style="position: absolute; left: 1px; top: 1px; bottom: 1px; width: 20px; border-radius: 8px; overflow: hidden; --b: var(--cpu-bar)">
+                <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: repeating-linear-gradient(-45deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 7px, rgba(255,255,255,0) 7px, rgba(255,255,255,0) 14px); animation: gl-stripes 1.1s linear infinite"></div>
+                <div style="position: absolute; left: 4px; right: 4px; top: 1px; height: 45%; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.25) 100%)"></div>
+              </div>
+            </div>
+          </div>
+          <div data-need="17" style="display: flex; flex-direction: column; gap: 5px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 800; font-size: 13px; color: var(--sub)">Power</span>
+              <span style="font-weight: 900; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="17" data-places="0">--</span><span style="font-weight: 800; font-size: 12px; color: var(--sub)"> <span data-unit="18" data-default="W">W</span></span></span>
+            </div>
+            <div style="position: relative; height: 18px; border-radius: 9px; background: linear-gradient(180deg, rgba(160,175,195,0.55) 0%, rgba(255,255,255,0.75) 100%); box-shadow: inset 0 1px 3px rgba(20,40,80,0.35), 0 1px 0 rgba(255,255,255,0.9)">
+              <div class="gel fill" data-bar="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" style="position: absolute; left: 1px; top: 1px; bottom: 1px; width: 20px; border-radius: 8px; overflow: hidden; --b: var(--cpu-bar)">
+                <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: repeating-linear-gradient(-45deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 7px, rgba(255,255,255,0) 7px, rgba(255,255,255,0) 14px); animation: gl-stripes 1.1s linear infinite"></div>
+                <div style="position: absolute; left: 4px; right: 4px; top: 1px; height: 45%; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.25) 100%)"></div>
+              </div>
+            </div>
+          </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== GRAPHICS ===== -->
+  <section data-section="gpu" style="position: relative; z-index: 1; border-radius: 26px; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.28) 100%); backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 0 0 1px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(255,255,255,0.35), 0 12px 30px rgba(20,40,80,0.16), 0 2px 6px rgba(20,40,80,0.08); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 60px; background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 100%)"></div>
+    <div style="position: relative; display: flex; justify-content: space-between; align-items: center">
+      <h2 style="margin: 0; font-weight: 900; font-size: 22px; line-height: 1; color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.8)">Graphics</h2>
+      <span class="gel badge" data-state="21" data-need="21" style="display: inline-flex; align-items: center; height: 24px; padding: 0 12px; border-radius: 12px; font-weight: 900; font-size: 12px; color: #FFFFFF; text-shadow: 0 -1px 0 rgba(0,0,0,0.25)">Cool</span>
+    </div>
+    <div style="position: relative; display: flex; align-items: center; gap: 18px">
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+          <div data-need="25" style="display: flex; flex-direction: column; gap: 5px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 800; font-size: 13px; color: var(--sub)">Load</span>
+              <span style="font-weight: 900; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="25" data-places="0">--</span><span style="font-weight: 800; font-size: 12px; color: var(--sub)"> <span data-unit="26" data-default="%">%</span></span></span>
+            </div>
+            <div style="position: relative; height: 18px; border-radius: 9px; background: linear-gradient(180deg, rgba(160,175,195,0.55) 0%, rgba(255,255,255,0.75) 100%); box-shadow: inset 0 1px 3px rgba(20,40,80,0.35), 0 1px 0 rgba(255,255,255,0.9)">
+              <div class="gel fill" data-bar="25" data-max="27" data-unit-of="26" data-scale="100" style="position: absolute; left: 1px; top: 1px; bottom: 1px; width: 20px; border-radius: 8px; overflow: hidden; --b: var(--gpu-bar)">
+                <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: repeating-linear-gradient(-45deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 7px, rgba(255,255,255,0) 7px, rgba(255,255,255,0) 14px); animation: gl-stripes 1.1s linear infinite"></div>
+                <div style="position: absolute; left: 4px; right: 4px; top: 1px; height: 45%; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.25) 100%)"></div>
+              </div>
+            </div>
+          </div>
+          <div data-need="29" style="display: flex; flex-direction: column; gap: 5px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 800; font-size: 13px; color: var(--sub)">Clock</span>
+              <span style="font-weight: 900; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="29" data-places="2" data-ghz>--</span><span style="font-weight: 800; font-size: 12px; color: var(--sub)"> <span data-unit="30" data-default="GHz" data-ghz>GHz</span></span></span>
+            </div>
+            <div style="position: relative; height: 18px; border-radius: 9px; background: linear-gradient(180deg, rgba(160,175,195,0.55) 0%, rgba(255,255,255,0.75) 100%); box-shadow: inset 0 1px 3px rgba(20,40,80,0.35), 0 1px 0 rgba(255,255,255,0.9)">
+              <div class="gel fill" data-bar="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" style="position: absolute; left: 1px; top: 1px; bottom: 1px; width: 20px; border-radius: 8px; overflow: hidden; --b: var(--gpu-bar)">
+                <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: repeating-linear-gradient(-45deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 7px, rgba(255,255,255,0) 7px, rgba(255,255,255,0) 14px); animation: gl-stripes 1.1s linear infinite"></div>
+                <div style="position: absolute; left: 4px; right: 4px; top: 1px; height: 45%; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.25) 100%)"></div>
+              </div>
+            </div>
+          </div>
+          <div data-need="33" style="display: flex; flex-direction: column; gap: 5px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-weight: 800; font-size: 13px; color: var(--sub)">Power</span>
+              <span style="font-weight: 900; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="33" data-places="0">--</span><span style="font-weight: 800; font-size: 12px; color: var(--sub)"> <span data-unit="34" data-default="W">W</span></span></span>
+            </div>
+            <div style="position: relative; height: 18px; border-radius: 9px; background: linear-gradient(180deg, rgba(160,175,195,0.55) 0%, rgba(255,255,255,0.75) 100%); box-shadow: inset 0 1px 3px rgba(20,40,80,0.35), 0 1px 0 rgba(255,255,255,0.9)">
+              <div class="gel fill" data-bar="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" style="position: absolute; left: 1px; top: 1px; bottom: 1px; width: 20px; border-radius: 8px; overflow: hidden; --b: var(--gpu-bar)">
+                <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: repeating-linear-gradient(-45deg, rgba(255,255,255,0.22) 0px, rgba(255,255,255,0.22) 7px, rgba(255,255,255,0) 7px, rgba(255,255,255,0) 14px); animation: gl-stripes 1.1s linear infinite"></div>
+                <div style="position: absolute; left: 4px; right: 4px; top: 1px; height: 45%; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.25) 100%)"></div>
+              </div>
+            </div>
+          </div>
+      </div>
+      <div data-need="21" data-globe="21" style="position: relative; width: 168px; height: 176px; flex: none">
+        <svg aria-hidden="true" width="168" height="176" viewBox="0 0 170 178" style="position: absolute; top: 0; left: 0; overflow: visible">
+          <defs>
+            <linearGradient id="gl-orb-gpu" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--orb)"></stop><stop offset="0.55" style="stop-color: var(--orb)"></stop><stop offset="0.85" style="stop-color: var(--orb-d)"></stop><stop offset="1" style="stop-color: var(--orb-l)"></stop></linearGradient>
+          </defs>
+          <ellipse cx="85" cy="168" rx="56" ry="8" style="fill: var(--orb)" opacity="0.4" filter="url(#gl-soft)"></ellipse>
+          <circle cx="85" cy="85" r="76" fill="url(#gl-glassBall) rgba(255,255,255,0.2)"></circle>
+          <g clip-path="url(#gl-ball)">
+          <g style="animation: gl-slosh 5.8s ease-in-out -2s infinite">
+            <rect data-gel x="-10" y="88.7" width="190" height="70.3" fill="url(#gl-orb-gpu)"></rect>
+            <ellipse data-surface cx="85" cy="88.7" rx="71.9" ry="5" style="fill: var(--orb-l)" opacity="0.9"></ellipse>
+          </g>
+          </g>
+          <ellipse cx="85" cy="150" rx="40" ry="10" fill="#FFFFFF" opacity="0.4" filter="url(#gl-soft)"></ellipse>
+          <circle cx="85" cy="85" r="76" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.9"></circle>
+          <circle cx="85" cy="85" r="75" fill="none" stroke="#3A6EA8" stroke-width="1" opacity="0.4"></circle>
+          <ellipse cx="85" cy="40" rx="50" ry="28" fill="url(#gl-hi) #FFFFFF" opacity="0.9"></ellipse>
+          <ellipse cx="42" cy="96" rx="5" ry="16" transform="rotate(18 42 96)" fill="#FFFFFF" opacity="0.45"></ellipse>
+        </svg>
+        <div style="position: absolute; left: 0; right: 0; top: 66px; display: flex; flex-direction: column; align-items: center">
+          <span style="font-weight: 900; font-size: 46px; line-height: 1; color: #FFFFFF; text-shadow: 0 2px 3px var(--orb-d), 0 0 1px var(--orb-d)"><span data-num="21" data-places="0">--</span>°</span>
+          <span style="font-weight: 800; font-size: 11px; letter-spacing: 0.1em; color: #FFFFFF; text-shadow: 0 1px 2px var(--orb-d); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="20" data-default="EDGE" data-upper>EDGE</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== COOLING: candy pinwheels ===== -->
+  <section data-section="fans" style="position: relative; z-index: 1; border-radius: 26px; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.28) 100%); backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 0 0 1px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(255,255,255,0.35), 0 12px 30px rgba(20,40,80,0.16), 0 2px 6px rgba(20,40,80,0.08); padding: 16px 14px 16px; display: flex; flex-direction: column; gap: 8px; overflow: hidden">
+    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 60px; background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 100%)"></div>
+    <h2 style="position: relative; margin: 0 0 0 6px; font-weight: 900; font-size: 22px; line-height: 1; color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.8)">Cooling</h2>
+    <div style="position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+        <div data-need="37" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88" style="overflow: visible">
+            <circle r="40" fill="url(#gl-glassBall) rgba(255,255,255,0.25)" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.9"></circle>
+            <g data-rotor="37">
+              <g style="filter: drop-shadow(0 3px 2px rgba(20,40,80,0.25))">
+                  <g transform="rotate(0)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel0) #F0284A"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(90)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel3) #FF8A00"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel1) #5CC21E"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(270)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel4) #1E7BF0"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="7" fill="url(#gl-glassBall) #FFFFFF" stroke="#FFFFFF" stroke-width="1"></circle>
+            <circle r="7" fill="#FFFFFF" opacity="0.75"></circle>
+            <ellipse cx="0" cy="-3" rx="4.5" ry="2.5" fill="#FFFFFF"></ellipse>
+            <ellipse cx="0" cy="-26" rx="26" ry="11" fill="url(#gl-hi) #FFFFFF" opacity="0.45"></ellipse>
+          </svg>
+          <span style="font-weight: 900; font-size: 19px; line-height: 1; color: var(--ink)" data-num="37" data-places="0">--</span>
+          <span style="font-weight: 800; font-size: 11px; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="36" data-default="Fan 1">Fan 1</span>
+        </div>
+        <div data-need="41" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88" style="overflow: visible">
+            <circle r="40" fill="url(#gl-glassBall) rgba(255,255,255,0.25)" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.9"></circle>
+            <g data-rotor="41">
+              <g style="filter: drop-shadow(0 3px 2px rgba(20,40,80,0.25))">
+                  <g transform="rotate(0)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel0) #F0284A"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(90)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel3) #FF8A00"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel1) #5CC21E"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(270)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel4) #1E7BF0"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="7" fill="url(#gl-glassBall) #FFFFFF" stroke="#FFFFFF" stroke-width="1"></circle>
+            <circle r="7" fill="#FFFFFF" opacity="0.75"></circle>
+            <ellipse cx="0" cy="-3" rx="4.5" ry="2.5" fill="#FFFFFF"></ellipse>
+            <ellipse cx="0" cy="-26" rx="26" ry="11" fill="url(#gl-hi) #FFFFFF" opacity="0.45"></ellipse>
+          </svg>
+          <span style="font-weight: 900; font-size: 19px; line-height: 1; color: var(--ink)" data-num="41" data-places="0">--</span>
+          <span style="font-weight: 800; font-size: 11px; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="40" data-default="Fan 2">Fan 2</span>
+        </div>
+        <div data-need="45" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88" style="overflow: visible">
+            <circle r="40" fill="url(#gl-glassBall) rgba(255,255,255,0.25)" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.9"></circle>
+            <g data-rotor="45">
+              <g style="filter: drop-shadow(0 3px 2px rgba(20,40,80,0.25))">
+                  <g transform="rotate(0)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel0) #F0284A"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(90)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel3) #FF8A00"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel1) #5CC21E"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(270)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel4) #1E7BF0"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="7" fill="url(#gl-glassBall) #FFFFFF" stroke="#FFFFFF" stroke-width="1"></circle>
+            <circle r="7" fill="#FFFFFF" opacity="0.75"></circle>
+            <ellipse cx="0" cy="-3" rx="4.5" ry="2.5" fill="#FFFFFF"></ellipse>
+            <ellipse cx="0" cy="-26" rx="26" ry="11" fill="url(#gl-hi) #FFFFFF" opacity="0.45"></ellipse>
+          </svg>
+          <span style="font-weight: 900; font-size: 19px; line-height: 1; color: var(--ink)" data-num="45" data-places="0">--</span>
+          <span style="font-weight: 800; font-size: 11px; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="44" data-default="Fan 3">Fan 3</span>
+        </div>
+        <div data-need="49" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+          <svg aria-hidden="true" width="88" height="88" viewBox="-44 -44 88 88" style="overflow: visible">
+            <circle r="40" fill="url(#gl-glassBall) rgba(255,255,255,0.25)" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.9"></circle>
+            <g data-rotor="49">
+              <g style="filter: drop-shadow(0 3px 2px rgba(20,40,80,0.25))">
+                  <g transform="rotate(0)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel0) #F0284A"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(90)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel3) #FF8A00"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel1) #5CC21E"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+                  <g transform="rotate(270)">
+                    <path d="M0 -3 C11 -9 18 -24 12 -33 C6 -40 -6 -38 -9 -29 C-11 -20 -7 -10 0 -3 Z" fill="url(#gl-gel4) #1E7BF0"></path>
+                    <path d="M-1 -11 C4 -15 9 -25 6 -30 C3 -34 -3 -33 -5 -28 C-6 -22 -5 -15 -1 -11 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.7"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="7" fill="url(#gl-glassBall) #FFFFFF" stroke="#FFFFFF" stroke-width="1"></circle>
+            <circle r="7" fill="#FFFFFF" opacity="0.75"></circle>
+            <ellipse cx="0" cy="-3" rx="4.5" ry="2.5" fill="#FFFFFF"></ellipse>
+            <ellipse cx="0" cy="-26" rx="26" ry="11" fill="url(#gl-hi) #FFFFFF" opacity="0.45"></ellipse>
+          </svg>
+          <span style="font-weight: 900; font-size: 19px; line-height: 1; color: var(--ink)" data-num="49" data-places="0">--</span>
+          <span style="font-weight: 800; font-size: 11px; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="48" data-default="Fan 4">Fan 4</span>
+        </div>
+    </div>
+  </section>
+  <!-- ===== MEMORY: gumdrop jars ===== -->
+  <section data-section="memory" style="position: relative; z-index: 1; border-radius: 26px; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.28) 100%); backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 0 0 1px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(255,255,255,0.35), 0 12px 30px rgba(20,40,80,0.16), 0 2px 6px rgba(20,40,80,0.08); padding: 16px 18px 16px; display: flex; flex-direction: column; gap: 6px; overflow: hidden">
+    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 60px; background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 100%)"></div>
+    <h2 style="position: relative; margin: 0 0 0 2px; font-weight: 900; font-size: 22px; line-height: 1; color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.8)">Memory</h2>
+    <div style="position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+        <div data-need="53" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+          <svg data-jar="53" data-max="55" aria-hidden="true" width="112" height="162" viewBox="0 0 112 162" style="overflow: visible">
+            <ellipse cx="56" cy="156" rx="40" ry="5" fill="rgba(20,40,80,0.22)" filter="url(#gl-soft)"></ellipse>
+            <rect x="14" y="30" width="84" height="124" rx="20" fill="rgba(255,255,255,0.28)" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="1.5"></rect>
+            <g data-slot transform="translate(28 148) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 148) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 148) rotate(3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 148) rotate(1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 134.5) rotate(-1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 134.5) rotate(-3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 134.5) rotate(-5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 121) rotate(6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 121) rotate(4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 121) rotate(2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 121) rotate(0)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 107.5) rotate(-2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 107.5) rotate(-4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 107.5) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 94) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 94) rotate(3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 94) rotate(1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 94) rotate(-1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 80.5) rotate(-3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 80.5) rotate(-5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 80.5) rotate(6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 67) rotate(4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 67) rotate(2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 67) rotate(0)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 67) rotate(-2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 53.5) rotate(-4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 53.5) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 53.5) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <path d="M24 46 C20 70 20 118 24 142" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.6"></path>
+            <path d="M88 52 C91 76 91 112 88 134" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.5"></path>
+            <rect x="14" y="30" width="84" height="124" rx="20" fill="none" stroke="#3A6EA8" stroke-opacity="0.35" stroke-width="1"></rect>
+            <rect x="22" y="22" width="68" height="12" rx="4" fill="rgba(255,255,255,0.5)" stroke="#FFFFFF" stroke-width="1"></rect>
+            <rect x="16" y="6" width="80" height="20" rx="10" fill="url(#gl-gel0) #F0284A"></rect>
+            <rect x="20" y="7.5" width="72" height="8" rx="4" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></rect>
+          </svg>
+          <span style="font-weight: 900; font-size: 24px; line-height: 1; color: var(--ink)"><span data-pct="53" data-max="55">--</span><span style="font-size: 14px; color: var(--sub)">%</span></span>
+          <span style="font-weight: 900; font-size: 13px; color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="52" data-default="Memory">Memory</span>
+          <span style="font-weight: 700; font-size: 12px; color: var(--sub)"><span data-num="53" data-places="1" data-plain>--</span> of <span data-num="55" data-places="0" data-plain>--</span> <span data-unit="54" data-default="GB">GB</span></span>
+        </div>
+        <div data-need="57" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+          <svg data-jar="57" data-max="59" aria-hidden="true" width="112" height="162" viewBox="0 0 112 162" style="overflow: visible">
+            <ellipse cx="56" cy="156" rx="40" ry="5" fill="rgba(20,40,80,0.22)" filter="url(#gl-soft)"></ellipse>
+            <rect x="14" y="30" width="84" height="124" rx="20" fill="rgba(255,255,255,0.28)" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="1.5"></rect>
+            <g data-slot transform="translate(28 148) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 148) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 148) rotate(3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 148) rotate(1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 134.5) rotate(-1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 134.5) rotate(-3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 134.5) rotate(-5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 121) rotate(6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 121) rotate(4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 121) rotate(2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 121) rotate(0)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 107.5) rotate(-2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 107.5) rotate(-4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 107.5) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 94) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 94) rotate(3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 94) rotate(1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 94) rotate(-1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 80.5) rotate(-3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 80.5) rotate(-5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 80.5) rotate(6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 67) rotate(4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 67) rotate(2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 67) rotate(0)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 67) rotate(-2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 53.5) rotate(-4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 53.5) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 53.5) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <path d="M24 46 C20 70 20 118 24 142" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.6"></path>
+            <path d="M88 52 C91 76 91 112 88 134" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.5"></path>
+            <rect x="14" y="30" width="84" height="124" rx="20" fill="none" stroke="#3A6EA8" stroke-opacity="0.35" stroke-width="1"></rect>
+            <rect x="22" y="22" width="68" height="12" rx="4" fill="rgba(255,255,255,0.5)" stroke="#FFFFFF" stroke-width="1"></rect>
+            <rect x="16" y="6" width="80" height="20" rx="10" fill="url(#gl-gel2) #8A4BEA"></rect>
+            <rect x="20" y="7.5" width="72" height="8" rx="4" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></rect>
+          </svg>
+          <span style="font-weight: 900; font-size: 24px; line-height: 1; color: var(--ink)"><span data-pct="57" data-max="59">--</span><span style="font-size: 14px; color: var(--sub)">%</span></span>
+          <span style="font-weight: 900; font-size: 13px; color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="56" data-default="Video">Video</span>
+          <span style="font-weight: 700; font-size: 12px; color: var(--sub)"><span data-num="57" data-places="1" data-plain>--</span> of <span data-num="59" data-places="0" data-plain>--</span> <span data-unit="58" data-default="GB">GB</span></span>
+        </div>
+        <div data-need="61" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+          <svg data-jar="61" data-max="63" aria-hidden="true" width="112" height="162" viewBox="0 0 112 162" style="overflow: visible">
+            <ellipse cx="56" cy="156" rx="40" ry="5" fill="rgba(20,40,80,0.22)" filter="url(#gl-soft)"></ellipse>
+            <rect x="14" y="30" width="84" height="124" rx="20" fill="rgba(255,255,255,0.28)" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="1.5"></rect>
+            <g data-slot transform="translate(28 148) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 148) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 148) rotate(3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 148) rotate(1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 134.5) rotate(-1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 134.5) rotate(-3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 134.5) rotate(-5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 121) rotate(6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 121) rotate(4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 121) rotate(2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 121) rotate(0)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 107.5) rotate(-2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 107.5) rotate(-4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 107.5) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 94) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 94) rotate(3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 94) rotate(1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 94) rotate(-1)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 80.5) rotate(-3)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 80.5) rotate(-5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 80.5) rotate(6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(28 67) rotate(4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(47 67) rotate(2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(66 67) rotate(0)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel1)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(85 67) rotate(-2)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel3)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(37 53.5) rotate(-4)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel0)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(56 53.5) rotate(-6)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel4)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <g data-slot transform="translate(75 53.5) rotate(5)"><path d="M-9 0 C-9 -9 -5.5 -13 0 -13 C5.5 -13 9 -9 9 0 C9 1.5 7 2 0 2 C-7 2 -9 1.5 -9 0 Z" fill="url(#gl-gel2)"></path><path d="M-5.5 -6.5 C-5.5 -9.5 -3 -11 0 -11 C3 -11 5.5 -9.5 5.5 -6.5 C5.5 -5.2 3 -5.2 0 -5.2 C-3 -5.2 -5.5 -5.2 -5.5 -6.5 Z" fill="url(#gl-hi) #FFFFFF" opacity="0.8"></path></g>
+            <path d="M24 46 C20 70 20 118 24 142" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.6"></path>
+            <path d="M88 52 C91 76 91 112 88 134" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.5"></path>
+            <rect x="14" y="30" width="84" height="124" rx="20" fill="none" stroke="#3A6EA8" stroke-opacity="0.35" stroke-width="1"></rect>
+            <rect x="22" y="22" width="68" height="12" rx="4" fill="rgba(255,255,255,0.5)" stroke="#FFFFFF" stroke-width="1"></rect>
+            <rect x="16" y="6" width="80" height="20" rx="10" fill="url(#gl-gel3) #FF8A00"></rect>
+            <rect x="20" y="7.5" width="72" height="8" rx="4" fill="url(#gl-hi) #FFFFFF" opacity="0.85"></rect>
+          </svg>
+          <span style="font-weight: 900; font-size: 24px; line-height: 1; color: var(--ink)"><span data-pct="61" data-max="63">--</span><span style="font-size: 14px; color: var(--sub)">%</span></span>
+          <span style="font-weight: 900; font-size: 13px; color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="60" data-default="Disk">Disk</span>
+          <span style="font-weight: 700; font-size: 12px; color: var(--sub)"><span data-num="61" data-places="1" data-plain>--</span> of <span data-num="63" data-places="0" data-plain>--</span> <span data-unit="62" data-default="GB">GB</span></span>
+        </div>
+    </div>
+  </section>
+  <!-- ===== NETWORK ===== -->
+  <section data-section="network" style="position: relative; z-index: 1; border-radius: 26px; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.28) 100%); backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 0 0 1px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(255,255,255,0.35), 0 12px 30px rgba(20,40,80,0.16), 0 2px 6px rgba(20,40,80,0.08); padding: 16px 20px 16px; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+    <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 60px; background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 100%)"></div>
+    <div style="position: relative; display: flex; justify-content: space-between; align-items: center">
+      <h2 style="margin: 0; font-weight: 900; font-size: 22px; line-height: 1; color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.8)">Network</h2>
+      <div style="display: flex; gap: 8px">
+        <span class="gel" data-need="65" style="display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border-radius: 13px; font-weight: 900; font-size: 13px; color: #FFFFFF; text-shadow: 0 -1px 0 rgba(0,0,0,0.25); --b: var(--net-in)">↓ <span><span data-num="65" data-places="1">--</span> <span data-unit="66" data-default="MB/s">MB/s</span></span></span>
+        <span class="gel" data-need="69" style="display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border-radius: 13px; font-weight: 900; font-size: 13px; color: #FFFFFF; text-shadow: 0 -1px 0 rgba(0,0,0,0.25); --b: var(--net-out)">↑ <span data-num="69" data-places="1">--</span></span>
+      </div>
+    </div>
+    <div style="position: relative; height: 120px; border-radius: 16px; background: rgba(255,255,255,0.4); box-shadow: inset 0 2px 6px rgba(20,40,80,0.18), inset 0 -1px 0 rgba(255,255,255,0.9)">
+      <svg data-chart role="img" aria-label="Network traffic over the last minute" width="100%" height="120" style="position: absolute; top: 0; left: 0; overflow: visible">
+        <path data-rules d="M12 36 L372 36 M12 64 L372 64 M12 92 L372 92" fill="none" stroke="#FFFFFF" stroke-width="1.2" opacity="0.8"></path>
+        <path data-area d="" fill="url(#gl-area) rgba(0,0,0,0)"></path>
+        <path data-line="out" d="" fill="none" style="stroke: color-mix(in srgb, var(--net-out), #000 30%)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"></path>
+        <path data-line="out" d="" fill="none" style="stroke: var(--net-out)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path data-line="out" d="" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round" opacity="0.7" transform="translate(0 -0.9)"></path>
+        <path data-line="in" d="" fill="none" style="stroke: color-mix(in srgb, var(--net-in), #000 30%)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path data-line="in" d="" fill="none" style="stroke: var(--net-in)" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path data-line="in" d="" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" opacity="0.75" transform="translate(0 -1.4)"></path>
+        <g data-dot transform="translate(362 104)">
+          <g style="transform-box: fill-box; transform-origin: center; animation: gl-pulse 1.6s ease-in-out infinite">
+            <circle r="8" style="fill: var(--net-in)" stroke="#FFFFFF" stroke-width="2"></circle>
+            <ellipse cx="0" cy="-3.5" rx="5" ry="3" fill="url(#gl-hi) #FFFFFF" opacity="0.9"></ellipse>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <div style="position: relative; display: flex; justify-content: space-between; font-weight: 800; font-size: 11px; color: var(--sub)"><span>1 minute ago</span><span>now</span></div>
+  </section>
+  </div>
+  <!-- ===== FOOTER ===== -->
+  <footer style="position: relative; z-index: 1; display: flex; justify-content: center">
+    <div style="display: inline-flex; align-items: center; gap: 10px; height: 34px; padding: 0 20px; border-radius: 17px; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.28) 100%); backdrop-filter: blur(12px) saturate(1.5); -webkit-backdrop-filter: blur(12px) saturate(1.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.95), inset 0 0 0 1px rgba(255,255,255,0.6), inset 0 -2px 6px rgba(255,255,255,0.35), 0 12px 30px rgba(20,40,80,0.16), 0 2px 6px rgba(20,40,80,0.08)">
+      <span class="gel dot" style="width: 12px; height: 12px; border-radius: 50%; --b: var(--gel0)"></span><span class="gel dot" style="width: 12px; height: 12px; border-radius: 50%; --b: var(--gel1)"></span><span class="gel dot" style="width: 12px; height: 12px; border-radius: 50%; --b: var(--gel4)"></span>
+      <span style="font-weight: 800; font-size: 14px; color: var(--sub); white-space: nowrap" data-need="73">Up <span data-uptime="73">--</span></span>
+    </div>
+  </footer>
+</div>
+</div>
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "flavour", "label": "Flavour", "type": "choice", "var": "--flavour", "default": "candy", "choices": [{"value": "candy", "label": "Candy"}, {"value": "aqua", "label": "Aqua"}, {"value": "graphite", "label": "Graphite"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Network chart full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100, WARM = 72, HOT = 85;
+  var SAMPLES = 40, SAMPLE_MS = 1500;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+  // The flavour is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-flavour', (css.getPropertyValue('--flavour') || 'candy').trim() || 'candy');
+
+  // Temperature colour: five stops (--temp-0 .. --temp-4) at these degrees.
+  var TEMP_AT = [20, 55, 68, 80, 92];
+  var TEMP = TEMP_AT.map(function (_, i) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(css.getPropertyValue('--temp-' + i).trim());
+    var n = m ? parseInt(m[1], 16) : 0x1E8CF5;
+    return [n >> 16, (n >> 8) & 255, n & 255];
+  });
+  function tempColour(t) {
+    if (!isFinite(t)) t = TEMP_AT[0];
+    var i = 0;
+    while (i < TEMP_AT.length - 2 && t > TEMP_AT[i + 1]) i++;
+    var f = clamp01((t - TEMP_AT[i]) / (TEMP_AT[i + 1] - TEMP_AT[i]));
+    return 'rgb(' + TEMP[i].map(function (c, k) { return Math.round(c + (TEMP[i + 1][k] - c) * f); }).join(',') + ')';
+  }
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  // A clock given in MHz is shown, and scaled, in GHz.
+  function inGhz(el, v, id) { return el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[id] || '')); }
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-gumdrop-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  // The value the top of the chart stands for, shared by both lines. `peak`
+  // is the largest sample of the last minute, `fixed` the Network chart full
+  // scale option (0 when it is left to follow the peak).
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    // Follow the peak in steps (1, 2, 4, 8, 16 ...), so the curves do not
+    // rescale each time the peak moves a little.
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+
+  // A smooth curve through the points: each span is a cubic whose handles
+  // follow the slope between the neighbouring points.
+  function curve(pts) {
+    if (pts.length < 2) return '';
+    var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+      d += ' C' + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + ' ' +
+           (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + ' ' + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + ' ' +
+           p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return d;
+  }
+
+  // Both speeds as gel tubes (three strokes of one curve each), in over a
+  // soft fill; the newest sample at the right, under the pulsing bead. The
+  // chart is as wide as its tray, so it is drawn in the tray's own pixels.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var W = svg.clientWidth || 384;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var x1 = W - 22, step = (x1 - 14) / (SAMPLES - 1);
+    function points(values) {
+      return values.map(function (v, i) {
+        return [x1 - (values.length - 1 - i) * step, 104 - clamp01(v / full) * 70];
+      });
+    }
+    var down = points(hist.down), d = curve(down), up = curve(points(hist.up));
+    attr(svg.querySelector('[data-rules]'), 'd', [36, 64, 92].map(function (y) { return 'M12 ' + y + ' L' + (W - 12) + ' ' + y; }).join(' '));
+    each('[data-line="in"]', function (el) { attr(el, 'd', d); }, svg);
+    each('[data-line="out"]', function (el) { attr(el, 'd', up); }, svg);
+    attr(svg.querySelector('[data-area]'), 'd', d ? d + ' L' + x1.toFixed(1) + ' 116 L' + down[0][0].toFixed(1) + ' 116 Z' : '');
+    var dot = svg.querySelector('[data-dot]');
+    hide(dot, down.length === 0);          // nothing to mark before the first sample
+    if (down.length) attr(dot, 'transform', 'translate(' + x1.toFixed(1) + ' ' + down[down.length - 1][1].toFixed(1) + ')');
+  }
+  window.addEventListener('resize', drawChart);
+  window.addEventListener('rg-layout', function () { setTimeout(drawChart, 0); });
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
+    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
+    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
+    var day = num(v['2']);
+    each('[data-fulldate]', function (el) {   // Friday, 13 November
+      var dm = [isFinite(day) ? String(Math.round(day)) : '', known(v['3']) ? String(v['3']) : ''].filter(Boolean).join(' ');
+      text(el, [known(v['1']) ? String(v['1']) : '', dm].filter(Boolean).join(', ') || '\u00a0');
+    });
+
+    each('[data-num]', function (el) {
+      var id = el.getAttribute('data-num'), n = num(v[id]);
+      if (inGhz(el, v, +id + 1)) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      var shown = inGhz(el, v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? shown.toUpperCase() : shown);
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      var name = known(c) ? String(c) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? name.toUpperCase() : name);
+    });
+    each('[data-uptime]', function (el) {  // 4 days, 7 hours
+      var sec = num(v[el.getAttribute('data-uptime')]), parts = [];
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        parts = d > 0 ? [[d, 'day'], [hr, 'hour']] : hr > 0 ? [[hr, 'hour'], [mn, 'minute']] : [[mn, 'minute']];
+      }
+      text(el, parts.length ? parts.map(function (p) { return p[0] + ' ' + p[1] + (p[0] === 1 ? '' : 's'); }).join(', ') : '--');
+    });
+
+    // Globes: gel up to the reading, 20 to 100 degrees, in the temperature
+    // colour; the lighter surface is as wide as the globe is at that level.
+    each('[data-globe]', function (el) {
+      var t = num(v[el.getAttribute('data-globe')]);
+      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var y = 159 - f * 148, half = Math.sqrt(Math.max(74 * 74 - (y - 85) * (y - 85), 0));
+      var c = tempColour(t); if (el.style.getPropertyValue('--orb') !== c) el.style.setProperty('--orb', c);
+      var gelRect = el.querySelector('[data-gel]'), surface = el.querySelector('[data-surface]');
+      attr(gelRect, 'y', y.toFixed(1)); attr(gelRect, 'height', Math.max(159 - y, 0.1).toFixed(1));
+      attr(surface, 'cy', y.toFixed(1)); attr(surface, 'rx', Math.max(half - 2, 0).toFixed(1));
+      hide(surface, half < 6);
+    });
+    each('[data-state]', function (el) {
+      var t = num(v[el.getAttribute('data-state')]);
+      text(el, t >= HOT ? 'Hot!' : t >= WARM ? 'Warm' : 'Cool');
+      var b = t >= HOT ? 'var(--temp-4)' : t >= WARM ? 'var(--temp-3)' : 'var(--temp-0)'; if (el.style.getPropertyValue('--b') !== b) el.style.setProperty('--b', b);
+    });
+
+    // Gel bars against the sensor's own maximum, else the limit in the
+    // stylesheet (a number, or the name of a custom property). The gel keeps
+    // 20px so that it still reads at low values.
+    each('[data-bar]', function (el) {
+      var val = num(v[el.getAttribute('data-bar')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (scale.indexOf('clock') > 0 && /^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { val /= 1000; max /= 1000; }
+      style(el, 'width', 'max(20px, calc(' + (share(val, max, fallback) * 100).toFixed(1) + '% - 2px))');
+    });
+    each('[data-rotor]', function (el) {
+      var rpm = num(v[el.getAttribute('data-rotor')]);
+      fanRpm[el.getAttribute('data-rotor')] = isFinite(rpm) ? rpm : 0;
+    });
+    // Jars: 28 gumdrops, filled from the bottom to the share in use.
+    each('[data-jar]', function (el) {
+      var f = share(num(v[el.getAttribute('data-jar')]), num(v[el.getAttribute('data-max')]), 100);
+      var count = Math.round(f * 28);
+      each('[data-slot]', function (slot, i) { hide(slot, i >= count); }, el);
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a hidden part cancels its animation,
+    // and stepping a cancelled one would bring it back.
+    anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    // Pinwheels: one turn every 2400 / RPM seconds, but never more than
+    // about 100 degrees a frame, which would read as turning backwards.
+    each('[data-rotor]', function (el) {
+      var id = el.getAttribute('data-rotor'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(360 / 2400 * rpm * dt * speed, 100 * (1 - Math.exp(-rpm / 1200)));
+      rotorAngle[id] = ((rotorAngle[id] || 0) + step) % 360;
+      el.setAttribute('transform', 'rotate(' + rotorAngle[id].toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still-motion', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // globes and jars in their empty state before the first values arrive
+})();
+</script>
+</body>
+</html>

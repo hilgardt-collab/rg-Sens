@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x960 1440x725 2880x455">
 <title>Warrior Sensor Panel</title>
 <!--
   Warrior sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -38,8 +39,13 @@
 
   Options (the panel's Display tab, or the top of warrior_panel.css): palette
   (Blood Red, Molten, Cold Steel), how the design fits the panel, the frame
-  rate, and the full-scale values of the bars. The design is drawn for
-  480x1920 and is scaled to whatever size the panel has.
+  rate, and the full-scale values of the bars.
+
+  Size: the design is drawn for 480x1920, but its six groups re-arrange to
+  suit the panel: one column of six, two of three, three of two or six side
+  by side (the rg-layouts list gives the size each needs), and then take up
+  the panel's exact shape. The Layout option fixes the column count; the Fit
+  option can crop, letterbox or distort instead.
 
   Motion: the rib slits and blade edges pulse, the clock flickers, a band
   sweeps the two screens, the gauge geometry turns and the rotors spin, all
@@ -54,7 +60,7 @@
 <link rel="stylesheet" href="warrior_panel.css">
 </head>
 <body>
-<div style="width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden; background-color: #0B0506; background-image: radial-gradient(ellipse 90% 40% at 50% 0%, color-mix(in srgb, var(--red) 20%, transparent) 0%, rgba(0,0,0,0) 70%), radial-gradient(ellipse 90% 30% at 50% 100%, color-mix(in srgb, var(--red) 12%, transparent) 0%, rgba(0,0,0,0) 70%), repeating-linear-gradient(135deg, color-mix(in srgb, var(--red) 4.5%, transparent) 0px, color-mix(in srgb, var(--red) 4.5%, transparent) 2px, transparent 2px, transparent 9px); font-family: 'Saira Condensed', sans-serif; color: #FFD9C7; padding: 40px 26px 34px; display: flex; flex-direction: column; justify-content: space-between">
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background-color: #0B0506; background-image: radial-gradient(ellipse 90% 40% at 50% 0%, color-mix(in srgb, var(--red) 20%, transparent) 0%, rgba(0,0,0,0) 70%), radial-gradient(ellipse 90% 30% at 50% 100%, color-mix(in srgb, var(--red) 12%, transparent) 0%, rgba(0,0,0,0) 70%), repeating-linear-gradient(135deg, color-mix(in srgb, var(--red) 4.5%, transparent) 0px, color-mix(in srgb, var(--red) 4.5%, transparent) 2px, transparent 2px, transparent 9px); font-family: 'Saira Condensed', sans-serif; color: #FFD9C7; padding: 40px 26px 34px; display: flex; flex-direction: column; gap: 10px">
 
   <!-- gradients -->
   <svg aria-hidden="true" width="0" height="0" style="position: absolute; top: 0; left: 0">
@@ -79,81 +85,13 @@
   </svg>
 
   <!-- ===== ARMOURED FRAME ===== -->
-  <svg aria-hidden="true" width="480" height="1920" viewBox="0 0 480 1920" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none">
-    <polygon points="40,12 150,12 166,26 314,26 330,12 440,12 468,40 468,640 456,656 456,700 468,716 468,1260 456,1276 456,1320 468,1336 468,1880 440,1908 330,1908 314,1894 166,1894 150,1908 40,1908 12,1880 12,1336 24,1320 24,1276 12,1260 12,716 24,700 24,656 12,640 12,40" fill="none" stroke="#000" stroke-width="7" stroke-linejoin="miter"></polygon>
-    <polygon points="40,12 150,12 166,26 314,26 330,12 440,12 468,40 468,640 456,656 456,700 468,716 468,1260 456,1276 456,1320 468,1336 468,1880 440,1908 330,1908 314,1894 166,1894 150,1908 40,1908 12,1880 12,1336 24,1320 24,1276 12,1260 12,716 24,700 24,656 12,640 12,40" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="3.5" stroke-linejoin="miter"></polygon>
-    <polygon points="40,12 150,12 166,26 314,26 330,12 440,12 468,40 468,640 456,656 456,700 468,716 468,1260 456,1276 456,1320 468,1336 468,1880 440,1908 330,1908 314,1894 166,1894 150,1908 40,1908 12,1880 12,1336 24,1320 24,1276 12,1260 12,716 24,700 24,656 12,640 12,40" fill="none" stroke="#E0262E" stroke-width="1" opacity="0.6" transform="translate(240 960) scale(0.975 0.9965) translate(-240 -960)"></polygon>
-    
-      <polygon points="4,58 58,4 74,4 4,74" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
-    
-      <polygon points="476,58 422,4 406,4 476,74" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
-    
-      <polygon points="4,1862 58,1916 74,1916 4,1846" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
-    
-      <polygon points="476,1862 422,1916 406,1916 476,1846" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
-    
-    <g>
-      
-        <polygon points="13,100 25,112 25,164 13,176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.00s infinite"></rect>
-      
-        <polygon points="13,260 25,272 25,324 13,336" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="278" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.27s infinite"></rect>
-      
-        <polygon points="13,420 25,432 25,484 13,496" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="438" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.54s infinite"></rect>
-      
-        <polygon points="13,780 25,792 25,844 13,856" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="798" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.81s infinite"></rect>
-      
-        <polygon points="13,940 25,952 25,1004 13,1016" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="958" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.08s infinite"></rect>
-      
-        <polygon points="13,1100 25,1112 25,1164 13,1176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.35s infinite"></rect>
-      
-        <polygon points="13,1400 25,1412 25,1464 13,1476" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1418" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.62s infinite"></rect>
-      
-        <polygon points="13,1560 25,1572 25,1624 13,1636" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1578" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.89s infinite"></rect>
-      
-        <polygon points="13,1720 25,1732 25,1784 13,1796" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1738" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 2.16s infinite"></rect>
-      
-    </g>
-    <g transform="translate(480 0) scale(-1 1)">
-      
-        <polygon points="13,100 25,112 25,164 13,176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.00s infinite"></rect>
-      
-        <polygon points="13,260 25,272 25,324 13,336" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="278" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.27s infinite"></rect>
-      
-        <polygon points="13,420 25,432 25,484 13,496" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="438" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.54s infinite"></rect>
-      
-        <polygon points="13,780 25,792 25,844 13,856" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="798" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.81s infinite"></rect>
-      
-        <polygon points="13,940 25,952 25,1004 13,1016" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="958" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.08s infinite"></rect>
-      
-        <polygon points="13,1100 25,1112 25,1164 13,1176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.35s infinite"></rect>
-      
-        <polygon points="13,1400 25,1412 25,1464 13,1476" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1418" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.62s infinite"></rect>
-      
-        <polygon points="13,1560 25,1572 25,1624 13,1636" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1578" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.89s infinite"></rect>
-      
-        <polygon points="13,1720 25,1732 25,1784 13,1796" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
-        <rect x="18" y="1738" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 2.16s infinite"></rect>
-      
-    </g>
-  </svg>
+  <!-- drawn by the script to the size of the panel's box: an outline with a
+       notch at the top and bottom and at each third of the sides, a plate
+       across each corner, and pulsing ribs down both sides -->
+  <svg data-frame aria-hidden="true" width="100%" height="100%" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none"></svg>
 
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
   <!-- ===== HEADER: crescent blade over the clock ===== -->
   <header style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 4px">
     <div style="display: flex; align-items: center; gap: 8px; align-self: stretch; height: 30px">
@@ -527,6 +465,8 @@
     </div>
   </section>
 
+  </div>
+
   <!-- ===== FOOTER ===== -->
   <footer style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px">
     <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%); padding: 0 30px; height: 30px; display: flex; align-items: center">
@@ -543,7 +483,8 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "palette", "label": "Palette", "type": "choice", "default": "blood", "choices": [{"value": "blood", "label": "Blood Red", "set": {"--red": "#E0262E", "--red-dk": "#5E0A0E", "--hot": "#FF7A1A", "--white-hot": "#FFE3B0", "--metal": "#B07A40"}}, {"value": "molten", "label": "Molten", "set": {"--red": "#FF5A14", "--red-dk": "#5E1E05", "--hot": "#FFC23A", "--white-hot": "#FFF1C8", "--metal": "#B8864A"}}, {"value": "steel", "label": "Cold Steel", "set": {"--red": "#D81E3C", "--red-dk": "#4A0812", "--hot": "#FF6A55", "--white-hot": "#FFE0E0", "--metal": "#9AA0A8"}}]},
-    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
     {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
     {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
     {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
@@ -666,6 +607,59 @@
     if (!isFinite(val)) return 0;
     return clamp01(val / (max > 0 ? max : fallback));
   }
+
+  // ------------------------------------------------------- the frame
+  // Drawn for the box rg-Sens gives the design (480x1920 until it says
+  // otherwise), so it fits every arrangement.
+  function drawFrame(W, H) {
+    var svg = document.querySelector('[data-frame]');
+    if (!svg) return;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    function add(name, attrs, parent) {
+      var el = document.createElementNS(SVG, name);
+      for (var k in attrs) el.setAttribute(k, attrs[k]);
+      (parent || svg).appendChild(el);
+      return el;
+    }
+    var mid = W / 2, R = W - 12, B = H - 12;
+    // side notches at each third, when the box is tall enough to carry them
+    var notches = H >= 900 ? [Math.round(H / 3), Math.round(2 * H / 3) - 20] : [];
+    var right = [], left = [];
+    notches.forEach(function (y) {
+      right.push([R, y], [R - 12, y + 16], [R - 12, y + 60], [R, y + 76]);
+      left.unshift([12, y + 76], [24, y + 60], [24, y + 16], [12, y]);   // the left side is travelled upwards
+    });
+    var pts = [[40, 12], [mid - 90, 12], [mid - 74, 26], [mid + 74, 26], [mid + 90, 12], [R - 28, 12], [R, 40]]
+      .concat(right, [[R, B - 28], [R - 28, B], [mid + 90, B], [mid + 74, B - 14], [mid - 74, B - 14], [mid - 90, B], [40, B], [12, B - 28]],
+              left, [[12, 40]])
+      .map(function (p) { return p[0] + ',' + p[1]; }).join(' ');
+    add('polygon', { points: pts, fill: 'none', stroke: '#000', 'stroke-width': 7, 'stroke-linejoin': 'miter' });
+    add('polygon', { points: pts, fill: 'none', stroke: 'url(#wr-metal) #B07A40', 'stroke-width': 3.5, 'stroke-linejoin': 'miter' });
+    add('polygon', { points: pts, fill: 'none', stroke: '#E0262E', 'stroke-width': 1, opacity: 0.6,
+      transform: 'translate(' + mid + ' ' + H / 2 + ') scale(' + ((W - 12) / W).toFixed(4) + ' ' + ((H - 6.7) / H).toFixed(4) +
+                 ') translate(' + -mid + ' ' + -H / 2 + ')' });
+    [[1, 1, 0, 0], [-1, 1, W, 0], [1, -1, 0, H], [-1, -1, W, H]].forEach(function (c) {   // corner plates
+      add('polygon', { points: '4,58 58,4 74,4 4,74', fill: 'url(#wr-metal) #B07A40', stroke: '#5E0A0E', 'stroke-width': 1,
+        transform: 'translate(' + c[2] + ' ' + c[3] + ') scale(' + c[0] + ' ' + c[1] + ')' });
+    });
+    // ribs: every 160 px along each stretch of the sides between the notches
+    var stops = [0].concat(notches.map(function (y) { return y + 40; }), [H]), n = 0;
+    var sides = [add('g', {}), add('g', { transform: 'translate(' + W + ' 0) scale(-1 1)' })];
+    for (var s = 0; s < stops.length - 1; s++) {
+      for (var y = stops[s] + 100; y + 76 <= stops[s + 1] - 60; y += 160) {
+        sides.forEach(function (g) {
+          add('polygon', { points: '13,' + y + ' 25,' + (y + 12) + ' 25,' + (y + 64) + ' 13,' + (y + 76),
+                           fill: 'url(#wr-metal) #583d20', stroke: '#000', 'stroke-width': 1 }, g);
+          add('rect', { x: 18, y: y + 18, width: 2.5, height: 40, fill: '#E0262E',
+                        style: 'animation: wr-beat 2.4s ease-in-out ' + (n * 0.27).toFixed(2) + 's infinite' }, g);
+        });
+        n++;
+      }
+    }
+  }
+  // rg-Sens may have set the box before this script ran
+  drawFrame(parseFloat(root.style.getPropertyValue('--rg-w')) || 480, parseFloat(root.style.getPropertyValue('--rg-h')) || 1920);
+  window.addEventListener('rg-layout', function (e) { drawFrame(e.detail.width, e.detail.height); });
 
   // ------------------------------------------------------- drawn once
   // Gauge teeth: 26 serrations around the 270 degree arc, base at r 68, tip at r 95.
@@ -837,7 +831,7 @@
     var now = Date.now(), t = (now - EPOCH) * speed;
     var dt = Math.min((now - last) / 1000, 1);
     last = now;
-    if (tick % (fps * 5 | 0 || 1) === 0) anims = document.getAnimations();   // sections may have appeared
+    anims = document.getAnimations();   // asked for each frame: ribs are redrawn with the box, sections appear
     for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
     // Rotors: one turn every 1200 / RPM seconds, but never more than about 44
     // degrees a frame. Three blades repeat every 120 degrees, so a bigger

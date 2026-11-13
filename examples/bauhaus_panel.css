@@ -9,8 +9,11 @@
   src: local("Jost"), url("fonts/jost/Jost%5Bwght%5D.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch). */
-  --rg-fit: cover;
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
   /* Palette: page, inside of shapes, ink (text, rules, borders), captions,
      and the three primaries.
        Primary  #F1EBDD #FBF7EE #141414 #5A5650  #D9322B #F2B91B #1F4FA0   (default)
@@ -39,11 +42,20 @@ html, body { margin: 0; background: var(--paper); }
 .rg-placeholder { transition: none; }
 
 /* All text is lowercase, after Herbert Bayer's universal alphabet. */
-.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns. */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
   background: var(--paper); font-family: "Jost", "Futura", sans-serif; font-variant-numeric: lining-nums tabular-nums;
   font-weight: 500; color: var(--ink); text-transform: lowercase; padding: 24px 24px 22px;
-  display: flex; flex-direction: column; justify-content: space-between; }
+  display: flex; flex-direction: column; gap: 16px; }
 .panel span { white-space: nowrap; }
+/* The groups: a grid of --rg-cols columns whose rows share the height left
+   over, so every section stretches to its cell. */
+.groups { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr));
+  gap: 16px 24px; align-content: stretch; }
+.groups > .poster { width: 432px; justify-self: center; align-self: center; }
+.groups > .section > div:first-of-type { flex: 1; }
+.groups > .section .body { justify-content: space-around; }
 .ink { fill: var(--ink); }
 .paper2 { fill: var(--paper2); }
 .red { fill: var(--red); background-color: var(--red); }
@@ -99,7 +111,8 @@ html, body { margin: 0; background: var(--paper); }
 .stat .val span { font-size: 13px; font-weight: 500; }
 
 /* cooling */
-.fans { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+/* the squares grow with their column, so the row is kept to its drawn width */
+.fans { flex: 1; min-width: 0; max-width: 390px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .fan { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .fan > div { position: relative; aspect-ratio: 1 / 1; border: 3px solid var(--ink); background: var(--paper2); }
 .fan svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }

@@ -12,8 +12,11 @@
 @font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: italic;
   src: local("Cormorant Garamond Italic"), url("fonts/cormorant-garamond/CormorantGaramond-Italic%5Bwght%5D.ttf") format("truetype"); }
 :root {
-  /* How the design fits the panel (cover, contain or stretch). */
-  --rg-fit: cover;
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
   --metal: #C9A24A;
   --foliage: #8FAE8B;
   --m-hi: color-mix(in srgb, var(--metal), white 62%);
@@ -54,3 +57,24 @@ html, body { margin: 0; background: var(--bg); }
 
 .net { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 12px; }
 .net:not([hidden]) ~ .net:not([hidden]) { padding-left: 16px; border-left: 1px solid var(--l-dk); }
+
+/* Artwork that follows the box: the rim with its inner hairline, a vine
+   down each side (cut off where the box ends) and an arch at the middle of
+   the top and of the bottom. */
+.rim, .vine, .arch { position: absolute; pointer-events: none; }
+.rim { top: 10px; right: 10px; bottom: 10px; left: 10px; border: 1.6px solid var(--m-mid); border-radius: 24px; }
+.rim::after { content: ""; position: absolute; top: 4px; right: 4px; bottom: 4px; left: 4px;
+  border: 0.8px solid color-mix(in srgb, var(--l-mid) 55%, transparent); border-radius: 19px; }
+.vine { top: 0; max-height: 1920px; }
+.vine.l { left: 0; }
+.vine.r { right: 0; transform: scaleX(-1); }
+.arch { left: 50%; margin-left: -240px; }
+.arch.t { top: 0; }
+.arch.b { bottom: 0; transform: scaleY(-1); }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over. A group is
+   centred in its cell; the footer stays below the grid. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 8px 28px; align-content: stretch; }
+.groups > * { justify-content: center; min-width: 0; }

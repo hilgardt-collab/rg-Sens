@@ -8,9 +8,10 @@
   src: local("Antonio"), url("fonts/antonio/Antonio%5Bwght%5D.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch) and how many
-     columns its sections take (0 chooses by the panel's shape). */
-  --rg-fit: cover;
+  /* How the design fits the panel (fill: the frames re-arrange and stretch
+     to the panel's shape; or cover, contain, stretch) and how many columns
+     its frames take (0 chooses by the panel's shape). */
+  --rg-fit: fill;
   --rg-columns: 0;
   /* Scheme: classic, cool or alert. */
   --scheme: classic;
@@ -59,7 +60,8 @@ html, body { margin: 0; background: #000; }
 .panel h1, .panel h2 { margin: 0; padding: 0 4px; font-weight: 600; white-space: nowrap; }
 
 /* ---- frame: 96px side column + content, elbow / content / elbow ---- */
-.frame { flex: 1 1 auto; width: 454px; display: grid; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: 56px 1fr 56px; --f: var(--f1); }
+/* A frame is as wide as its column: the box less the padding and the gaps. */
+.frame { flex: 1 1 auto; width: calc((var(--rg-w, 480px) - 26px - 26px * (var(--rg-cols, 1) - 1)) / var(--rg-cols, 1)); display: grid; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: 56px 1fr 56px; --f: var(--f1); }
 .frame.b { --f: var(--f2); }
 .frame.c { --f: var(--f3); }
 .elbow { position: relative; background: var(--f); border-radius: 48px 0 0 0; }

@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1730 960x1030 1440x790 2880x490">
+<title>Japandi Sensor Panel</title>
+<!--
+  Japandi sensor panel for the rg-Sens CSS Template displayer, drawn for
+  480x1920 portrait: a plaster and linen wall, an oak shelf with a vase and a
+  branch beside the clock, and soft cards with river-stone dials, oak-bladed
+  fans and glaze-dipped cups. A sibling of the other example panels: the
+  same placeholders 0-73 and the same setup, plus the year.
+
+  The look is Japanese minimalism with Scandinavian warmth: warm neutrals,
+  low contrast, generous space, natural materials and small imperfections.
+  Keep it quiet when editing: one accent pair, thin lines, light type. There
+  are no Japanese characters and no religious symbols, on purpose.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names, year
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two dials ("PACKAGE", "EDGE"), the fans and the cups;
+  set them on the sensors.
+
+  Anything left unbound is hidden: a row, a dial, a whole card. The
+  processor's power row has no rg-Sens source and stays hidden unless you bind
+  a sensor to it by hand on the Bindings tab.
+
+  A dial is an arc round a river stone, 20 to 100 degrees; its colour goes
+  from the cool accent to the hot one between 50 and 85. The word at the
+  card's top right reads calm, warm (from 72) or hot (from 85), when the
+  arc's end dot also pulses. A cup is dipped in glaze from the foot up to
+  the share of its pool that is in use.
+
+  The network chart keeps the last minute (40 samples) of in and out speed
+  in the page, on one shared scale. It starts empty and survives a reload of
+  the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of japandi_panel.css): palette
+  (Oak & Sage, Charcoal, Terracotta), how the design fits the panel, the
+  layout, the frame rate, and the full scale of the bars and of the network
+  chart.
+
+  Size: the design is drawn for 480x1920, but its six groups (the still life
+  with the clock and the five cards) re-arrange to suit the panel: one
+  column of six, two of three, three of two or six side by side (the
+  rg-layouts list gives the size each needs), and the cards then stretch to
+  the panel's exact shape. The wall and the daylight cover any size. The
+  Layout option fixes the column count; the Fit option can crop, letterbox
+  or distort instead.
+
+  Motion: the fan blades turn with RPM, the branch sways, the daylight
+  brightens and dims and the dot at the newest sample pulses, at
+  --motion-fps frames a second. 0 turns motion off, as do the panel's
+  Animation switch and the system's reduced-motion setting.
+
+  Fonts: Shippori Mincho (titles, day name, state words) and Manrope (clock,
+  numbers, labels), loaded from the fonts folder next to this file; copy
+  that folder along with the template. Shippori Mincho is bundled as a
+  Latin-only subset of the original. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="japandi_panel.css">
+</head>
+<body>
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background: linear-gradient(170deg, var(--wall-1) 0%, var(--wall-2) 100%); font-family: Manrope, 'Helvetica Neue', sans-serif; font-variant-numeric: lining-nums tabular-nums; color: var(--ink); padding: 30px 32px 26px; display: flex; flex-direction: column; gap: 14px">
+  <!-- ===== BACKGROUND: plaster / linen wall (z 0) ===== -->
+  <svg aria-hidden="true" width="100%" height="100%" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none">
+    <defs>
+      <filter id="jp-plaster" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.006" numOctaves="4" seed="3"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.27  0 0 0 0 0.18  0 0 0 0.9 -0.42"></feColorMatrix></filter>
+      <filter id="jp-linen" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.9 0.035" numOctaves="2" seed="6" result="a"></feTurbulence><feTurbulence type="fractalNoise" baseFrequency="0.035 0.9" numOctaves="2" seed="8" result="b"></feTurbulence><feBlend in="a" in2="b" mode="multiply"></feBlend><feColorMatrix type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.24  0 0 0 0 0.16  -1.1 0 0 0 0.62"></feColorMatrix></filter>
+      <filter id="jp-noise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="2" stitchTiles="stitch" seed="5"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.38  0 0 0 0 0.3  0.5 0 0 0 -0.18"></feColorMatrix></filter>
+      <filter id="jp-speck" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" seed="12" result="n"></feTurbulence><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.22  0 0 0 0 0.18  0 0 0 0 0.14  -2.2 0 0 0 0.92" result="s"></feColorMatrix><feComposite in="s" in2="SourceAlpha" operator="in"></feComposite></filter>
+      <filter id="jp-grainH" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.01 0.35" numOctaves="3" seed="4" result="n"></feTurbulence><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.22  0 0 0 0 0.1  0 0 0 1.4 -0.6" result="g"></feColorMatrix><feComposite in="g" in2="SourceAlpha" operator="in"></feComposite></filter>
+      <filter id="jp-grainV" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.35 0.02" numOctaves="3" seed="7" result="n"></feTurbulence><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.22  0 0 0 0 0.1  0 0 0 1.4 -0.6" result="g"></feColorMatrix><feComposite in="g" in2="SourceAlpha" operator="in"></feComposite></filter>
+      <filter id="jp-blur6" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"></feGaussianBlur></filter>
+      <filter id="jp-blur3" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"></feGaussianBlur></filter>
+      <filter id="jp-blur16" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="16"></feGaussianBlur></filter>
+      <linearGradient id="jp-oakH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E4C79E"></stop><stop offset="0.25" stop-color="#CBA676"></stop><stop offset="1" stop-color="#A9844F"></stop></linearGradient>
+      <linearGradient id="jp-oakB" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#A9844F"></stop><stop offset="0.35" stop-color="#E4C79E"></stop><stop offset="0.7" stop-color="#CBA676"></stop><stop offset="1" stop-color="#A9844F"></stop></linearGradient>
+      <radialGradient id="jp-stone" cx="0.36" cy="0.3" r="0.8"><stop offset="0" stop-color="#DCD6CD"></stop><stop offset="0.55" stop-color="#B9B2A8"></stop><stop offset="1" stop-color="#8E877D"></stop></radialGradient>
+      <radialGradient id="jp-vase" cx="0.3" cy="0.4" r="0.85"><stop offset="0" stop-color="#F3EEE6"></stop><stop offset="0.55" stop-color="#DCD3C5"></stop><stop offset="1" stop-color="#B2A796"></stop></radialGradient>
+      <linearGradient id="jp-clay" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#C2AE8F"></stop><stop offset="0.3" stop-color="#E2D3BE"></stop><stop offset="0.75" stop-color="#E2D3BE"></stop><stop offset="1" stop-color="#C2AE8F"></stop></linearGradient>
+      <linearGradient id="jp-cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.28"></stop><stop offset="0.3" stop-color="#000" stop-opacity="0"></stop><stop offset="0.62" stop-color="#000" stop-opacity="0"></stop><stop offset="1" stop-color="#000" stop-opacity="0.3"></stop></linearGradient>
+      <radialGradient id="jp-hub" cx="0.38" cy="0.32" r="0.75"><stop offset="0" stop-color="#F4F1EC"></stop><stop offset="1" stop-color="#BDB5AA"></stop></radialGradient>
+      <linearGradient id="jp-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#87977B" stop-opacity="0.32"></stop><stop offset="1" stop-color="#87977B" stop-opacity="0"></stop></linearGradient>
+      <clipPath id="jp-cup"><path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z"></path></clipPath>
+    </defs>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#jp-plaster)"></rect>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#jp-linen)" opacity="0.3"></rect>
+  </svg>
+  <!-- ===== HEADER: oak shelf, ceramic vase with branch, clock ===== -->
+  <header style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <h1 style="margin: 0; font-family: 'Shippori Mincho', serif; font-weight: 500; font-size: 22px; line-height: 1; letter-spacing: 0.02em; color: var(--ink)">System Sensors</h1>
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.24em; color: var(--sub)" data-dmy>&nbsp;</span>
+    </div>
+    <div style="height: 1px; background: var(--faint)"></div>
+  </header>
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
+  <section class="still">
+    <div style="position: relative; width: 416px; height: 336px">
+      <svg aria-hidden="true" width="416" height="336" viewBox="0 0 416 336" style="position: absolute; top: 0; left: 0; overflow: visible">
+        <!-- shelf shadow on the wall -->
+        <rect x="6" y="314" width="404" height="14" rx="7" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur6)"></rect>
+        <!-- vase and branch shadows cast to the right -->
+        <g transform="translate(16 6)" opacity="0.9" filter="url(#jp-blur6)">
+          <path d="M93.0 146.0 C92.6 147.3 90.9 150.7 90.5 154.0 C90.1 157.3 90.2 161.3 90.5 166.0 C90.8 170.7 90.9 176.7 92.5 182.0 C94.1 187.3 96.8 192.3 100.0 198.0 C103.3 203.7 108.7 209.0 112.0 216.0 C115.3 223.0 118.2 231.3 120.0 240.0 C121.8 248.7 122.9 259.7 123.0 268.0 C123.1 276.3 122.2 284.7 120.5 290.0 C118.8 295.3 114.3 298.3 113.0 300.0 L51.0 300.0 C49.8 298.3 45.2 295.3 43.5 290.0 C41.8 284.7 40.9 276.3 41.0 268.0 C41.1 259.7 42.2 248.7 44.0 240.0 C45.8 231.3 48.7 223.0 52.0 216.0 C55.3 209.0 60.8 203.7 64.0 198.0 C67.3 192.3 69.9 187.3 71.5 182.0 C73.1 176.7 73.2 170.7 73.5 166.0 C73.8 161.3 73.9 157.3 73.5 154.0 C73.1 150.7 71.4 147.3 71.0 146.0 Z" fill="rgba(70,50,30,0.2)"></path>
+          <g style="transform-box: view-box; transform-origin: 82px 146px; animation: jp-sway 9s ease-in-out infinite"><path d="M82.0 146.0 C80.0 104.0 68.0 62.0 56.0 16.0 M81.0 124.0 C94.0 100.0 114.0 80.0 134.0 66.0 M76.0 100.0 C64.0 88.0 46.0 80.0 30.0 78.0 M70.0 66.0 C80.0 50.0 92.0 40.0 104.0 32.0 " fill="none" stroke="rgba(70,50,30,0.10)" stroke-width="2.4"></path><ellipse rx="7" ry="3" transform="translate(72.7 104.1) rotate(-141.7)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(78.8 89.8) rotate(-59.3)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(67.5 78.7) rotate(-144.6)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(72.9 63.8) rotate(-61.5)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(61.1 52.8) rotate(-146.2)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(66.1 37.4) rotate(-62.6)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(54.2 26.1) rotate(-146.7)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(60.8 20.3) rotate(42.0)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(54.7 11.2) rotate(-104.6)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(93.9 97.0) rotate(-94.0)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(108.1 94.1) rotate(-6.2)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(109.7 80.2) rotate(-86.6)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(123.9 79.2) rotate(0.7)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(126.7 65.8) rotate(-80.0)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(138.8 70.3) rotate(42.0)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(138.1 63.1) rotate(-35.0)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(57.4 91.5) rotate(-190.0)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(53.2 79.8) rotate(-112.4)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(41.2 84.7) rotate(-202.4)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(34.9 74.2) rotate(-124.6)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(34.8 73.7) rotate(-42.0)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(25.0 77.4) rotate(-172.9)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(79.4 46.6) rotate(-90.9)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(93.9 44.8) rotate(-0.6)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(96.8 31.6) rotate(-79.4)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(110.3 33.7) rotate(15.4)" fill="rgba(70,50,30,0.10)"></ellipse><ellipse rx="7" ry="3" transform="translate(108.2 29.2) rotate(-33.7)" fill="rgba(70,50,30,0.10)"></ellipse></g>
+        </g>
+        <!-- branch -->
+        <g style="transform-box: view-box; transform-origin: 82px 146px; animation: jp-sway 9s ease-in-out infinite">
+          <path d="M82.0 146.0 C80.0 104.0 68.0 62.0 56.0 16.0 M81.0 124.0 C94.0 100.0 114.0 80.0 134.0 66.0 M76.0 100.0 C64.0 88.0 46.0 80.0 30.0 78.0 M70.0 66.0 C80.0 50.0 92.0 40.0 104.0 32.0 " fill="none" stroke="#6E6A58" stroke-width="1.6" stroke-linecap="round"></path>
+          <ellipse rx="7" ry="3" transform="translate(72.7 104.1) rotate(-141.7)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(78.8 89.8) rotate(-59.3)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(67.5 78.7) rotate(-144.6)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(72.9 63.8) rotate(-61.5)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(61.1 52.8) rotate(-146.2)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(66.1 37.4) rotate(-62.6)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(54.2 26.1) rotate(-146.7)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(60.8 20.3) rotate(42.0)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(54.7 11.2) rotate(-104.6)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(93.9 97.0) rotate(-94.0)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(108.1 94.1) rotate(-6.2)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(109.7 80.2) rotate(-86.6)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(123.9 79.2) rotate(0.7)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(126.7 65.8) rotate(-80.0)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(138.8 70.3) rotate(42.0)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(138.1 63.1) rotate(-35.0)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(57.4 91.5) rotate(-190.0)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(53.2 79.8) rotate(-112.4)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(41.2 84.7) rotate(-202.4)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(34.9 74.2) rotate(-124.6)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(34.8 73.7) rotate(-42.0)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(25.0 77.4) rotate(-172.9)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(79.4 46.6) rotate(-90.9)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(93.9 44.8) rotate(-0.6)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(96.8 31.6) rotate(-79.4)" fill="#86967A"></ellipse><ellipse rx="7" ry="3" transform="translate(110.3 33.7) rotate(15.4)" fill="#64735A"></ellipse><ellipse rx="7" ry="3" transform="translate(108.2 29.2) rotate(-33.7)" fill="#86967A"></ellipse>
+        </g>
+        <!-- vase -->
+        <path d="M93.0 146.0 C92.6 147.3 90.9 150.7 90.5 154.0 C90.1 157.3 90.2 161.3 90.5 166.0 C90.8 170.7 90.9 176.7 92.5 182.0 C94.1 187.3 96.8 192.3 100.0 198.0 C103.3 203.7 108.7 209.0 112.0 216.0 C115.3 223.0 118.2 231.3 120.0 240.0 C121.8 248.7 122.9 259.7 123.0 268.0 C123.1 276.3 122.2 284.7 120.5 290.0 C118.8 295.3 114.3 298.3 113.0 300.0 L51.0 300.0 C49.8 298.3 45.2 295.3 43.5 290.0 C41.8 284.7 40.9 276.3 41.0 268.0 C41.1 259.7 42.2 248.7 44.0 240.0 C45.8 231.3 48.7 223.0 52.0 216.0 C55.3 209.0 60.8 203.7 64.0 198.0 C67.3 192.3 69.9 187.3 71.5 182.0 C73.1 176.7 73.2 170.7 73.5 166.0 C73.8 161.3 73.9 157.3 73.5 154.0 C73.1 150.7 71.4 147.3 71.0 146.0 Z" fill="url(#jp-vase) #DCD3C5"></path>
+        <path d="M93.0 146.0 C92.6 147.3 90.9 150.7 90.5 154.0 C90.1 157.3 90.2 161.3 90.5 166.0 C90.8 170.7 90.9 176.7 92.5 182.0 C94.1 187.3 96.8 192.3 100.0 198.0 C103.3 203.7 108.7 209.0 112.0 216.0 C115.3 223.0 118.2 231.3 120.0 240.0 C121.8 248.7 122.9 259.7 123.0 268.0 C123.1 276.3 122.2 284.7 120.5 290.0 C118.8 295.3 114.3 298.3 113.0 300.0 L51.0 300.0 C49.8 298.3 45.2 295.3 43.5 290.0 C41.8 284.7 40.9 276.3 41.0 268.0 C41.1 259.7 42.2 248.7 44.0 240.0 C45.8 231.3 48.7 223.0 52.0 216.0 C55.3 209.0 60.8 203.7 64.0 198.0 C67.3 192.3 69.9 187.3 71.5 182.0 C73.1 176.7 73.2 170.7 73.5 166.0 C73.8 161.3 73.9 157.3 73.5 154.0 C73.1 150.7 71.4 147.3 71.0 146.0 Z" fill="#000" filter="url(#jp-speck)" opacity="0.55"></path>
+        <path d="M93.0 146.0 C92.6 147.3 90.9 150.7 90.5 154.0 C90.1 157.3 90.2 161.3 90.5 166.0 C90.8 170.7 90.9 176.7 92.5 182.0 C94.1 187.3 96.8 192.3 100.0 198.0 C103.3 203.7 108.7 209.0 112.0 216.0 C115.3 223.0 118.2 231.3 120.0 240.0 C121.8 248.7 122.9 259.7 123.0 268.0 C123.1 276.3 122.2 284.7 120.5 290.0 C118.8 295.3 114.3 298.3 113.0 300.0 L51.0 300.0 C49.8 298.3 45.2 295.3 43.5 290.0 C41.8 284.7 40.9 276.3 41.0 268.0 C41.1 259.7 42.2 248.7 44.0 240.0 C45.8 231.3 48.7 223.0 52.0 216.0 C55.3 209.0 60.8 203.7 64.0 198.0 C67.3 192.3 69.9 187.3 71.5 182.0 C73.1 176.7 73.2 170.7 73.5 166.0 C73.8 161.3 73.9 157.3 73.5 154.0 C73.1 150.7 71.4 147.3 71.0 146.0 Z" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.6"></path>
+        <ellipse cx="82" cy="146" rx="10" ry="2.4" fill="#B2A796"></ellipse>
+        <path d="M66 236 C64 250 64 268 67 282" fill="none" stroke="#FFFFFF" stroke-width="5" opacity="0.14" stroke-linecap="round"></path>
+        <!-- oak shelf -->
+        <rect x="0" y="300" width="416" height="18" rx="2" fill="url(#jp-oakH) #CBA676"></rect>
+        <rect x="0" y="300" width="416" height="18" rx="2" fill="#000" filter="url(#jp-grainH)" opacity="0.5"></rect>
+        <rect x="0" y="300" width="416" height="1.5" fill="#FFFFFF" opacity="0.35"></rect>
+        <rect x="0" y="316.5" width="416" height="1.5" fill="#000" opacity="0.12"></rect>
+        <!-- small stone on the shelf -->
+        <ellipse cx="372" cy="300" rx="16" ry="3" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur3)"></ellipse>
+        <path d="M356 300 C356 290 364 285 373 285 C383 285 389 291 389 300 Z" fill="url(#jp-stone) #B9B2A8"></path>
+        <path d="M356 300 C356 290 364 285 373 285 C383 285 389 291 389 300 Z" fill="#000" filter="url(#jp-speck)" opacity="0.45"></path>
+      </svg>
+      <div style="position: absolute; left: 172px; right: 0; top: 70px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px">
+        <span style="font-weight: 200; font-size: 88px; line-height: 0.95; letter-spacing: -0.02em; color: var(--ink)" data-clock="0">--:--</span>
+        <div style="width: 36px; height: 2px; margin: 8px 0 4px 4px; background: var(--hot)"></div>
+        <span style="margin-left: 3px; font-family: 'Shippori Mincho', serif; font-size: 24px; line-height: 1.1; color: var(--ink)" data-dayname="1">&nbsp;</span>
+        <span style="margin-left: 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.22em; color: var(--sub); white-space: nowrap" data-date>&nbsp;</span>
+      </div>
+    </div>
+  </section>
+  <!-- ===== PROCESSOR ===== -->
+  <section data-section="cpu" style="position: relative; z-index: 1; background: var(--card); border-radius: 18px; padding: 18px 22px 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 14px 30px var(--shade), 0 2px 6px var(--shade); display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <h2 style="margin: 0; font-family: 'Shippori Mincho', serif; font-weight: 500; font-size: 22px; line-height: 1; color: var(--ink)">Processor</h2>
+      <span style="font-family: 'Shippori Mincho', serif; font-size: 16px; color: var(--cool)" data-state="5">calm</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 20px">
+      <div data-need="5" style="position: relative; width: 160px; height: 160px; flex: none">
+        <svg data-gauge="5" role="img" aria-label="Package temperature dial" width="160" height="160" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0; overflow: visible">
+          <path d="M169.7 100.0 C169.7 101.4 170.3 105.8 170.0 108.7 C169.8 111.5 169.1 114.4 168.1 117.2 C167.1 119.9 165.7 122.5 164.2 125.0 C162.7 127.5 160.9 129.8 159.0 132.0 C157.1 134.2 155.1 136.3 153.0 138.2 C151.0 140.2 148.8 142.1 146.7 143.9 C144.5 145.6 142.3 147.3 140.0 148.9 C137.6 150.5 135.3 152.1 132.8 153.4 C130.3 154.8 127.8 156.0 125.1 157.0 C122.5 158.0 119.7 158.8 116.9 159.4 C114.1 159.9 111.3 160.2 108.5 160.3 C105.6 160.5 102.8 160.3 100.0 160.1 C97.2 159.8 94.5 159.4 91.7 158.9 C89.0 158.4 86.4 157.8 83.7 157.2 C81.0 156.6 78.3 156.0 75.7 155.3 C73.0 154.5 70.2 153.8 67.5 152.9 C64.8 151.9 62.0 151.0 59.4 149.7 C56.8 148.5 54.1 147.1 51.7 145.4 C49.3 143.7 47.0 141.8 45.1 139.6 C43.1 137.5 41.4 135.0 40.1 132.5 C38.7 130.0 37.7 127.2 37.0 124.5 C36.3 121.8 36.0 118.9 35.8 116.2 C35.6 113.4 35.8 110.6 35.9 107.9 C36.1 105.2 36.4 102.6 36.7 100.0 C37.0 97.4 37.3 94.9 37.7 92.3 C38.0 89.7 38.3 87.2 38.7 84.6 C39.1 82.0 39.6 79.3 40.2 76.7 C40.9 74.1 41.6 71.4 42.6 68.9 C43.7 66.3 44.9 63.7 46.4 61.4 C47.9 59.0 49.8 56.7 51.8 54.7 C53.8 52.6 56.1 50.8 58.5 49.1 C60.9 47.5 63.5 46.1 66.1 44.8 C68.7 43.6 71.5 42.5 74.3 41.6 C77.0 40.7 79.9 39.9 82.7 39.3 C85.5 38.6 88.4 38.1 91.3 37.7 C94.2 37.3 97.1 37.0 100.0 36.9 C102.9 36.9 105.9 36.9 108.8 37.3 C111.7 37.7 114.6 38.3 117.3 39.1 C120.1 40.0 122.8 41.2 125.3 42.6 C127.8 43.9 130.2 45.6 132.3 47.4 C134.5 49.1 136.5 51.1 138.3 53.0 C140.2 55.0 141.8 57.1 143.5 59.1 C145.2 61.1 146.7 63.1 148.3 65.2 C149.9 67.2 151.5 69.1 153.2 71.1 C154.8 73.2 156.5 75.2 158.2 77.3 C159.8 79.5 161.6 81.7 163.1 84.1 C164.6 86.5 166.1 89.0 167.2 91.7 C168.3 94.3 169.3 98.6 169.7 100.0 Z" transform="translate(5 9)" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur6)"></path>
+          <path d="M169.7 100.0 C169.7 101.4 170.3 105.8 170.0 108.7 C169.8 111.5 169.1 114.4 168.1 117.2 C167.1 119.9 165.7 122.5 164.2 125.0 C162.7 127.5 160.9 129.8 159.0 132.0 C157.1 134.2 155.1 136.3 153.0 138.2 C151.0 140.2 148.8 142.1 146.7 143.9 C144.5 145.6 142.3 147.3 140.0 148.9 C137.6 150.5 135.3 152.1 132.8 153.4 C130.3 154.8 127.8 156.0 125.1 157.0 C122.5 158.0 119.7 158.8 116.9 159.4 C114.1 159.9 111.3 160.2 108.5 160.3 C105.6 160.5 102.8 160.3 100.0 160.1 C97.2 159.8 94.5 159.4 91.7 158.9 C89.0 158.4 86.4 157.8 83.7 157.2 C81.0 156.6 78.3 156.0 75.7 155.3 C73.0 154.5 70.2 153.8 67.5 152.9 C64.8 151.9 62.0 151.0 59.4 149.7 C56.8 148.5 54.1 147.1 51.7 145.4 C49.3 143.7 47.0 141.8 45.1 139.6 C43.1 137.5 41.4 135.0 40.1 132.5 C38.7 130.0 37.7 127.2 37.0 124.5 C36.3 121.8 36.0 118.9 35.8 116.2 C35.6 113.4 35.8 110.6 35.9 107.9 C36.1 105.2 36.4 102.6 36.7 100.0 C37.0 97.4 37.3 94.9 37.7 92.3 C38.0 89.7 38.3 87.2 38.7 84.6 C39.1 82.0 39.6 79.3 40.2 76.7 C40.9 74.1 41.6 71.4 42.6 68.9 C43.7 66.3 44.9 63.7 46.4 61.4 C47.9 59.0 49.8 56.7 51.8 54.7 C53.8 52.6 56.1 50.8 58.5 49.1 C60.9 47.5 63.5 46.1 66.1 44.8 C68.7 43.6 71.5 42.5 74.3 41.6 C77.0 40.7 79.9 39.9 82.7 39.3 C85.5 38.6 88.4 38.1 91.3 37.7 C94.2 37.3 97.1 37.0 100.0 36.9 C102.9 36.9 105.9 36.9 108.8 37.3 C111.7 37.7 114.6 38.3 117.3 39.1 C120.1 40.0 122.8 41.2 125.3 42.6 C127.8 43.9 130.2 45.6 132.3 47.4 C134.5 49.1 136.5 51.1 138.3 53.0 C140.2 55.0 141.8 57.1 143.5 59.1 C145.2 61.1 146.7 63.1 148.3 65.2 C149.9 67.2 151.5 69.1 153.2 71.1 C154.8 73.2 156.5 75.2 158.2 77.3 C159.8 79.5 161.6 81.7 163.1 84.1 C164.6 86.5 166.1 89.0 167.2 91.7 C168.3 94.3 169.3 98.6 169.7 100.0 Z" fill="url(#jp-stone) #B9B2A8"></path>
+          <path d="M169.7 100.0 C169.7 101.4 170.3 105.8 170.0 108.7 C169.8 111.5 169.1 114.4 168.1 117.2 C167.1 119.9 165.7 122.5 164.2 125.0 C162.7 127.5 160.9 129.8 159.0 132.0 C157.1 134.2 155.1 136.3 153.0 138.2 C151.0 140.2 148.8 142.1 146.7 143.9 C144.5 145.6 142.3 147.3 140.0 148.9 C137.6 150.5 135.3 152.1 132.8 153.4 C130.3 154.8 127.8 156.0 125.1 157.0 C122.5 158.0 119.7 158.8 116.9 159.4 C114.1 159.9 111.3 160.2 108.5 160.3 C105.6 160.5 102.8 160.3 100.0 160.1 C97.2 159.8 94.5 159.4 91.7 158.9 C89.0 158.4 86.4 157.8 83.7 157.2 C81.0 156.6 78.3 156.0 75.7 155.3 C73.0 154.5 70.2 153.8 67.5 152.9 C64.8 151.9 62.0 151.0 59.4 149.7 C56.8 148.5 54.1 147.1 51.7 145.4 C49.3 143.7 47.0 141.8 45.1 139.6 C43.1 137.5 41.4 135.0 40.1 132.5 C38.7 130.0 37.7 127.2 37.0 124.5 C36.3 121.8 36.0 118.9 35.8 116.2 C35.6 113.4 35.8 110.6 35.9 107.9 C36.1 105.2 36.4 102.6 36.7 100.0 C37.0 97.4 37.3 94.9 37.7 92.3 C38.0 89.7 38.3 87.2 38.7 84.6 C39.1 82.0 39.6 79.3 40.2 76.7 C40.9 74.1 41.6 71.4 42.6 68.9 C43.7 66.3 44.9 63.7 46.4 61.4 C47.9 59.0 49.8 56.7 51.8 54.7 C53.8 52.6 56.1 50.8 58.5 49.1 C60.9 47.5 63.5 46.1 66.1 44.8 C68.7 43.6 71.5 42.5 74.3 41.6 C77.0 40.7 79.9 39.9 82.7 39.3 C85.5 38.6 88.4 38.1 91.3 37.7 C94.2 37.3 97.1 37.0 100.0 36.9 C102.9 36.9 105.9 36.9 108.8 37.3 C111.7 37.7 114.6 38.3 117.3 39.1 C120.1 40.0 122.8 41.2 125.3 42.6 C127.8 43.9 130.2 45.6 132.3 47.4 C134.5 49.1 136.5 51.1 138.3 53.0 C140.2 55.0 141.8 57.1 143.5 59.1 C145.2 61.1 146.7 63.1 148.3 65.2 C149.9 67.2 151.5 69.1 153.2 71.1 C154.8 73.2 156.5 75.2 158.2 77.3 C159.8 79.5 161.6 81.7 163.1 84.1 C164.6 86.5 166.1 89.0 167.2 91.7 C168.3 94.3 169.3 98.6 169.7 100.0 Z" fill="#000" filter="url(#jp-speck)" opacity="0.5"></path>
+          <path d="M39.2 160.8 A86 86 0 1 1 160.8 160.8" fill="none" stroke="#DED6C9" stroke-width="3" stroke-linecap="round"></path>
+          <path data-arc d="" fill="none" stroke="#87977B" stroke-width="3.5" stroke-linecap="round"></path>
+          <circle cx="32.1" cy="167.9" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="5.8" cy="118.7" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="11.3" cy="63.3" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="46.7" cy="20.2" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="100.0" cy="4.0" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="153.3" cy="20.2" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="188.7" cy="63.3" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="194.2" cy="118.7" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="167.9" cy="167.9" r="1.6" fill="#8A8278" opacity="0.6"></circle>
+          <circle data-end cx="39.2" cy="160.8" r="6" fill="#87977B" stroke="#F7F3EC" stroke-width="2.5" style=""></circle>
+        </svg>
+        <div style="position: absolute; left: 0; right: 0; top: 50px; display: flex; flex-direction: column; align-items: center">
+          <span style="font-weight: 300; font-size: 46px; line-height: 1; color: var(--on-stone)"><span data-num="5" data-places="0">--</span>°</span>
+          <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.2em; color: var(--on-stone-sub); max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="4" data-default="PACKAGE" data-upper>PACKAGE</span>
+        </div>
+      </div>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+          <div data-need="9" style="display: flex; flex-direction: column; gap: 7px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">LOAD</span>
+              <span style="font-weight: 500; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="9" data-places="0">--</span><span style="font-size: 12px; font-weight: 500; color: var(--sub)"> <span data-unit="10" data-default="%">%</span></span></span>
+            </div>
+            <div data-bar="9" data-max="11" data-unit-of="10" data-scale="100" style="position: relative; height: 3px; border-radius: 2px; background: var(--faint)">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 2px; background: var(--cool)"></div>
+              <div style="position: absolute; top: -3px; left: 0%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--cool); box-shadow: 0 0 0 2px var(--card)"></div>
+            </div>
+          </div>
+          <div data-need="13" style="display: flex; flex-direction: column; gap: 7px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">CLOCK</span>
+              <span style="font-weight: 500; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="13" data-places="2" data-ghz>--</span><span style="font-size: 12px; font-weight: 500; color: var(--sub)"> <span data-unit="14" data-default="GHz" data-ghz>GHz</span></span></span>
+            </div>
+            <div data-bar="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" style="position: relative; height: 3px; border-radius: 2px; background: var(--faint)">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 2px; background: var(--cool)"></div>
+              <div style="position: absolute; top: -3px; left: 0%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--cool); box-shadow: 0 0 0 2px var(--card)"></div>
+            </div>
+          </div>
+          <div data-need="17" style="display: flex; flex-direction: column; gap: 7px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">POWER</span>
+              <span style="font-weight: 500; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="17" data-places="0">--</span><span style="font-size: 12px; font-weight: 500; color: var(--sub)"> <span data-unit="18" data-default="W">W</span></span></span>
+            </div>
+            <div data-bar="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" style="position: relative; height: 3px; border-radius: 2px; background: var(--faint)">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 2px; background: var(--cool)"></div>
+              <div style="position: absolute; top: -3px; left: 0%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--cool); box-shadow: 0 0 0 2px var(--card)"></div>
+            </div>
+          </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== GRAPHICS ===== -->
+  <section data-section="gpu" style="position: relative; z-index: 1; background: var(--card); border-radius: 18px; padding: 18px 22px 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 14px 30px var(--shade), 0 2px 6px var(--shade); display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <h2 style="margin: 0; font-family: 'Shippori Mincho', serif; font-weight: 500; font-size: 22px; line-height: 1; color: var(--ink)">Graphics</h2>
+      <span style="font-family: 'Shippori Mincho', serif; font-size: 16px; color: var(--cool)" data-state="21">calm</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 20px">
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+          <div data-need="25" style="display: flex; flex-direction: column; gap: 7px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">LOAD</span>
+              <span style="font-weight: 500; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="25" data-places="0">--</span><span style="font-size: 12px; font-weight: 500; color: var(--sub)"> <span data-unit="26" data-default="%">%</span></span></span>
+            </div>
+            <div data-bar="25" data-max="27" data-unit-of="26" data-scale="100" style="position: relative; height: 3px; border-radius: 2px; background: var(--faint)">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 2px; background: var(--cool)"></div>
+              <div style="position: absolute; top: -3px; left: 0%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--cool); box-shadow: 0 0 0 2px var(--card)"></div>
+            </div>
+          </div>
+          <div data-need="29" style="display: flex; flex-direction: column; gap: 7px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">CLOCK</span>
+              <span style="font-weight: 500; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="29" data-places="2" data-ghz>--</span><span style="font-size: 12px; font-weight: 500; color: var(--sub)"> <span data-unit="30" data-default="GHz" data-ghz>GHz</span></span></span>
+            </div>
+            <div data-bar="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" style="position: relative; height: 3px; border-radius: 2px; background: var(--faint)">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 2px; background: var(--cool)"></div>
+              <div style="position: absolute; top: -3px; left: 0%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--cool); box-shadow: 0 0 0 2px var(--card)"></div>
+            </div>
+          </div>
+          <div data-need="33" style="display: flex; flex-direction: column; gap: 7px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">POWER</span>
+              <span style="font-weight: 500; font-size: 20px; line-height: 1; color: var(--ink)"><span data-num="33" data-places="0">--</span><span style="font-size: 12px; font-weight: 500; color: var(--sub)"> <span data-unit="34" data-default="W">W</span></span></span>
+            </div>
+            <div data-bar="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" style="position: relative; height: 3px; border-radius: 2px; background: var(--faint)">
+              <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 2px; background: var(--cool)"></div>
+              <div style="position: absolute; top: -3px; left: 0%; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--cool); box-shadow: 0 0 0 2px var(--card)"></div>
+            </div>
+          </div>
+      </div>
+      <div data-need="21" style="position: relative; width: 160px; height: 160px; flex: none">
+        <svg data-gauge="21" role="img" aria-label="Edge temperature dial" width="160" height="160" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0; overflow: visible">
+          <path d="M167.4 100.0 C167.2 101.4 166.9 105.5 166.4 108.2 C166.0 110.9 165.4 113.6 164.6 116.3 C163.8 118.9 162.9 121.5 161.7 124.0 C160.6 126.5 159.2 129.0 157.6 131.2 C156.0 133.5 154.1 135.6 152.1 137.6 C150.1 139.5 147.9 141.3 145.6 142.9 C143.3 144.4 140.9 145.8 138.5 147.1 C136.1 148.5 133.6 149.6 131.2 150.8 C128.7 151.9 126.3 153.0 123.8 154.1 C121.4 155.2 118.9 156.3 116.3 157.3 C113.8 158.4 111.2 159.5 108.5 160.4 C105.7 161.3 102.9 162.2 100.0 162.7 C97.1 163.3 94.1 163.8 91.1 163.8 C88.1 163.8 85.0 163.6 82.0 163.0 C79.1 162.4 76.2 161.4 73.5 160.1 C70.8 158.8 68.3 157.2 66.0 155.4 C63.6 153.7 61.5 151.6 59.6 149.5 C57.6 147.5 55.9 145.2 54.2 143.1 C52.5 140.9 51.0 138.7 49.5 136.4 C47.9 134.2 46.5 132.1 45.0 129.8 C43.6 127.6 42.2 125.4 40.8 123.0 C39.5 120.7 38.2 118.3 37.1 115.8 C36.0 113.4 35.0 110.8 34.3 108.1 C33.6 105.5 33.1 102.7 33.0 100.0 C32.8 97.3 32.9 94.5 33.3 91.7 C33.6 89.0 34.3 86.3 35.2 83.7 C36.0 81.0 37.1 78.5 38.3 76.0 C39.5 73.5 40.8 71.1 42.3 68.7 C43.7 66.3 45.3 64.0 47.0 61.7 C48.6 59.5 50.4 57.3 52.3 55.2 C54.3 53.1 56.3 51.0 58.6 49.2 C60.8 47.4 63.2 45.7 65.8 44.3 C68.4 43.0 71.2 41.8 74.0 41.0 C76.8 40.1 79.8 39.6 82.7 39.4 C85.6 39.1 88.7 39.3 91.5 39.5 C94.4 39.8 97.3 40.3 100.0 40.9 C102.7 41.5 105.4 42.2 108.0 42.9 C110.6 43.6 113.1 44.3 115.7 45.0 C118.3 45.6 120.8 46.2 123.4 46.9 C126.0 47.5 128.7 48.1 131.4 48.9 C134.1 49.7 136.9 50.4 139.6 51.5 C142.3 52.6 145.1 53.8 147.6 55.3 C150.1 56.8 152.6 58.5 154.8 60.5 C156.9 62.5 158.9 64.8 160.5 67.2 C162.1 69.6 163.4 72.3 164.4 74.9 C165.4 77.6 166.1 80.4 166.6 83.2 C167.2 86.0 167.4 88.8 167.5 91.6 C167.6 94.4 167.4 98.6 167.4 100.0 Z" transform="translate(5 9)" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur6)"></path>
+          <path d="M167.4 100.0 C167.2 101.4 166.9 105.5 166.4 108.2 C166.0 110.9 165.4 113.6 164.6 116.3 C163.8 118.9 162.9 121.5 161.7 124.0 C160.6 126.5 159.2 129.0 157.6 131.2 C156.0 133.5 154.1 135.6 152.1 137.6 C150.1 139.5 147.9 141.3 145.6 142.9 C143.3 144.4 140.9 145.8 138.5 147.1 C136.1 148.5 133.6 149.6 131.2 150.8 C128.7 151.9 126.3 153.0 123.8 154.1 C121.4 155.2 118.9 156.3 116.3 157.3 C113.8 158.4 111.2 159.5 108.5 160.4 C105.7 161.3 102.9 162.2 100.0 162.7 C97.1 163.3 94.1 163.8 91.1 163.8 C88.1 163.8 85.0 163.6 82.0 163.0 C79.1 162.4 76.2 161.4 73.5 160.1 C70.8 158.8 68.3 157.2 66.0 155.4 C63.6 153.7 61.5 151.6 59.6 149.5 C57.6 147.5 55.9 145.2 54.2 143.1 C52.5 140.9 51.0 138.7 49.5 136.4 C47.9 134.2 46.5 132.1 45.0 129.8 C43.6 127.6 42.2 125.4 40.8 123.0 C39.5 120.7 38.2 118.3 37.1 115.8 C36.0 113.4 35.0 110.8 34.3 108.1 C33.6 105.5 33.1 102.7 33.0 100.0 C32.8 97.3 32.9 94.5 33.3 91.7 C33.6 89.0 34.3 86.3 35.2 83.7 C36.0 81.0 37.1 78.5 38.3 76.0 C39.5 73.5 40.8 71.1 42.3 68.7 C43.7 66.3 45.3 64.0 47.0 61.7 C48.6 59.5 50.4 57.3 52.3 55.2 C54.3 53.1 56.3 51.0 58.6 49.2 C60.8 47.4 63.2 45.7 65.8 44.3 C68.4 43.0 71.2 41.8 74.0 41.0 C76.8 40.1 79.8 39.6 82.7 39.4 C85.6 39.1 88.7 39.3 91.5 39.5 C94.4 39.8 97.3 40.3 100.0 40.9 C102.7 41.5 105.4 42.2 108.0 42.9 C110.6 43.6 113.1 44.3 115.7 45.0 C118.3 45.6 120.8 46.2 123.4 46.9 C126.0 47.5 128.7 48.1 131.4 48.9 C134.1 49.7 136.9 50.4 139.6 51.5 C142.3 52.6 145.1 53.8 147.6 55.3 C150.1 56.8 152.6 58.5 154.8 60.5 C156.9 62.5 158.9 64.8 160.5 67.2 C162.1 69.6 163.4 72.3 164.4 74.9 C165.4 77.6 166.1 80.4 166.6 83.2 C167.2 86.0 167.4 88.8 167.5 91.6 C167.6 94.4 167.4 98.6 167.4 100.0 Z" fill="url(#jp-stone) #B9B2A8"></path>
+          <path d="M167.4 100.0 C167.2 101.4 166.9 105.5 166.4 108.2 C166.0 110.9 165.4 113.6 164.6 116.3 C163.8 118.9 162.9 121.5 161.7 124.0 C160.6 126.5 159.2 129.0 157.6 131.2 C156.0 133.5 154.1 135.6 152.1 137.6 C150.1 139.5 147.9 141.3 145.6 142.9 C143.3 144.4 140.9 145.8 138.5 147.1 C136.1 148.5 133.6 149.6 131.2 150.8 C128.7 151.9 126.3 153.0 123.8 154.1 C121.4 155.2 118.9 156.3 116.3 157.3 C113.8 158.4 111.2 159.5 108.5 160.4 C105.7 161.3 102.9 162.2 100.0 162.7 C97.1 163.3 94.1 163.8 91.1 163.8 C88.1 163.8 85.0 163.6 82.0 163.0 C79.1 162.4 76.2 161.4 73.5 160.1 C70.8 158.8 68.3 157.2 66.0 155.4 C63.6 153.7 61.5 151.6 59.6 149.5 C57.6 147.5 55.9 145.2 54.2 143.1 C52.5 140.9 51.0 138.7 49.5 136.4 C47.9 134.2 46.5 132.1 45.0 129.8 C43.6 127.6 42.2 125.4 40.8 123.0 C39.5 120.7 38.2 118.3 37.1 115.8 C36.0 113.4 35.0 110.8 34.3 108.1 C33.6 105.5 33.1 102.7 33.0 100.0 C32.8 97.3 32.9 94.5 33.3 91.7 C33.6 89.0 34.3 86.3 35.2 83.7 C36.0 81.0 37.1 78.5 38.3 76.0 C39.5 73.5 40.8 71.1 42.3 68.7 C43.7 66.3 45.3 64.0 47.0 61.7 C48.6 59.5 50.4 57.3 52.3 55.2 C54.3 53.1 56.3 51.0 58.6 49.2 C60.8 47.4 63.2 45.7 65.8 44.3 C68.4 43.0 71.2 41.8 74.0 41.0 C76.8 40.1 79.8 39.6 82.7 39.4 C85.6 39.1 88.7 39.3 91.5 39.5 C94.4 39.8 97.3 40.3 100.0 40.9 C102.7 41.5 105.4 42.2 108.0 42.9 C110.6 43.6 113.1 44.3 115.7 45.0 C118.3 45.6 120.8 46.2 123.4 46.9 C126.0 47.5 128.7 48.1 131.4 48.9 C134.1 49.7 136.9 50.4 139.6 51.5 C142.3 52.6 145.1 53.8 147.6 55.3 C150.1 56.8 152.6 58.5 154.8 60.5 C156.9 62.5 158.9 64.8 160.5 67.2 C162.1 69.6 163.4 72.3 164.4 74.9 C165.4 77.6 166.1 80.4 166.6 83.2 C167.2 86.0 167.4 88.8 167.5 91.6 C167.6 94.4 167.4 98.6 167.4 100.0 Z" fill="#000" filter="url(#jp-speck)" opacity="0.5"></path>
+          <path d="M39.2 160.8 A86 86 0 1 1 160.8 160.8" fill="none" stroke="#DED6C9" stroke-width="3" stroke-linecap="round"></path>
+          <path data-arc d="" fill="none" stroke="#87977B" stroke-width="3.5" stroke-linecap="round"></path>
+          <circle cx="32.1" cy="167.9" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="5.8" cy="118.7" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="11.3" cy="63.3" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="46.7" cy="20.2" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="100.0" cy="4.0" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="153.3" cy="20.2" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="188.7" cy="63.3" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="194.2" cy="118.7" r="1.6" fill="#8A8278" opacity="0.6"></circle><circle cx="167.9" cy="167.9" r="1.6" fill="#8A8278" opacity="0.6"></circle>
+          <circle data-end cx="39.2" cy="160.8" r="6" fill="#87977B" stroke="#F7F3EC" stroke-width="2.5" style=""></circle>
+        </svg>
+        <div style="position: absolute; left: 0; right: 0; top: 50px; display: flex; flex-direction: column; align-items: center">
+          <span style="font-weight: 300; font-size: 46px; line-height: 1; color: var(--on-stone)"><span data-num="21" data-places="0">--</span>°</span>
+          <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.2em; color: var(--on-stone-sub); max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="20" data-default="EDGE" data-upper>EDGE</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== COOLING: oak-bladed fans ===== -->
+  <section data-section="fans" style="position: relative; z-index: 1; background: var(--card); border-radius: 18px; padding: 18px 16px 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 14px 30px var(--shade), 0 2px 6px var(--shade); display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 0 6px">
+      <h2 style="margin: 0; font-family: 'Shippori Mincho', serif; font-weight: 500; font-size: 22px; line-height: 1; color: var(--ink)">Cooling</h2>
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: var(--sub)">RPM</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+        <div data-need="37" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="86" height="86" viewBox="-43 -43 86 86" style="overflow: visible">
+            <circle r="40" fill="none" stroke="#DED6C9" stroke-width="1"></circle>
+            <g data-rotor="37">
+              <g style="filter: drop-shadow(2px 4px 3px var(--shade-2))">
+                  <g transform="rotate(0)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="9.5" fill="url(#jp-hub) #F4F1EC" style="filter: drop-shadow(1px 2px 2px var(--shade-2))"></circle>
+            <circle r="3" fill="#BDB5AA" opacity="0.6"></circle>
+          </svg>
+          <span style="font-weight: 500; font-size: 18px; line-height: 1; color: var(--ink)" data-num="37" data-places="0">--</span>
+          <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="36" data-default="FAN 1" data-upper>FAN 1</span>
+        </div>
+        <div data-need="41" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="86" height="86" viewBox="-43 -43 86 86" style="overflow: visible">
+            <circle r="40" fill="none" stroke="#DED6C9" stroke-width="1"></circle>
+            <g data-rotor="41">
+              <g style="filter: drop-shadow(2px 4px 3px var(--shade-2))">
+                  <g transform="rotate(0)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="9.5" fill="url(#jp-hub) #F4F1EC" style="filter: drop-shadow(1px 2px 2px var(--shade-2))"></circle>
+            <circle r="3" fill="#BDB5AA" opacity="0.6"></circle>
+          </svg>
+          <span style="font-weight: 500; font-size: 18px; line-height: 1; color: var(--ink)" data-num="41" data-places="0">--</span>
+          <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="40" data-default="FAN 2" data-upper>FAN 2</span>
+        </div>
+        <div data-need="45" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="86" height="86" viewBox="-43 -43 86 86" style="overflow: visible">
+            <circle r="40" fill="none" stroke="#DED6C9" stroke-width="1"></circle>
+            <g data-rotor="45">
+              <g style="filter: drop-shadow(2px 4px 3px var(--shade-2))">
+                  <g transform="rotate(0)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="9.5" fill="url(#jp-hub) #F4F1EC" style="filter: drop-shadow(1px 2px 2px var(--shade-2))"></circle>
+            <circle r="3" fill="#BDB5AA" opacity="0.6"></circle>
+          </svg>
+          <span style="font-weight: 500; font-size: 18px; line-height: 1; color: var(--ink)" data-num="45" data-places="0">--</span>
+          <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="44" data-default="FAN 3" data-upper>FAN 3</span>
+        </div>
+        <div data-need="49" style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+          <svg aria-hidden="true" width="86" height="86" viewBox="-43 -43 86 86" style="overflow: visible">
+            <circle r="40" fill="none" stroke="#DED6C9" stroke-width="1"></circle>
+            <g data-rotor="49">
+              <g style="filter: drop-shadow(2px 4px 3px var(--shade-2))">
+                  <g transform="rotate(0)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="url(#jp-oakB) #CBA676"></path>
+                    <path d="M-5.5 -9 C-9 -20 -10 -32 -6.5 -37 C-3.5 -40 3.5 -40 6.5 -37 C10 -32 9 -20 5.5 -9 Z" fill="#000" filter="url(#jp-grainV)" opacity="0.55"></path>
+                  </g>
+              </g>
+            </g>
+            <circle r="9.5" fill="url(#jp-hub) #F4F1EC" style="filter: drop-shadow(1px 2px 2px var(--shade-2))"></circle>
+            <circle r="3" fill="#BDB5AA" opacity="0.6"></circle>
+          </svg>
+          <span style="font-weight: 500; font-size: 18px; line-height: 1; color: var(--ink)" data-num="49" data-places="0">--</span>
+          <span style="font-size: 10px; font-weight: 600; letter-spacing: 0.14em; color: var(--sub); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="48" data-default="FAN 4" data-upper>FAN 4</span>
+        </div>
+    </div>
+  </section>
+  <!-- ===== MEMORY: glaze-dipped cups ===== -->
+  <section data-section="memory" style="position: relative; z-index: 1; background: var(--card); border-radius: 18px; padding: 18px 22px 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 14px 30px var(--shade), 0 2px 6px var(--shade); display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <h2 style="margin: 0; font-family: 'Shippori Mincho', serif; font-weight: 500; font-size: 22px; line-height: 1; color: var(--ink)">Memory</h2>
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: var(--sub)">IN USE</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <div data-need="53" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+          <svg data-cup="53" data-max="55" aria-hidden="true" width="100" height="150" viewBox="0 0 100 150" style="overflow: visible">
+            <ellipse cx="54" cy="142" rx="34" ry="5" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur3)"></ellipse>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-clay) #E2D3BE"></path>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="#000" filter="url(#jp-speck)" opacity="0.5"></path>
+            <g clip-path="url(#jp-cup)"><g data-glaze data-drawn="70.2"><rect x="18" y="130" width="64" height="200" fill="#8FA38A"></rect>
+            <path d="M21.4 70.2 C22.1 70.3 24.1 70.9 25.5 71.0 C26.8 71.1 28.2 70.9 29.6 70.6 C30.9 70.4 32.3 69.3 33.6 69.5 C35.0 69.8 36.4 71.8 37.7 72.0 C39.1 72.1 40.5 70.5 41.8 70.3 C43.2 70.2 44.5 71.0 45.9 71.0 C47.3 71.1 48.6 70.7 50.0 70.4 C51.4 70.2 52.7 69.6 54.1 69.4 C55.5 69.2 56.8 69.0 58.2 69.5 C59.5 70.0 60.9 72.1 62.3 72.3 C63.6 72.6 65.0 71.4 66.4 71.0 C67.7 70.7 69.1 70.5 70.4 70.2 C71.8 70.0 73.2 69.4 74.5 69.3 C75.9 69.2 77.9 69.6 78.6 69.6 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="#8FA38A"></path>
+            <path d="M21.4 70.2 C22.1 70.3 24.1 70.9 25.5 71.0 C26.8 71.1 28.2 70.9 29.6 70.6 C30.9 70.4 32.3 69.3 33.6 69.5 C35.0 69.8 36.4 71.8 37.7 72.0 C39.1 72.1 40.5 70.5 41.8 70.3 C43.2 70.2 44.5 71.0 45.9 71.0 C47.3 71.1 48.6 70.7 50.0 70.4 C51.4 70.2 52.7 69.6 54.1 69.4 C55.5 69.2 56.8 69.0 58.2 69.5 C59.5 70.0 60.9 72.1 62.3 72.3 C63.6 72.6 65.0 71.4 66.4 71.0 C67.7 70.7 69.1 70.5 70.4 70.2 C71.8 70.0 73.2 69.4 74.5 69.3 C75.9 69.2 77.9 69.6 78.6 69.6 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.5"></path>
+            <path d="M21.4 70.2 C22.1 70.3 24.1 70.9 25.5 71.0 C26.8 71.1 28.2 70.9 29.6 70.6 C30.9 70.4 32.3 69.3 33.6 69.5 C35.0 69.8 36.4 71.8 37.7 72.0 C39.1 72.1 40.5 70.5 41.8 70.3 C43.2 70.2 44.5 71.0 45.9 71.0 C47.3 71.1 48.6 70.7 50.0 70.4 C51.4 70.2 52.7 69.6 54.1 69.4 C55.5 69.2 56.8 69.0 58.2 69.5 C59.5 70.0 60.9 72.1 62.3 72.3 C63.6 72.6 65.0 71.4 66.4 71.0 C67.7 70.7 69.1 70.5 70.4 70.2 C71.8 70.0 73.2 69.4 74.5 69.3 C75.9 69.2 77.9 69.6 78.6 69.6" fill="none" stroke="#000" stroke-width="0.8" opacity="0.18"></path>
+            <path d="M30 78.2 L30.8 128" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.4" stroke-linecap="round"></path>
+            </g></g>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.6"></path>
+            <rect x="18" y="13" width="64" height="6" rx="3" fill="#E2D3BE"></rect>
+            <rect x="18" y="13" width="64" height="6" rx="3" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.5"></rect>
+          </svg>
+          <span style="font-weight: 300; font-size: 26px; line-height: 1; color: var(--ink)"><span data-pct="53" data-max="55">--</span><span style="font-size: 14px; color: var(--sub)">%</span></span>
+          <span style="font-family: 'Shippori Mincho', serif; font-size: 15px; color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="52" data-default="Memory">Memory</span>
+          <span style="font-size: 11px; color: var(--sub)"><span data-num="53" data-places="1" data-plain>--</span> of <span data-num="55" data-places="0" data-plain>--</span> <span data-unit="54" data-default="GB">GB</span></span>
+        </div>
+        <div data-need="57" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+          <svg data-cup="57" data-max="59" aria-hidden="true" width="100" height="150" viewBox="0 0 100 150" style="overflow: visible">
+            <ellipse cx="54" cy="142" rx="34" ry="5" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur3)"></ellipse>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-clay) #E2D3BE"></path>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="#000" filter="url(#jp-speck)" opacity="0.5"></path>
+            <g clip-path="url(#jp-cup)"><g data-glaze data-drawn="93.8"><rect x="18" y="130" width="64" height="200" fill="#C49A5C"></rect>
+            <path d="M22.0 93.8 C22.6 93.8 24.6 93.9 26.0 93.7 C27.3 93.5 28.6 92.9 30.0 92.6 C31.3 92.4 32.7 92.1 34.0 92.1 C35.3 92.2 36.7 92.2 38.0 92.9 C39.3 93.7 40.7 96.4 42.0 96.5 C43.3 96.6 44.7 94.2 46.0 93.5 C47.3 92.9 48.7 92.7 50.0 92.4 C51.3 92.2 52.7 91.8 54.0 92.2 C55.3 92.6 56.7 94.6 58.0 94.9 C59.3 95.2 60.7 94.2 62.0 93.9 C63.3 93.6 64.7 93.6 66.0 93.4 C67.3 93.1 68.7 92.5 70.0 92.3 C71.4 92.1 72.7 92.1 74.0 92.3 C75.4 92.4 77.4 93.1 78.0 93.3 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="#C49A5C"></path>
+            <path d="M22.0 93.8 C22.6 93.8 24.6 93.9 26.0 93.7 C27.3 93.5 28.6 92.9 30.0 92.6 C31.3 92.4 32.7 92.1 34.0 92.1 C35.3 92.2 36.7 92.2 38.0 92.9 C39.3 93.7 40.7 96.4 42.0 96.5 C43.3 96.6 44.7 94.2 46.0 93.5 C47.3 92.9 48.7 92.7 50.0 92.4 C51.3 92.2 52.7 91.8 54.0 92.2 C55.3 92.6 56.7 94.6 58.0 94.9 C59.3 95.2 60.7 94.2 62.0 93.9 C63.3 93.6 64.7 93.6 66.0 93.4 C67.3 93.1 68.7 92.5 70.0 92.3 C71.4 92.1 72.7 92.1 74.0 92.3 C75.4 92.4 77.4 93.1 78.0 93.3 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.5"></path>
+            <path d="M22.0 93.8 C22.6 93.8 24.6 93.9 26.0 93.7 C27.3 93.5 28.6 92.9 30.0 92.6 C31.3 92.4 32.7 92.1 34.0 92.1 C35.3 92.2 36.7 92.2 38.0 92.9 C39.3 93.7 40.7 96.4 42.0 96.5 C43.3 96.6 44.7 94.2 46.0 93.5 C47.3 92.9 48.7 92.7 50.0 92.4 C51.3 92.2 52.7 91.8 54.0 92.2 C55.3 92.6 56.7 94.6 58.0 94.9 C59.3 95.2 60.7 94.2 62.0 93.9 C63.3 93.6 64.7 93.6 66.0 93.4 C67.3 93.1 68.7 92.5 70.0 92.3 C71.4 92.1 72.7 92.1 74.0 92.3 C75.4 92.4 77.4 93.1 78.0 93.3" fill="none" stroke="#000" stroke-width="0.8" opacity="0.18"></path>
+            <path d="M30 101.0 L30.8 128" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.4" stroke-linecap="round"></path>
+            </g></g>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.6"></path>
+            <rect x="18" y="13" width="64" height="6" rx="3" fill="#E2D3BE"></rect>
+            <rect x="18" y="13" width="64" height="6" rx="3" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.5"></rect>
+          </svg>
+          <span style="font-weight: 300; font-size: 26px; line-height: 1; color: var(--ink)"><span data-pct="57" data-max="59">--</span><span style="font-size: 14px; color: var(--sub)">%</span></span>
+          <span style="font-family: 'Shippori Mincho', serif; font-size: 15px; color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="56" data-default="Video">Video</span>
+          <span style="font-size: 11px; color: var(--sub)"><span data-num="57" data-places="1" data-plain>--</span> of <span data-num="59" data-places="0" data-plain>--</span> <span data-unit="58" data-default="GB">GB</span></span>
+        </div>
+        <div data-need="61" style="display: flex; flex-direction: column; align-items: center; gap: 3px">
+          <svg data-cup="61" data-max="63" aria-hidden="true" width="100" height="150" viewBox="0 0 100 150" style="overflow: visible">
+            <ellipse cx="54" cy="142" rx="34" ry="5" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur3)"></ellipse>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-clay) #E2D3BE"></path>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="#000" filter="url(#jp-speck)" opacity="0.5"></path>
+            <g clip-path="url(#jp-cup)"><g data-glaze data-drawn="90.2"><rect x="18" y="130" width="64" height="200" fill="#4E3A2E"></rect>
+            <path d="M21.9 90.2 C22.5 90.0 24.6 89.5 25.9 89.2 C27.2 89.0 28.6 88.5 29.9 88.5 C31.3 88.5 32.6 88.8 33.9 89.0 C35.3 89.3 36.6 89.9 37.9 90.1 C39.3 90.3 40.6 89.8 42.0 90.1 C43.3 90.4 44.6 91.9 46.0 91.7 C47.3 91.4 48.7 88.6 50.0 88.5 C51.3 88.4 52.7 90.7 54.0 91.0 C55.4 91.3 56.7 90.4 58.0 90.2 C59.4 90.0 60.7 90.2 62.1 90.0 C63.4 89.7 64.7 89.1 66.1 88.9 C67.4 88.6 68.7 88.4 70.1 88.5 C71.4 88.6 72.8 89.1 74.1 89.4 C75.4 89.7 77.5 90.1 78.1 90.3 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="#4E3A2E"></path>
+            <path d="M21.9 90.2 C22.5 90.0 24.6 89.5 25.9 89.2 C27.2 89.0 28.6 88.5 29.9 88.5 C31.3 88.5 32.6 88.8 33.9 89.0 C35.3 89.3 36.6 89.9 37.9 90.1 C39.3 90.3 40.6 89.8 42.0 90.1 C43.3 90.4 44.6 91.9 46.0 91.7 C47.3 91.4 48.7 88.6 50.0 88.5 C51.3 88.4 52.7 90.7 54.0 91.0 C55.4 91.3 56.7 90.4 58.0 90.2 C59.4 90.0 60.7 90.2 62.1 90.0 C63.4 89.7 64.7 89.1 66.1 88.9 C67.4 88.6 68.7 88.4 70.1 88.5 C71.4 88.6 72.8 89.1 74.1 89.4 C75.4 89.7 77.5 90.1 78.1 90.3 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.5"></path>
+            <path d="M21.9 90.2 C22.5 90.0 24.6 89.5 25.9 89.2 C27.2 89.0 28.6 88.5 29.9 88.5 C31.3 88.5 32.6 88.8 33.9 89.0 C35.3 89.3 36.6 89.9 37.9 90.1 C39.3 90.3 40.6 89.8 42.0 90.1 C43.3 90.4 44.6 91.9 46.0 91.7 C47.3 91.4 48.7 88.6 50.0 88.5 C51.3 88.4 52.7 90.7 54.0 91.0 C55.4 91.3 56.7 90.4 58.0 90.2 C59.4 90.0 60.7 90.2 62.1 90.0 C63.4 89.7 64.7 89.1 66.1 88.9 C67.4 88.6 68.7 88.4 70.1 88.5 C71.4 88.6 72.8 89.1 74.1 89.4 C75.4 89.7 77.5 90.1 78.1 90.3" fill="none" stroke="#000" stroke-width="0.8" opacity="0.18"></path>
+            <path d="M30 97.4 L30.8 128" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.4" stroke-linecap="round"></path>
+            </g></g>
+            <path d="M20.0 18.0 L80.0 18.0 L77.0 132.0 C77 137 75 140 69 140 L31 140 C25 140 23 137 23.0 132.0 Z" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.6"></path>
+            <rect x="18" y="13" width="64" height="6" rx="3" fill="#E2D3BE"></rect>
+            <rect x="18" y="13" width="64" height="6" rx="3" fill="url(#jp-cyl) rgba(0,0,0,0)" opacity="0.5"></rect>
+          </svg>
+          <span style="font-weight: 300; font-size: 26px; line-height: 1; color: var(--ink)"><span data-pct="61" data-max="63">--</span><span style="font-size: 14px; color: var(--sub)">%</span></span>
+          <span style="font-family: 'Shippori Mincho', serif; font-size: 15px; color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="60" data-default="Disk">Disk</span>
+          <span style="font-size: 11px; color: var(--sub)"><span data-num="61" data-places="1" data-plain>--</span> of <span data-num="63" data-places="0" data-plain>--</span> <span data-unit="62" data-default="GB">GB</span></span>
+        </div>
+    </div>
+  </section>
+  <!-- ===== NETWORK ===== -->
+  <section data-section="network" style="position: relative; z-index: 1; background: var(--card); border-radius: 18px; padding: 18px 22px 16px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 14px 30px var(--shade), 0 2px 6px var(--shade); display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline">
+      <h2 style="margin: 0; font-family: 'Shippori Mincho', serif; font-weight: 500; font-size: 22px; line-height: 1; color: var(--ink)">Network</h2>
+      <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.2em; color: var(--sub)" data-unit="66" data-default="MB/S" data-upper>MB/S</span>
+    </div>
+    <div style="display: flex; gap: 28px; align-items: baseline">
+      <span data-need="65" style="display: flex; align-items: baseline; gap: 8px"><span style="width: 14px; height: 2px; background: var(--ink); align-self: center"></span><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">IN</span><span style="font-weight: 300; font-size: 28px; line-height: 1" data-num="65" data-places="1">--</span></span>
+      <span data-need="69" style="display: flex; align-items: baseline; gap: 8px"><span style="width: 14px; height: 0; border-top: 2px dotted var(--hot); align-self: center"></span><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)">OUT</span><span style="font-weight: 300; font-size: 28px; line-height: 1" data-num="69" data-places="1">--</span></span>
+    </div>
+    <svg data-chart role="img" aria-label="Network traffic over the last minute" width="372" height="104" viewBox="0 0 372 104" style="overflow: visible">
+      <line x1="0" y1="26" x2="372" y2="26" stroke="#DED6C9" stroke-width="1"></line><line x1="0" y1="52" x2="372" y2="52" stroke="#DED6C9" stroke-width="1"></line><line x1="0" y1="78" x2="372" y2="78" stroke="#DED6C9" stroke-width="1"></line>
+      <path data-area d="" fill="url(#jp-area) rgba(0,0,0,0)"></path>
+      <path data-line="up" d="" fill="none" stroke="#C2805C" stroke-width="2" stroke-dasharray="0.1 5" stroke-linecap="round"></path>
+      <path data-line="down" d="" fill="none" stroke="#36322D" stroke-width="1.6" stroke-linejoin="round"></path>
+      <path d="M0 103.5 L372 103.5" fill="none" stroke="#8A8278" stroke-width="1" opacity="0.5"></path>
+      <circle data-dot cx="366" cy="100" r="4.5" fill="#36322D" stroke="#F7F3EC" stroke-width="2" style="animation: jp-pulse 2.4s ease-in-out infinite"></circle>
+    </svg>
+    <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; color: var(--sub)"><span>1 MIN AGO</span><span>NOW</span></div>
+  </section>
+  </div>
+  <!-- ===== FOOTER ===== -->
+  <footer style="position: relative; z-index: 1; display: flex; align-items: center; gap: 14px">
+    <div style="flex: 1; height: 1px; background: var(--faint)"></div>
+    <svg aria-hidden="true" width="28" height="30" viewBox="0 0 28 30" style="overflow: visible">
+      <ellipse cx="15" cy="29" rx="12" ry="2" fill="rgba(70,50,30,0.2)" filter="url(#jp-blur3)"></ellipse>
+      <path d="M3 28 C3 23 8 20 14 20 C21 20 26 23 26 28 Z" fill="url(#jp-stone) #B9B2A8"></path>
+      <path d="M6 20 C6 16 10 13 15 13 C20 13 23 16 23 20 Z" fill="url(#jp-stone) #B9B2A8"></path>
+      <path d="M9 13 C9 10 11.5 8 15 8 C18.5 8 20.5 10 20.5 13 Z" fill="url(#jp-stone) #B9B2A8"></path>
+    </svg>
+    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.22em; color: var(--sub); white-space: nowrap" data-need="73">UP <span data-uptime="73">--</span></span>
+    <div style="flex: 1; height: 1px; background: var(--faint)"></div>
+  </footer>
+  <!-- soft daylight through window slats, then fine grain -->
+  <div class="daylight" aria-hidden="true"></div>
+  <svg aria-hidden="true" width="100%" height="100%" style="position: absolute; top: 0; left: 0; z-index: 3; pointer-events: none; opacity: 0.22"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#jp-noise)"></rect></svg>
+</div>
+</div>
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "palette", "label": "Palette", "type": "choice", "var": "--palette", "default": "oak", "choices": [{"value": "oak", "label": "Oak & Sage"}, {"value": "charcoal", "label": "Charcoal"}, {"value": "terracotta", "label": "Terracotta"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Network chart full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"},
+    "90": {"hint": "Clock - Year", "source": "clock", "instance": 1, "field": "year", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100, WARM = 72, HOT = 85;
+  var SAMPLES = 40, SAMPLE_MS = 1500;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+  var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  // The palette is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-palette', (css.getPropertyValue('--palette') || 'oak').trim() || 'oak');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  // A clock given in MHz is shown, and scaled, in GHz.
+  function inGhz(el, v, id) { return el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[id] || '')); }
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-japandi-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  // The value the top of the chart stands for, shared by both lines. `peak`
+  // is the largest sample of the last minute, `fixed` the Network chart full
+  // scale option (0 when it is left to follow the peak).
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    // Follow the peak in steps (1, 2, 4, 8, 16 ...), so the curves do not
+    // rescale each time the peak moves a little.
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+
+  // A smooth curve through the points: each span is a cubic whose handles
+  // follow the slope between the neighbouring points.
+  function curve(pts) {
+    if (pts.length < 2) return '';
+    var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+      d += ' C' + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + ' ' +
+           (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + ' ' + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + ' ' +
+           p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return d;
+  }
+
+  // In as an ink line over a cool fade, out as a dotted line in the hot
+  // accent; the newest sample at the right edge, under the pulsing dot.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var step = 366 / (SAMPLES - 1);
+    function points(values) {
+      return values.map(function (v, i) {
+        return [366 - (values.length - 1 - i) * step, 100 - clamp01(v / full) * 73];
+      });
+    }
+    var down = points(hist.down), d = curve(down);
+    attr(svg.querySelector('[data-line="down"]'), 'd', d);
+    attr(svg.querySelector('[data-area]'), 'd', d ? d + ' L366 104 L' + down[0][0].toFixed(1) + ' 104 Z' : '');
+    attr(svg.querySelector('[data-line="up"]'), 'd', curve(points(hist.up)));
+    var dot = svg.querySelector('[data-dot]');
+    hide(dot, down.length === 0);          // nothing to mark before the first sample
+    if (down.length) attr(dot, 'cy', down[down.length - 1][1].toFixed(1));
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
+    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
+    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
+    var day = num(v['2']), month = MONTHS.indexOf(String(v['3'] || '').slice(0, 3).toLowerCase()) + 1, year = num(v['90']);
+    each('[data-dayname]', function (el) { var n = v[el.getAttribute('data-dayname')]; text(el, known(n) ? String(n) : '\u00a0'); });
+    each('[data-date]', function (el) {    // 13 NOVEMBER
+      text(el, [isFinite(day) ? String(Math.round(day)) : '', known(v['3']) ? String(v['3']).toUpperCase() : ''].filter(Boolean).join(' ') || '\u00a0');
+    });
+    each('[data-dmy]', function (el) {     // 13 · 11 · 2026
+      text(el, [isFinite(day) ? String(Math.round(day)) : '', month ? String(month) : '', isFinite(year) ? String(Math.round(year)) : '']
+        .filter(Boolean).join(' \u00b7 ') || '\u00a0');
+    });
+
+    each('[data-num]', function (el) {
+      var id = el.getAttribute('data-num'), n = num(v[id]);
+      if (inGhz(el, v, +id + 1)) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      var shown = inGhz(el, v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? shown.toUpperCase() : shown);
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      var name = known(c) ? String(c) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? name.toUpperCase() : name);
+    });
+    each('[data-uptime]', function (el) {  // 4 DAYS · 7 HOURS
+      var sec = num(v[el.getAttribute('data-uptime')]), parts = [];
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        parts = d > 0 ? [[d, 'day'], [hr, 'hour']] : hr > 0 ? [[hr, 'hour'], [mn, 'minute']] : [[mn, 'minute']];
+      }
+      text(el, parts.length ? parts.map(function (p) { return p[0] + ' ' + p[1] + (p[0] === 1 ? '' : 's'); }).join(' \u00b7 ').toUpperCase() : '--');
+    });
+
+    // Dials: the arc runs round the stone from 135 degrees, 270 degrees for
+    // the whole scale, and ends in a dot. Its colour goes from the cool
+    // accent to the hot one between 50 and 85 degrees.
+    each('[data-gauge]', function (el) {
+      var t = num(v[el.getAttribute('data-gauge')]);
+      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var deg = 135 + 270 * f, a = deg * Math.PI / 180;
+      var x = (100 + 86 * Math.cos(a)).toFixed(1), y = (100 + 86 * Math.sin(a)).toFixed(1);
+      var colour = 'color-mix(in srgb, var(--cool), var(--hot) ' + Math.round(clamp01(((isFinite(t) ? t : 0) - 50) / 35) * 100) + '%)';
+      var arc = el.querySelector('[data-arc]'), end = el.querySelector('[data-end]');
+      attr(arc, 'd', f > 0.002 ? 'M39.2 160.8 A86 86 0 ' + (270 * f > 180 ? 1 : 0) + ' 1 ' + x + ' ' + y : '');
+      style(arc, 'stroke', colour);
+      attr(end, 'cx', x); attr(end, 'cy', y);
+      style(end, 'fill', colour);
+      flag(end, 'hot', t >= HOT);
+    });
+    each('[data-state]', function (el) {
+      var t = num(v[el.getAttribute('data-state')]);
+      text(el, t >= HOT ? 'hot' : t >= WARM ? 'warm' : 'calm');
+      flag(el, 'hot', t >= HOT);
+      flag(el, 'warm', t >= WARM && t < HOT);
+    });
+
+    // Hairline bars: a fill and an end dot, against the sensor's own maximum,
+    // else the limit in the stylesheet (a number, or the name of a custom
+    // property).
+    each('[data-bar]', function (el) {
+      var val = num(v[el.getAttribute('data-bar')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (scale.indexOf('clock') > 0 && /^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { val /= 1000; max /= 1000; }
+      var pct = (share(val, max, fallback) * 100).toFixed(1) + '%';
+      style(el.children[0], 'width', pct);
+      style(el.children[1], 'left', pct);
+    });
+    each('[data-rotor]', function (el) {
+      var rpm = num(v[el.getAttribute('data-rotor')]);
+      fanRpm[el.getAttribute('data-rotor')] = isFinite(rpm) ? rpm : 0;
+    });
+    // Cups: the glaze, drawn at one level, is moved as a piece so that its
+    // uneven edge sits at the share in use: the foot is y 140, the rim y 18.
+    each('[data-cup]', function (el) {
+      var f = share(num(v[el.getAttribute('data-cup')]), num(v[el.getAttribute('data-max')]), 100);
+      var glaze = el.querySelector('[data-glaze]');
+      attr(glaze, 'transform', 'translate(0 ' + (140 - f * 122 - +glaze.getAttribute('data-drawn')).toFixed(1) + ')');
+      hide(glaze, f <= 0);
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a dial that cools cancels its dot's
+    // animation, and stepping a cancelled one would bring it back.
+    anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    // Fans: one turn every 4000 / RPM seconds, but never more than about 44
+    // degrees a frame. Three blades repeat every 120 degrees, so a bigger
+    // step would read as standing still or turning backwards.
+    each('[data-rotor]', function (el) {
+      var id = el.getAttribute('data-rotor'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(360 / 4000 * rpm * dt * speed, 44 * (1 - Math.exp(-rpm / 1200)));
+      rotorAngle[id] = ((rotorAngle[id] || 0) + step) % 360;
+      el.setAttribute('transform', 'rotate(' + rotorAngle[id].toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still-motion', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // dials and cups in their empty state before the first values arrive
+})();
+</script>
+</body>
+</html>

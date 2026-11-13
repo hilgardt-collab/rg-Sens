@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1800 960x1050 1440x725 2880x455">
 <title>Bauhaus Sensor Panel</title>
 <!--
   Bauhaus sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -47,8 +48,14 @@
 
   Options (the panel's Display tab, or the top of bauhaus_panel.css): palette
   (Primary, Night, Muted), how the design fits the panel, the frame rate, and
-  the full scale of the bars and of the network chart. The design is drawn
-  for 480x1920 and is scaled to whatever size the panel has.
+  the full scale of the bars and of the network chart.
+
+  Size: the design is drawn for 480x1920, but its six groups (the poster and
+  the five sections) re-arrange to suit the panel: one column of six, two of
+  three, three of two or six side by side (the rg-layouts list gives the
+  size each needs), and the sections then stretch to the panel's exact
+  shape. The Layout option fixes the column count; the Fit option can crop,
+  letterbox or distort instead.
 
   Motion: the poster's triangle turns very slowly, the fan pinwheels turn
   with RPM and the dot over the newest bar pulses, at --motion-fps frames a
@@ -63,7 +70,8 @@
 <body>
 <div class="panel">
 
-  <!-- ===== poster ===== -->
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
   <header class="poster">
     <svg aria-hidden="true" width="432" height="340" viewBox="0 0 432 340">
       <circle class="red" cx="318" cy="128" r="118"></circle>
@@ -223,6 +231,8 @@
     </div>
   </section>
 
+  </div>
+
   <footer class="foot">
     <div>
       <span class="up" data-need="73">uptime <span data-uptime="73">--</span></span>
@@ -238,7 +248,8 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "palette", "label": "Palette", "type": "choice", "default": "primary", "choices": [{"value": "primary", "label": "Primary", "set": {"--paper": "#F1EBDD", "--paper2": "#FBF7EE", "--ink": "#141414", "--sub": "#5A5650", "--red": "#D9322B", "--yellow": "#F2B91B", "--blue": "#1F4FA0"}}, {"value": "night", "label": "Night", "set": {"--paper": "#151515", "--paper2": "#222222", "--ink": "#F1EBDD", "--sub": "#A8A29A", "--red": "#E5432F", "--yellow": "#F5C230", "--blue": "#3F73D0"}}, {"value": "muted", "label": "Muted", "set": {"--paper": "#E9E2D2", "--paper2": "#F3EEE3", "--ink": "#23211E", "--sub": "#6A6359", "--red": "#B5523B", "--yellow": "#D9A441", "--blue": "#4A6A88"}}]},
-    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
     {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
     {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
     {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},

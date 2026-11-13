@@ -848,13 +848,20 @@ pub fn generate_update_script() -> &'static str {
     // Fit to the panel. A template that states the size it was drawn for
     //   <meta name="rg-design-size" content="480x1920">
     // is scaled to the panel it is shown in. It may list other arrangements
-    // of the same design, narrowest first
-    //   <meta name="rg-layouts" content="480x1920 960x1040 1440x800">
-    // and the one that fills the panel best is chosen; the page lays itself
-    // out from --rg-w / --rg-h and data-rg-columns on <html>. Two custom
-    // properties steer it (template options usually set them):
-    //   --rg-fit      cover (default: fill the panel, cropping) | contain | stretch
-    //   --rg-columns  0 = choose (default), N = use the Nth layout
+    // of the same design, narrowest first, each the size the design needs
+    // with that many columns
+    //   <meta name="rg-layouts" content="480x1920 960x1040 1440x800 2880x420">
+    // and the one that can be shown largest is chosen; the page lays itself
+    // out from --rg-w / --rg-h, --rg-cols and data-rg-columns on <html>. An
+    // arrangement's column count is its width over the first one's (1, 2, 3
+    // and 6 above). Two custom properties steer it (template options usually
+    // set them):
+    //   --rg-fit      cover (default: fill the panel, cropping) | contain |
+    //                 stretch | fill (the design box takes the panel's own
+    //                 proportions, at least as large as the arrangement, and
+    //                 the page's CSS stretches into it: nothing is cropped,
+    //                 banded or distorted)
+    //   --rg-columns  0 = choose (default), N = the arrangement with N columns
     // A template without the meta tag is left exactly as it is.
     (function () {
         var meta = document.querySelector('meta[name="rg-design-size"]');
@@ -868,6 +875,7 @@ pub fn generate_update_script() -> &'static str {
         var more = document.querySelector('meta[name="rg-layouts"]');
         var layouts = more ? more.content.trim().split(/\s+/).map(size).filter(Boolean) : [];
         if (!layouts.length) layouts = [design];
+        layouts.forEach(function (l) { l.n = Math.max(1, Math.round(l.w / layouts[0].w)); });
         var root = document.documentElement, body = document.body;
         var css = getComputedStyle(root);
         var fit = (css.getPropertyValue('--rg-fit') || '').trim() || 'cover';
@@ -883,7 +891,9 @@ pub fn generate_update_script() -> &'static str {
             if (!(iw > 0 && ih > 0)) return;
             var at = 0;
             if (columns > 0) {
+                // the arrangement with that many columns, else the Nth
                 at = Math.min(columns, layouts.length) - 1;
+                layouts.forEach(function (l, i) { if (l.n === columns) at = i; });
             } else {
                 var best = 0;
                 layouts.forEach(function (l, i) {
@@ -891,24 +901,112 @@ pub fn generate_update_script() -> &'static str {
                     if (s > best * 1.02) { best = s; at = i; }
                 });
             }
-            var l = layouts[at];
-            var sx = iw / l.w, sy = ih / l.h;
-            if (fit === 'contain') sx = sy = Math.min(sx, sy);
+            var l = layouts[at], w = l.w, h = l.h;
+            var sx = iw / w, sy = ih / h;
+            if (fit === 'fill') {
+                // the box grows in the direction the panel has room to spare
+                sx = sy = Math.min(sx, sy);
+                w = Math.round(iw / sx * 100) / 100;
+                h = Math.round(ih / sy * 100) / 100;
+            } else if (fit === 'contain') sx = sy = Math.min(sx, sy);
             else if (fit !== 'stretch') sx = sy = Math.max(sx, sy);
-            var key = [at, l.w, l.h, sx.toFixed(4), sy.toFixed(4), iw, ih].join(' ');
+            var key = [at, w, h, sx.toFixed(4), sy.toFixed(4), iw, ih].join(' ');
             if (key === shown) return;
             shown = key;
-            root.style.setProperty('--rg-w', l.w + 'px');
-            root.style.setProperty('--rg-h', l.h + 'px');
-            root.setAttribute('data-rg-columns', String(at + 1));
-            body.style.width = l.w + 'px';
-            body.style.height = l.h + 'px';
-            body.style.transform = 'translate(' + ((iw - l.w * sx) / 2).toFixed(2) + 'px,' +
-                ((ih - l.h * sy) / 2).toFixed(2) + 'px) scale(' + sx.toFixed(5) + ',' + sy.toFixed(5) + ')';
-            window.dispatchEvent(new CustomEvent('rg-layout', { detail: { columns: at + 1, width: l.w, height: l.h } }));
+            root.style.setProperty('--rg-w', w + 'px');
+            root.style.setProperty('--rg-h', h + 'px');
+            root.style.setProperty('--rg-cols', String(l.n));
+            root.setAttribute('data-rg-columns', String(l.n));
+            body.style.width = w + 'px';
+            body.style.height = h + 'px';
+            body.style.transform = 'translate(' + ((iw - w * sx) / 2).toFixed(2) + 'px,' +
+                ((ih - h * sy) / 2).toFixed(2) + 'px) scale(' + sx.toFixed(5) + ',' + sy.toFixed(5) + ')';
+            window.dispatchEvent(new CustomEvent('rg-layout', { detail: { columns: l.n, width: w, height: h } }));
         }
         window.addEventListener('resize', apply);
         apply();
+    })();
+
+    // Bake. An SVG filter is recomputed over its whole region each time
+    // anything over or under it repaints, so a full-page noise texture
+    // (feTurbulence) costs a full render on every value update. An element
+    // marked
+    //   <rect data-rg-bake width="100%" height="100%" filter="url(#noise)"/>
+    // is drawn once into a bitmap that takes its place: an <image> put
+    // before it in the same <svg>, so nothing else in the page moves. The
+    // marked elements of one svg share a bitmap; it is drawn again when the
+    // svg changes size. Only the element and its filter go into the bitmap,
+    // so mark plain shapes whose look comes from the filter, not ones that
+    // need other definitions; they must be the svg's first drawn content.
+    (function () {
+        var entries = [];
+        function bake(entry) {
+            var svg = entry.svg, w = Math.round(svg.clientWidth), h = Math.round(svg.clientHeight);
+            if (!(w > 0 && h > 0)) return;
+            // as sharp as the page is shown, within reason
+            var body = document.body, shown = body.offsetWidth > 0 ? body.getBoundingClientRect().width / body.offsetWidth : 1;
+            var k = Math.min(Math.max(shown, 1), 2, Math.sqrt(8000000 / (w * h)));
+            var pw = Math.round(w * k), ph = Math.round(h * k);
+            var key = pw + 'x' + ph;
+            if (entry.key === key) return;
+            entry.key = key;
+            var ser = new XMLSerializer(), defs = '', shapes = '', seen = {};
+            entry.parts.forEach(function (el) {
+                var m = /url\(["']?#([^"')]+)/.exec(el.getAttribute('filter') || '');
+                var filter = m && document.getElementById(m[1]);
+                if (filter && !seen[m[1]]) { seen[m[1]] = true; defs += ser.serializeToString(filter); }
+                var copy = el.cloneNode(true);
+                copy.style.display = '';
+                var fill = getComputedStyle(el).fill;           // a colour the stylesheet gave it
+                if (fill && fill.indexOf('url') !== 0) copy.setAttribute('fill', fill);
+                shapes += ser.serializeToString(copy);
+            });
+            var img = new Image();
+            img.onload = function () {
+                if (entry.key !== key) return;                  // resized again meanwhile
+                var canvas = document.createElement('canvas'), png;
+                canvas.width = pw;
+                canvas.height = ph;
+                canvas.getContext('2d').drawImage(img, 0, 0, pw, ph);
+                try { png = canvas.toDataURL('image/png'); } catch (e) { return; }   // left as it was
+                entry.image.setAttribute('href', png);
+                entry.image.style.display = '';
+                entry.parts.forEach(function (el) { el.style.display = 'none'; });
+            };
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="' + pw + '" height="' + ph + '" viewBox="0 0 ' + w + ' ' + h + '"><defs>' +
+                defs + '</defs>' + shapes + '</svg>');
+        }
+        function bakeAll() { entries.forEach(bake); }
+        var timer = null;
+        function later() { clearTimeout(timer); timer = setTimeout(bakeAll, 120); }
+        var watch = window.ResizeObserver ? new ResizeObserver(later) : null;
+        function setup() {
+            Array.prototype.forEach.call(document.querySelectorAll('[data-rg-bake]'), function (el) {
+                var svg = el.ownerSVGElement;
+                if (!svg || !svg.parentNode) return;
+                var entry = entries.filter(function (e) { return e.svg === svg; })[0];
+                if (!entry) {
+                    var image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                    // 100%: until it is drawn again after a resize, the old bitmap stretches
+                    image.setAttribute('width', '100%');
+                    image.setAttribute('height', '100%');
+                    image.setAttribute('preserveAspectRatio', 'none');
+                    image.style.display = 'none';
+                    el.parentNode.insertBefore(image, el);
+                    entry = { svg: svg, image: image, parts: [], key: '' };
+                    entries.push(entry);
+                    if (watch) watch.observe(svg);
+                }
+                entry.parts.push(el);
+            });
+            if (!entries.length) return;
+            window.addEventListener('resize', later);
+            window.addEventListener('rg-layout', later);
+            bakeAll();
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
+        else setup();
     })();
 
     // Signal that the bridge is ready
@@ -1285,6 +1383,22 @@ mod tests {
                 include_str!("../../examples/gothic_panel.html"),
                 include_str!("../../examples/gothic_panel.css"),
             ),
+            (
+                include_str!("../../examples/western_panel.html"),
+                include_str!("../../examples/western_panel.css"),
+            ),
+            (
+                include_str!("../../examples/japandi_panel.html"),
+                include_str!("../../examples/japandi_panel.css"),
+            ),
+            (
+                include_str!("../../examples/gumdrop_panel.html"),
+                include_str!("../../examples/gumdrop_panel.css"),
+            ),
+            (
+                include_str!("../../examples/filigree_panel.html"),
+                include_str!("../../examples/filigree_panel.css"),
+            ),
         ];
         for (html, css) in panels {
             assert!(html.contains(r#"<meta name="rg-design-size" content="480x1920">"#));
@@ -1327,6 +1441,89 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A full-page noise texture (a 100% rect whose filter is feTurbulence)
+    /// is recomputed on every repaint unless the bridge bakes it, so every
+    /// example marks those with `data-rg-bake`.
+    #[test]
+    fn example_panels_bake_their_full_page_textures() {
+        assert!(generate_update_script().contains("[data-rg-bake]"));
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
+        let rect = regex::Regex::new(
+            r#"<rect ([^>]*)width="100%" height="100%" filter="url\(#([\w-]+)\)""#,
+        )
+        .unwrap();
+        let mut baked = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            if !name.ends_with("_panel.html") {
+                continue;
+            }
+            let html = std::fs::read_to_string(&path).unwrap();
+            for found in rect.captures_iter(&html) {
+                let start = html
+                    .find(&format!(r#"<filter id="{}""#, &found[2]))
+                    .unwrap_or_else(|| panic!("{name}: filter {} not found", &found[2]));
+                let end = start + html[start..].find("</filter>").unwrap();
+                if html[start..end].contains("feTurbulence") {
+                    assert!(
+                        found[1].contains("data-rg-bake"),
+                        "{name}: the full-page texture using #{} is not baked",
+                        &found[2]
+                    );
+                    baked += 1;
+                }
+            }
+        }
+        assert!(baked >= 14, "only {baked} baked textures found");
+    }
+
+    /// An example that lists arrangements (`rg-layouts`) starts from the
+    /// 480 px column, defaults to the `fill` fit and offers exactly the
+    /// column counts it lists as its Layout option.
+    #[test]
+    fn example_panels_that_rearrange_declare_their_layouts() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            if !name.ends_with("_panel.html") {
+                continue;
+            }
+            let html = std::fs::read_to_string(&path).unwrap();
+            let Some(list) = html
+                .split_once(r#"<meta name="rg-layouts" content=""#)
+                .and_then(|(_, rest)| rest.split_once('"'))
+                .map(|(list, _)| list.to_string())
+            else {
+                continue;
+            };
+            seen += 1;
+            let widths: Vec<u32> = list
+                .split_whitespace()
+                .map(|size| size.split_once('x').unwrap().0.parse().unwrap())
+                .collect();
+            assert_eq!(widths[0], 480, "{name}: the first arrangement is one column");
+            let mut columns: Vec<String> = widths.iter().map(|w| (w / 480).to_string()).collect();
+            columns.insert(0, "0".to_string());
+            let options = extract_template_options(&html);
+            assert!(!options.is_empty(), "{name}: the options block parses");
+            let fit = options.iter().find(|o| o.id == "fit").unwrap();
+            assert_eq!(fit.default, "fill", "{name}: re-arranging is the default fit");
+            let layout = options
+                .iter()
+                .find(|o| o.id == "columns")
+                .unwrap_or_else(|| panic!("{name}: no Layout option"));
+            let OptionKind::Choice(choices) = &layout.kind else {
+                panic!("{name}: Layout is a choice");
+            };
+            let offered: Vec<String> = choices.iter().map(|c| c.value.clone()).collect();
+            assert_eq!(offered, columns, "{name}: Layout offers the listed column counts");
+        }
+        assert!(seen >= 12, "only {seen} examples list arrangements");
     }
 
     #[test]

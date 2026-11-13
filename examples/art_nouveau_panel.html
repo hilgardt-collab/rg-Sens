@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1210 1440x1010 2880x725">
 <title>Art Nouveau Sensor Panel</title>
 <!--
   Art Nouveau sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -41,13 +42,18 @@
 
   Options and size: the settings named above are also on the panel's Display
   tab in rg-Sens (Template Options, declared in the rg-template-options block
-  below), so the stylesheet need not be edited. The design is drawn for
-  480x1920 and is scaled to whatever size the panel has.
+  below), so the stylesheet need not be edited.
+
+  Size: the design is drawn for 480x1920, but its six groups re-arrange to
+  suit the panel: one column of six, two of three, three of two or six side
+  by side (the rg-layouts list gives the size each needs), and then take up
+  the panel's exact shape. The Layout option fixes the column count; the Fit
+  option can crop, letterbox or distort instead.
 -->
 <link rel="stylesheet" href="art_nouveau_panel.css">
 </head>
 <body>
-<div style="width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden; background-color: var(--bg); background-image: radial-gradient(var(--dots) 1px, transparent 1.6px); background-size: 14px 14px; font-family: 'Cormorant Garamond', serif; color: var(--cream); padding: 116px 46px 132px; display: flex; flex-direction: column; justify-content: space-between">
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background-color: var(--bg); background-image: radial-gradient(var(--dots) 1px, transparent 1.6px); background-size: 14px 14px; font-family: 'Cormorant Garamond', serif; color: var(--cream); padding: 116px 46px 132px; display: flex; flex-direction: column; gap: 8px">
 
   <!-- shared gradients -->
   <svg aria-hidden="true" width="0" height="0" style="position: absolute; top: 0; left: 0">
@@ -72,12 +78,12 @@
   </svg>
 
   <!-- ===== FRAME: border, climbing vines, Guimard arches ===== -->
-  <svg aria-hidden="true" width="480" height="1920" viewBox="0 0 480 1920" style="position: absolute; top: 0; left: 0; pointer-events: none">
-    <rect x="10" y="10" width="460" height="1900" rx="24" fill="none" stroke-width="1.6" style="stroke: url(#nv-gold) var(--m-mid)"></rect>
-    <rect x="15.5" y="15.5" width="449" height="1889" rx="19" fill="none" stroke-width="0.8" opacity="0.55" style="stroke: var(--l-mid)"></rect>
-
-    <!-- left vine -->
-    <g>
+  <!-- the rim, the two vines and the two arches follow the panel's box:
+       the rim is drawn by the stylesheet, a vine hangs down each side and
+       an arch sits at the middle of the top and of the bottom -->
+  <div class="rim" aria-hidden="true"></div>
+  <svg class="vine l" aria-hidden="true" width="60" height="100%" viewBox="0 0 60 1920" preserveAspectRatio="xMinYMin slice">
+    <g id="nv-vine">
       <path d="M28 1770 C28 1735 22 1735 22 1700 C22 1665 34 1665 34 1630 C34 1595 22 1595 22 1560 C22 1525 34 1525 34 1490 C34 1455 22 1455 22 1420 C22 1385 34 1385 34 1350 C34 1315 22 1315 22 1280 C22 1245 34 1245 34 1210 C34 1175 22 1175 22 1140 C22 1105 34 1105 34 1070 C34 1035 22 1035 22 1000 C22 965 34 965 34 930 C34 895 22 895 22 860 C22 825 34 825 34 790 C34 755 22 755 22 720 C22 685 34 685 34 650 C34 615 22 615 22 580 C22 545 34 545 34 510 C34 475 22 475 22 440 C22 405 34 405 34 370 C34 335 22 335 22 300 C22 265 34 265 34 230 C34 195 22 195 22 160" fill="none" stroke-width="2.2" style="stroke: url(#nv-sage) var(--l-mid)"></path>
       <path d="M34 1490 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path><path d="M22 1140 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path><path d="M34 790 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path><path d="M22 440 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path>
       
@@ -176,109 +182,9 @@
       
       <circle cx="15.0" cy="1564.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="1284.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="1004.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="724.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="444.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="164.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle>
     </g>
-    <!-- right vine (mirror) -->
-    <g transform="translate(480 0) scale(-1 1)">
-      <path d="M28 1770 C28 1735 22 1735 22 1700 C22 1665 34 1665 34 1630 C34 1595 22 1595 22 1560 C22 1525 34 1525 34 1490 C34 1455 22 1455 22 1420 C22 1385 34 1385 34 1350 C34 1315 22 1315 22 1280 C22 1245 34 1245 34 1210 C34 1175 22 1175 22 1140 C22 1105 34 1105 34 1070 C34 1035 22 1035 22 1000 C22 965 34 965 34 930 C34 895 22 895 22 860 C22 825 34 825 34 790 C34 755 22 755 22 720 C22 685 34 685 34 650 C34 615 22 615 22 580 C22 545 34 545 34 510 C34 475 22 475 22 440 C22 405 34 405 34 370 C34 335 22 335 22 300 C22 265 34 265 34 230 C34 195 22 195 22 160" fill="none" stroke-width="2.2" style="stroke: url(#nv-sage) var(--l-mid)"></path>
-      <path d="M34 1490 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path><path d="M22 1140 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path><path d="M34 790 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path><path d="M22 440 c-8 -2 -12 -10 -7 -14 c4 -3 8 1 5 4 c-1 1 -3 1 -3 0" fill="none" stroke-width="1.3" style="stroke: var(--l-mid)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(25 1735) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(25 1735) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1665) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1665) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1661) rotate(-45) scale(0.8)" style="fill: url(#nv-gold) var(--m-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1661) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1595) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1595) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1525) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1525) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1455) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1455) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1451) rotate(-45) scale(0.8)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1451) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1385) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1385) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1315) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1315) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1245) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1245) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1241) rotate(-45) scale(0.8)" style="fill: url(#nv-gold) var(--m-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1241) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1175) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1175) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1105) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1105) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1035) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1035) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 1031) rotate(-45) scale(0.8)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 1031) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 965) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 965) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 895) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 895) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 825) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 825) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 821) rotate(-45) scale(0.8)" style="fill: url(#nv-gold) var(--m-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 821) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 755) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 755) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 685) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 685) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 615) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 615) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 611) rotate(-45) scale(0.8)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 611) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 545) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 545) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 475) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 475) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 405) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 405) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 401) rotate(-45) scale(0.8)" style="fill: url(#nv-gold) var(--m-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 401) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 335) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 335) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 265) rotate(-125)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 265) rotate(-125)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 195) rotate(-150)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 195) rotate(-150)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-        <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(28 191) rotate(-45) scale(0.8)" style="fill: url(#nv-sage) var(--l-mid)"></path>
-        <path d="M1 0 L15 0" transform="translate(28 191) rotate(-45) scale(0.8)" stroke-width="0.8" opacity="0.7" style="stroke: var(--bg)"></path>
-      
-      <circle cx="15.0" cy="1564.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="1284.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="1004.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="724.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="444.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle><circle cx="15.0" cy="164.0" r="3" stroke-width="0.8" style="fill: var(--rose); stroke: var(--m-mid)"></circle>
-    </g>
-
-    <!-- top arch (Guimard) -->
-    <g>
+  </svg>
+  <svg class="vine r" aria-hidden="true" width="60" height="100%" viewBox="0 0 60 1920" preserveAspectRatio="xMinYMin slice"><use href="#nv-vine"></use></svg>
+  <svg class="arch t" aria-hidden="true" width="480" height="160" viewBox="0 0 480 160">
       <path d="M22 152 C22 72 100 48 170 52 C206 54 222 32 240 18 C258 32 274 54 310 52 C380 48 458 72 458 152" fill="none" stroke-width="3.2" style="stroke: url(#nv-gold) var(--m-mid)"></path>
       <path d="M34 152 C34 84 104 62 170 65 C210 67 226 46 240 34 C254 46 270 67 310 65 C376 62 446 84 446 152" fill="none" stroke-width="1.3" style="stroke: url(#nv-sage) var(--l-mid)"></path>
       <path d="M150 55 C126 57 104 70 108 86 C111 97 128 95 126 85 C124 78 116 80 117 85" fill="none" stroke-width="1.8" style="stroke: url(#nv-gold) var(--m-mid)"></path>
@@ -293,18 +199,17 @@
       <path d="M422 152 C422 112 416 94 396 82" fill="none" stroke-width="2.2" style="stroke: url(#nv-gold) var(--m-mid)"></path>
       <ellipse cx="392" cy="74" rx="15" ry="19" transform="rotate(-35 392 74)" fill="#E0893A" opacity="0.16"></ellipse>
       <ellipse cx="392" cy="74" rx="7.5" ry="11.5" transform="rotate(-35 392 74)" fill="url(#nv-amber) #E0893A" stroke-width="1.2" style="stroke: var(--m-mid)"></ellipse>
-    </g>
-
-    <!-- bottom arch (mirror of the top, no lamps) -->
-    <g transform="translate(0 1920) scale(1 -1)">
+  </svg>
+  <svg class="arch b" aria-hidden="true" width="480" height="160" viewBox="0 0 480 160">
       <path d="M22 152 C22 72 100 48 170 52 C206 54 222 32 240 18 C258 32 274 54 310 52 C380 48 458 72 458 152" fill="none" stroke-width="3.2" style="stroke: url(#nv-gold) var(--m-mid)"></path>
       <path d="M34 152 C34 84 104 62 170 65 C210 67 226 46 240 34 C254 46 270 67 310 65 C376 62 446 84 446 152" fill="none" stroke-width="1.3" style="stroke: url(#nv-sage) var(--l-mid)"></path>
       <path d="M150 55 C126 57 104 70 108 86 C111 97 128 95 126 85 C124 78 116 80 117 85" fill="none" stroke-width="1.8" style="stroke: url(#nv-gold) var(--m-mid)"></path>
       <path d="M330 55 C354 57 376 70 372 86 C369 97 352 95 354 85 C356 78 364 80 363 85" fill="none" stroke-width="1.8" style="stroke: url(#nv-gold) var(--m-mid)"></path>
       <circle cx="240" cy="28" r="5" stroke-width="1.2" style="fill: var(--rose); stroke: var(--m-mid)"></circle>
-    </g>
   </svg>
 
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
   <!-- ===== HEADER: Mucha halo ===== -->
   <header style="display: flex; flex-direction: column; align-items: center; gap: 4px">
     <div style="position: relative; width: 388px; height: 46px">
@@ -714,6 +619,8 @@
     </div>
   </section>
 
+  </div>
+
   <!-- ===== FOOTER: water lily ===== -->
   <footer style="display: flex; flex-direction: column; align-items: center; gap: 4px">
     <svg aria-hidden="true" width="240" height="84" viewBox="0 0 240 84">
@@ -751,7 +658,8 @@
 [
     {"id": "metal", "label": "Metal", "type": "choice", "var": "--metal", "default": "#C9A24A", "choices": [{"value": "#C9A24A", "label": "Gold"}, {"value": "#B87A4B", "label": "Copper"}, {"value": "#C98B7A", "label": "Rose gold"}, {"value": "#BFC3BA", "label": "Pewter"}]},
     {"id": "foliage", "label": "Foliage", "type": "choice", "var": "--foliage", "default": "#8FAE8B", "choices": [{"value": "#8FAE8B", "label": "Sage"}, {"value": "#5E9C93", "label": "Teal"}, {"value": "#9AA05A", "label": "Olive"}, {"value": "#9A7A9E", "label": "Plum"}]},
-    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]}
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]}
 ]
 </script>
 

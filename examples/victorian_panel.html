@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1060 1440x775 2880x450">
 <title>Victorian Sensor Panel</title>
 <!--
   Victorian sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -51,8 +52,14 @@
   Options (the panel's Display tab, or the top of victorian_panel.css):
   wallpaper (Burgundy, Bottle Green, Midnight Blue), how the design fits the
   panel, the frame rate of what moves, and the full scale of the fan bars and
-  the traffic chart. The design is drawn for 480x1920 and is scaled to
-  whatever size the panel has.
+  the traffic chart.
+
+  Size: the design is drawn for 480x1920, but its six frames re-arrange to
+  suit the panel: one column of six, two of three, three of two or six side
+  by side (the rg-layouts list gives the size each needs), and the frames
+  then stretch to the panel's exact shape. The wallpaper covers any size.
+  The Layout option fixes the column count; the Fit option can crop,
+  letterbox or distort instead.
 
   Motion: the gaslight flickers softly and the seconds dial sweeps, at
   --motion-fps frames a second; nothing else moves. 0 turns motion off (the
@@ -82,7 +89,8 @@
         <stop offset="0.85" style="stop-color: #F4EDDC"></stop>
         <stop offset="1" style="stop-color: #DCCFAF"></stop>
       </radialGradient>
-      <!-- one damask motif; the script hangs the wall with it -->
+      <!-- one damask motif, and the tile that hangs the wall with it: a motif
+           every 80 px across and 120 px down, each other column dropped by half -->
       <g id="vc-motif">
         <path class="m" d="M40 14 C54 34 56 56 40 78 C26 56 26 34 40 14 Z"></path>
         <path class="w" d="M40 30 C47 42 47 56 40 66 C33 56 33 42 40 30 Z"></path>
@@ -90,16 +98,18 @@
         <path class="s" d="M40 14 C36 6 40 0 44 4 C46 6 44 10 40 8" stroke-width="2"></path>
         <path class="m" d="M0 93 L5 100 L0 107 L-5 100 Z M40 96 L44 101 L40 106 L36 101 Z"></path>
       </g>
+      <pattern id="vc-wall" width="160" height="120" patternUnits="userSpaceOnUse"><use href="#vc-motif" x="-160" y="-120"></use><use href="#vc-motif" x="-160" y="0"></use><use href="#vc-motif" x="-160" y="120"></use><use href="#vc-motif" x="0" y="-120"></use><use href="#vc-motif" x="0" y="0"></use><use href="#vc-motif" x="0" y="120"></use><use href="#vc-motif" x="160" y="-120"></use><use href="#vc-motif" x="160" y="0"></use><use href="#vc-motif" x="160" y="120"></use><use href="#vc-motif" x="-80" y="-60"></use><use href="#vc-motif" x="-80" y="60"></use><use href="#vc-motif" x="-80" y="180"></use><use href="#vc-motif" x="80" y="-60"></use><use href="#vc-motif" x="80" y="60"></use><use href="#vc-motif" x="80" y="180"></use><use href="#vc-motif" x="240" y="-60"></use><use href="#vc-motif" x="240" y="60"></use><use href="#vc-motif" x="240" y="180"></use></pattern>
       <!-- corner flourish, copied into each card's four corners -->
       <g id="vc-corner"><path d="M3 27 V10 C3 6 6 3 10 3 H27 M8 22 C8 14 14 8 22 8 M13 18 C13 15 15 13 18 13"></path><circle cx="18" cy="13" r="1.6"></circle></g>
     </defs>
   </svg>
 
   <!-- ===== damask wallpaper and gaslight ===== -->
-  <svg class="wall" data-wall aria-hidden="true" width="480" height="1920" viewBox="0 0 480 1920"></svg>
+  <svg class="wall" aria-hidden="true" width="100%" height="100%"><rect width="100%" height="100%" fill="url(#vc-wall)"></rect></svg>
   <div class="gas" aria-hidden="true"></div>
 
-  <!-- ===== header: pocket watch ===== -->
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
   <section class="frame">
     <div class="card head">
       <svg class="watch" data-watch role="img" aria-label="Pocket watch" width="160" height="184" viewBox="0 0 200 230">
@@ -262,6 +272,8 @@
     </div>
   </section>
 
+  </div>
+
   <footer class="ribbon" data-need="73">
     <svg aria-hidden="true" width="420" height="56" viewBox="0 0 420 56">
       <polygon points="0,16 46,16 46,54 0,54 14,35" fill="#5E0F12"></polygon>
@@ -278,7 +290,8 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "wallpaper", "label": "Wallpaper", "type": "choice", "default": "burgundy", "choices": [{"value": "burgundy", "label": "Burgundy", "set": {"--wall": "#3A0E14", "--motif": "#521821"}}, {"value": "green", "label": "Bottle Green", "set": {"--wall": "#0F2A1E", "--motif": "#1C4432"}}, {"value": "blue", "label": "Midnight Blue", "set": {"--wall": "#101A33", "--motif": "#1C2C52"}}]},
-    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
     {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 4, "help": "The gaslight's flicker and the watch's seconds dial; 0 turns motion off"},
     {"id": "fan_max", "label": "Fan full scale (r.p.m.)", "type": "number", "var": "--fan-max", "min": 500, "max": 10000, "step": 100, "default": 2400, "help": "Used when a fan has no maximum of its own"},
     {"id": "net_max", "label": "Traffic chart full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
@@ -455,13 +468,6 @@
   }
 
   // ------------------------------------------------------- drawn once
-  // The wall: one damask motif every 80 px across and 120 px down, each
-  // other column dropped by half.
-  each('[data-wall]', function (wall) {
-    for (var col = -1; col <= 6; col++) {
-      for (var y = col % 2 ? -60 : -120; y <= 1980; y += 120) svg('use', { href: '#vc-motif', x: col * 80, y: y }, wall);
-    }
-  });
   // Corner flourishes on every card.
   each('.card', function (card) {
     ['tl', 'tr', 'bl', 'br'].forEach(function (at) {

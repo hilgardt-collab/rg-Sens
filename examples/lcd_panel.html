@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1660 960x1030 1440x780 2880x500">
 <title>LCD Sensor Panel</title>
 <!--
   LCD sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait:
@@ -58,8 +59,13 @@
   Options (the panel's Display tab, or the top of lcd_panel.css): backlight
   (Classic Green, Blue Backlight, Amber, Night Red), how the design fits the
   panel, the tick rate of what moves, the temperature that lights the warning
-  triangle, and the full scale of the fan bars and the network chart. The
-  design is drawn for 480x1920 and is scaled to whatever size the panel has.
+  triangle, and the full scale of the fan bars and the network chart.
+
+  Size: the design is drawn for 480x1920, but its six groups re-arrange to
+  suit the panel: one column of six, two of three, three of two or six side
+  by side (the rg-layouts list gives the size each needs), and the windows
+  then stretch to the panel's exact shape. The Layout option fixes the
+  column count; the Fit option can crop, letterbox or distort instead.
 
   Motion: nothing fades, an LCD switches. The clock and uptime colons blink
   once a second, each fan icon flips between two frames faster with RPM, the
@@ -87,6 +93,8 @@
     </div>
   </header>
 
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
   <section data-need="0">
     <div class="ch"><span>TIME</span><i></i><span>CH 00</span></div>
     <div class="bezel"><div class="lcd clock">
@@ -247,6 +255,8 @@
     </div></div>
   </section>
 
+  </div>
+
   <section data-need="73">
     <div class="ch"><span>UPTIME</span><i></i><span>CH 06</span></div>
     <div class="up">
@@ -266,7 +276,8 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "backlight", "label": "Backlight", "type": "choice", "var": "--backlight", "default": "green", "choices": [{"value": "green", "label": "Classic Green"}, {"value": "blue", "label": "Blue Backlight"}, {"value": "amber", "label": "Amber"}, {"value": "red", "label": "Night Red"}]},
-    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
     {"id": "fps", "label": "Motion ticks per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 8, "help": "How often the colons, fan icons and status lights are switched; 0 turns motion off"},
     {"id": "warn_temp", "label": "Warning triangle from (°C)", "type": "number", "var": "--warn-temp", "min": 30, "max": 110, "step": 1, "default": 72},
     {"id": "fan_max", "label": "Fan full scale (RPM)", "type": "number", "var": "--fan-max", "min": 500, "max": 10000, "step": 100, "default": 2400, "help": "Used when a fan has no maximum of its own"},

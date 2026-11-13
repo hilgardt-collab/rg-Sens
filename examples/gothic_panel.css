@@ -13,8 +13,11 @@
   src: local("Spectral SC"), url("fonts/spectral-sc/SpectralSC-Regular.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch). */
-  --rg-fit: cover;
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
   /* The one accent: colour, its light shade, its deep shade, and the glow
      it casts.
        Blood       #7A0C1A #A3222F #240308   (default)
@@ -63,3 +66,22 @@ html, body { margin: 0; background: #0B0A0C; }
 [data-state].burning { color: var(--accent-lt) !important; }
 /* A burning dial's arc pulses. */
 [data-arc].burning { animation: gx-pulse 1.4s ease-in-out infinite; }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over, so every
+   stone panel stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 12px 26px; align-content: stretch; }
+.groups > header { justify-content: center; }
+.groups > section { display: flex; flex-direction: column; min-width: 0; }
+.groups > section > div:nth-child(2) { flex: 1; justify-content: space-around; }
+/* Lace fans keep to the four corners, iron columns to the two sides. */
+.lace, .iron { position: absolute; z-index: 0; pointer-events: none; }
+.lace { opacity: 0.32; }
+.lace.tl { top: 0; left: 0; }
+.lace.tr { top: 0; right: 0; transform: scaleX(-1); }
+.lace.bl { bottom: 0; left: 0; transform: scaleY(-1); }
+.lace.br { bottom: 0; right: 0; transform: scale(-1, -1); }
+.iron { top: 0; opacity: 0.55; max-height: 1920px; }
+.iron.l { left: 0; }
+.iron.r { right: 0; transform: scaleX(-1); }

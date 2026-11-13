@@ -677,7 +677,7 @@ mod tests {
         assert_eq!(mapped(&values, "min"), "--");
     }
 
-    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior, Leather & Wood, LCD, Victorian, Mughal Peacock, Bauhaus and Gothic examples: every placeholder they
+    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior, Leather & Wood, LCD, Victorian, Mughal Peacock, Bauhaus, Gothic, Western and Japandi examples: every placeholder they
     /// use has an auto-configure entry, the numbering has no holes, the two
     /// share one mapping, and none loads anything from the network.
     #[test]
@@ -754,9 +754,29 @@ mod tests {
         let gothic_defaults = extract_placeholder_defaults(gothic);
         assert_eq!(gothic_defaults.len(), deco.len() + 1);
         assert_eq!(gothic_defaults[&90].field, "year");
+        // Western keeps to the shared 74.
+        let western = include_str!("../../examples/western_panel.html");
+        assert!(detect_placeholders(western).is_empty());
+        assert!(!western.contains("fonts.googleapis.com"));
+        assert_eq!(extract_placeholder_defaults(western).len(), deco.len());
+        // Japandi has the year on 90.
+        let japandi = include_str!("../../examples/japandi_panel.html");
+        assert!(detect_placeholders(japandi).is_empty());
+        assert!(!japandi.contains("fonts.googleapis.com"));
+        let japandi_defaults = extract_placeholder_defaults(japandi);
+        assert_eq!(japandi_defaults.len(), deco.len() + 1);
+        assert_eq!(japandi_defaults[&90].field, "year");
+        // Glass & Gumdrop and Filigree keep to the shared 74.
+        let gumdrop = include_str!("../../examples/gumdrop_panel.html");
+        let filigree = include_str!("../../examples/filigree_panel.html");
+        for plain in [gumdrop, filigree] {
+            assert!(detect_placeholders(plain).is_empty());
+            assert!(!plain.contains("fonts.googleapis.com"));
+            assert_eq!(extract_placeholder_defaults(plain).len(), deco.len());
+        }
         for other in [
             nouveau, steampunk, neon, lcars, warrior, leather, lcd, victorian, mughal, bauhaus,
-            gothic,
+            gothic, western, japandi, gumdrop, filigree,
         ] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {

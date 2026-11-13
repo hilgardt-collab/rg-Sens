@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
-<meta name="rg-layouts" content="480x1920 960x1070 1440x720">
+<meta name="rg-layouts" content="480x1760 960x1000 1440x715 2880x450">
 <title>Neon Sensor Panel</title>
 <!--
   Neon sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait.
@@ -55,8 +55,10 @@
   Options and size: the settings named above are also on the panel's Display
   tab in rg-Sens (Template Options, declared in the rg-template-options block
   below), so the stylesheet need not be edited. The design is drawn for
-  480x1920 and is scaled to whatever size the panel has; in a wide panel
-  its sections are arranged in two or three columns (Layout option).
+  480x1920, but its six groups (the clock and the five cards) re-arrange to
+  suit the panel: one column of six, two of three, three of two or six side
+  by side (Layout option), and the cards then stretch to the panel's exact
+  shape. The Fit option can crop, letterbox or distort instead.
 -->
 <link rel="stylesheet" href="neon_panel.css">
 </head>
@@ -77,6 +79,8 @@
   <div class="bg floor" aria-hidden="true"><div></div></div>
   <div class="bg horizon" aria-hidden="true"></div>
 
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
   <header>
     <div class="topbar">
       <div class="brand">
@@ -342,6 +346,8 @@
     </div>
   </section>
 
+  </div>
+
   <footer data-section="uptime">
     <div class="rule"></div>
     <div data-need="73"><span class="label">UPTIME</span><span class="uptime uni" data-uptime="73">--</span></div>
@@ -354,8 +360,8 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "palette", "label": "Palette", "type": "choice", "default": "cyan", "choices": [{"value": "cyan", "label": "Cyan + Magenta", "set": {"--a": "#22E4FF", "--b": "#FF2BD6"}}, {"value": "lime", "label": "Lime + Cyan", "set": {"--a": "#B6FF3B", "--b": "#22E4FF"}}, {"value": "amber", "label": "Amber + Pink", "set": {"--a": "#FFB020", "--b": "#FF3B8D"}}, {"value": "violet", "label": "Violet + Blue", "set": {"--a": "#9B5CFF", "--b": "#3BA4FF"}}]},
-    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the sections are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column"}, {"value": "2", "label": "Two columns"}, {"value": "3", "label": "Three columns"}]},
-    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
     {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
     {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
     {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},

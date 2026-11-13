@@ -15,8 +15,11 @@
   src: local("IM FELL English SC"), url("fonts/im-fell-english-sc/IMFeENsc28P.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch). */
-  --rg-fit: cover;
+  /* How the design fits the panel: fill (the frames re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the frames are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
   /* Wallpaper: the wall and its damask motif.
        Burgundy       #3A0E14 #521821   (default)
        Bottle Green   #0F2A1E #1C4432
@@ -41,9 +44,18 @@ html, body { margin: 0; background: var(--wall); }
 .rg-placeholder { transition: none; }
 
 /* ------------------------------------------------------------ the room */
-.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns. */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
   background: var(--wall); font-family: "IM Fell English", Georgia, serif; color: var(--ink);
-  padding: 26px 22px 24px; display: flex; flex-direction: column; justify-content: space-between; }
+  padding: 26px 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+/* The groups: a grid of --rg-cols columns whose rows share the height left
+   over, so every frame stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 12px 22px; align-content: stretch; }
+.groups > .frame { display: flex; flex-direction: column; }
+.groups > .frame > .card { flex: 1; justify-content: space-around; }
+.groups > .frame > .card.head { justify-content: center; }
 .wall, .gas { position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none; }
 #vc-motif .m { fill: var(--motif); }
 #vc-motif .w { fill: var(--wall); }
@@ -140,7 +152,7 @@ html, body { margin: 0; background: var(--wall); }
 .card.traffic { padding: 16px 20px; gap: 8px; }
 .traffic .now { display: flex; justify-content: space-between; align-items: baseline; font-style: italic; font-size: 16px; white-space: nowrap; }
 .traffic .now .in { color: var(--red); }
-.chart { display: block; }
+.chart { display: block; align-self: center; }
 .chart text { font-family: "IM Fell English", serif; font-style: italic; font-size: 10px; fill: var(--ink); }
 .traffic .ends { display: flex; justify-content: space-between; margin-top: -4px; padding: 0 22px; }
 

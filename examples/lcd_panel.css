@@ -8,8 +8,11 @@
   src: local("Share Tech Mono"), url("fonts/share-tech-mono/ShareTechMono-Regular.ttf") format("truetype"); }
 
 :root {
-  /* How the design fits the panel (cover, contain or stretch). */
-  --rg-fit: cover;
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
   /* Backlight: green (reflective), blue, amber or red (night). */
   --backlight: green;
   /* Ticks a second for what switches: colons, fan icons, status lights.
@@ -56,13 +59,21 @@ html, body { margin: 0; background: #1D1E21; }
 .rg-placeholder { transition: none; }
 
 /* ---------------------------------------------------------------- housing */
-.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns. */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
   background-color: #1E1F22;
   background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 8%, rgba(255,255,255,0) 92%, rgba(0,0,0,0.3) 100%),
     repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
   font-family: "Share Tech Mono", monospace; color: #C9CCD2; padding: 22px;
-  display: flex; flex-direction: column; justify-content: space-between; }
+  display: flex; flex-direction: column; gap: 14px; }
 .panel span { white-space: nowrap; }
+/* The groups: a grid of --rg-cols columns whose rows share the height left
+   over, so every window stretches to its cell. */
+.groups { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr));
+  gap: 14px 22px; align-content: stretch; }
+.groups > section > .bezel { flex: 1; display: flex; flex-direction: column; }
+.groups > section > .bezel > .lcd { flex: 1; justify-content: space-between; }
 
 .top { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; }
 .top .title { display: flex; flex-direction: column; gap: 2px; }
@@ -76,7 +87,7 @@ html, body { margin: 0; background: #1D1E21; }
 .led.amber { background: #FFB020; box-shadow: 0 0 6px #FFB020, inset 0 -1px 2px rgba(0,0,0,0.4); }
 .led.dim { opacity: 0.25; }
 
-.panel > section { display: flex; flex-direction: column; gap: 6px; }
+.panel section { display: flex; flex-direction: column; gap: 6px; }
 .ch { display: flex; align-items: center; gap: 10px; }
 .ch span { font-size: 12px; letter-spacing: 0.24em; color: #FF8A00; }
 .ch i { flex: 1; height: 1px; background: #3A3C42; }

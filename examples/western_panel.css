@@ -1,0 +1,136 @@
+/* Western Sensor Panel: stylesheet for western_panel.html (rg-Sens CSS Template displayer).
+   Sky, fonts, the grid of groups and the few classes the page's script
+   switches; the drawing itself is inline in the HTML. Setup notes are at the
+   top of the HTML file. */
+
+/* Bundled fonts: Rye and Alfa Slab One (SIL Open Font License) and Special
+   Elite (Apache 2.0); the licence is in each folder. Keep the fonts folder
+   next to this file; without it the page falls back to system fonts. */
+@font-face { font-family: "Rye"; font-weight: 400; font-style: normal;
+  src: local("Rye"), url("fonts/rye/Rye-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Alfa Slab One"; font-weight: 400; font-style: normal;
+  src: local("Alfa Slab One"), url("fonts/alfa-slab-one/AlfaSlabOne-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Special Elite"; font-weight: 400; font-style: normal;
+  src: local("Special Elite"), url("fonts/special-elite/SpecialElite-Regular.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* The vista's sky: sunset, noon or moon. */
+  --sky: sunset;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Belt full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Telegraph chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  --ink: #2A1A0F;
+  --sub: #5E4630;
+  --rust: #8E2B17;
+
+  /* Sunset */
+  --sky-1: #1E1530;
+  --sky-2: #5A2A4A;
+  --sky-3: #C2522E;
+  --sky-4: #F5A54A;
+  --sun-1: #FFE6A0;
+  --sun-2: #F08A2E;
+  --sun-glow: #FFAA50;
+  --haze: #F08C50;
+  --far: #8A4A52;
+  --butte: #4A2430;
+  --edge: #F08A50;
+  --ground-1: #3A2018;
+  --ground-2: #1A0E0A;
+  --fore: #140A08;
+  --cloud: #F3A27A;
+  --track: #C27A4A;
+  --clock: #FBE9C9;
+  --clock-glow: #FFAA50;
+}
+:root[data-sky="noon"] {
+  --sky-1: #4E7FAA; --sky-2: #86AECB; --sky-3: #C9D6D2; --sky-4: #EAD9B0;
+  --sun-1: #FFFFFF; --sun-2: #FFF4D0; --sun-glow: #FFFFFF; --haze: #EAD6B0;
+  --far: #B39078; --butte: #9A5E3A; --edge: #F2C59A;
+  --ground-1: #C08C58; --ground-2: #8A5C34; --fore: #4A2E18;
+  --cloud: #FFFFFF; --track: #E6C298; --clock: #FFF8EA; --clock-glow: rgba(40, 70, 110, 0.55);
+}
+:root[data-sky="moon"] {
+  --sky-1: #04060E; --sky-2: #0C1628; --sky-3: #1E2E4C; --sky-4: #3A4C6E;
+  --sun-1: #FAF8EE; --sun-2: #C6CAD6; --sun-glow: #A8B8E0; --haze: #3A4C72;
+  --far: #24304C; --butte: #141A2E; --edge: #8EA2CC;
+  --ground-1: #121826; --ground-2: #06080E; --fore: #03050A;
+  --cloud: #3A4866; --track: #2E3A58; --clock: #E8EEF8; --clock-glow: #6A84C0;
+}
+html, body { margin: 0; background: #2A1A10; }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* The vista's shapes carry the sunset as attributes; these follow the sky. */
+[stop-color="#1E1530"] { stop-color: var(--sky-1); }
+[stop-color="#5A2A4A"] { stop-color: var(--sky-2); }
+[stop-color="#C2522E"] { stop-color: var(--sky-3); }
+[stop-color="#F5A54A"] { stop-color: var(--sky-4); }
+[stop-color="#FFE6A0"] { stop-color: var(--sun-1); }
+[stop-color="#F08A2E"] { stop-color: var(--sun-2); }
+[stop-color="#FFAA50"] { stop-color: var(--sun-glow); }
+[stop-color="#F08C50"] { stop-color: var(--haze); }
+[stop-color="#3A2018"] { stop-color: var(--ground-1); }
+[stop-color="#1A0E0A"] { stop-color: var(--ground-2); }
+[fill="#8A4A52"] { fill: var(--far); }
+[fill="#4A2430"] { fill: var(--butte); }
+[stroke="#4A2430"] { stroke: var(--butte); }
+[fill="#F08A50"] { fill: var(--edge); }
+[stroke="#F08A50"] { stroke: var(--edge); }
+[fill="#140A08"] { fill: var(--fore); }
+[stroke="#140A08"] { stroke: var(--fore); }
+[fill="#F3A27A"] { fill: var(--cloud); }
+[fill="#C27A4A"] { fill: var(--track); }
+:root[data-sky="noon"] .stars { display: none; }
+:root[data-sky="moon"] .stars circle { opacity: 0.95; }
+
+@keyframes wx-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes wx-sway { 0%,100% { transform: rotate(-0.8deg); } 50% { transform: rotate(0.8deg); } }
+@keyframes wx-drift { 0%,100% { transform: translateX(-6px); } 50% { transform: translateX(6px); } }
+@keyframes wx-ember { 0%,100% { opacity: 1; } 35% { opacity: .78; } 70% { opacity: .92; } }
+@keyframes wx-spin { to { transform: rotate(360deg); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over, so every
+   poster stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 14px 24px; align-content: stretch; }
+.groups > section { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.groups > .vista { align-items: center; }
+/* a poster's paper fills its cell; what is under the title shares the room */
+.groups > section[data-section] > div:first-child { flex: 1; }
+.groups > section[data-section] > div:first-child > div:nth-child(n+3) { margin-top: auto; margin-bottom: auto; }
+
+/* A hot horseshoe glows and flickers. */
+[data-heat].ember { filter: drop-shadow(0 0 5px #E8641E); animation: wx-ember 2.2s ease-in-out infinite; }
+[data-state].warm { color: var(--rust) !important; }
+[data-state].hot { color: #B8401F !important; }
+
+/* Gun belts: one loop per <i>, written by the script; a filled loop holds a
+   brass cartridge with a lead tip behind the leather. */
+[data-belt] i { position: relative; width: 12px; height: 28px; flex: none; }
+[data-belt] i s { display: none; position: absolute; left: 2px; top: -6px; width: 8px; height: 7px; border-radius: 4px 4px 1px 1px;
+  background: radial-gradient(circle at 35% 30%, #D8D0C4 0%, #7A7268 55%, #3A3530 100%); }
+[data-belt] i b { display: none; position: absolute; left: 1.5px; top: 0; width: 9px; height: 16px;
+  background: linear-gradient(90deg, #6E4E1A 0%, #F0CE78 35%, #B88A34 62%, #5E4014 100%); }
+[data-belt] i.on s, [data-belt] i.on b { display: block; }
+[data-belt] i u { position: absolute; left: 0; right: 0; bottom: 2px; height: 16px; border-radius: 2px;
+  background: linear-gradient(90deg, #3E200E 0%, #7A4A28 40%, #6A3C1E 60%, #3A1C0C 100%);
+  box-shadow: 0 -1px 0 rgba(255,220,170,0.15), 0 1px 2px rgba(0,0,0,0.5); }

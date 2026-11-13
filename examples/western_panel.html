@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1100 1440x800 2880x510">
+<title>Western Sensor Panel</title>
+<!--
+  Western sensor panel for the rg-Sens CSS Template displayer, drawn for
+  480x1920 portrait: a weathered barn-wood wall with a framed desert vista for
+  the clock and aged paper posters nailed to it. A sibling of the other
+  example panels: the same placeholders 0-73 and the same setup.
+
+  The look is the mythic American Old West in realistic materials: wood,
+  paper, forged iron, brass and amber glass, with wood type and ink
+  illustrations. Keep it to frontier town and landscape imagery when
+  editing: no Native American sacred or cultural motifs, no guns pointed at
+  anything, and no real brands or place names.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, with day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two gauges ("package", "edge"), the windpumps and the
+  bottles; set them on the sensors.
+
+  Anything left unbound is hidden: a row, a gauge, a whole poster. The
+  processor's power row has no rg-Sens source and stays hidden unless you bind
+  a sensor to it by hand on the Bindings tab.
+
+  A gauge is an iron horseshoe heated from one end: the heated part grows
+  with the temperature from 20 to 100 degrees and takes the colour of forged
+  iron at that heat, the nail holes inside it glow as embers, and from 72 it
+  flickers. The word beside it reads Cool, Warm or Red hot! (from 85). A gun
+  belt holds twelve loops; the share that is filled is the value. A bottle
+  fills with whiskey as its pool fills.
+
+  The telegraph chart keeps the last minute (40 samples) of incoming and
+  outgoing speed in the page, on one shared scale. It starts empty and
+  survives a reload of the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of western_panel.css): sky
+  (Sunset, High Noon, Moonlight), how the design fits the panel, the layout,
+  the frame rate, and the full scale of the belts and of the telegraph chart.
+
+  Size: the design is drawn for 480x1920, but its six groups (the vista and
+  the five posters) re-arrange to suit the panel: one column of six, two of
+  three, three of two or six side by side (the rg-layouts list gives the
+  size each needs), and the posters then stretch to the panel's exact shape.
+  The wall is a tile and covers any size. The Layout option fixes the column
+  count; the Fit option can crop, letterbox or distort instead.
+
+  Motion: the windpumps turn with RPM, the sign sways, clouds drift, the
+  distant windpump turns, a hot horseshoe flickers and the dot at the newest
+  sample pulses, at --motion-fps frames a second. 0 turns motion off, as do
+  the panel's Animation switch and the system's reduced-motion setting.
+
+  Fonts: Rye (titles, signs, clock), Alfa Slab One (numbers) and Special
+  Elite (labels), loaded from the fonts folder next to this file; copy that
+  folder along with the template. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="western_panel.css">
+</head>
+<body>
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background: #3A2516; font-family: 'Special Elite', 'Courier New', monospace; font-variant-numeric: lining-nums; color: #2A1A0F; padding: 0 24px 18px; display: flex; flex-direction: column; gap: 14px">
+  <!-- ===== BACKGROUND: barn-wood wall (z 0) ===== -->
+  <svg aria-hidden="true" width="100%" height="100%" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none">
+    <defs>
+      <linearGradient id="wx-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E1530"></stop><stop offset="0.38" stop-color="#5A2A4A"></stop><stop offset="0.68" stop-color="#C2522E"></stop><stop offset="0.8" stop-color="#F5A54A"></stop></linearGradient>
+      <radialGradient id="wx-sun" cx="0.5" cy="0.45" r="0.55"><stop offset="0" stop-color="#FFE6A0"></stop><stop offset="1" stop-color="#F08A2E"></stop></radialGradient>
+      <radialGradient id="wx-sunGlow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFAA50" stop-opacity="0.75"></stop><stop offset="1" stop-color="#FFAA50" stop-opacity="0"></stop></radialGradient>
+      <linearGradient id="wx-haze" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F08C50" stop-opacity="0"></stop><stop offset="0.6" stop-color="#F08C50" stop-opacity="0.55"></stop><stop offset="1" stop-color="#F08C50" stop-opacity="0"></stop></linearGradient>
+      <linearGradient id="wx-ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A2018"></stop><stop offset="1" stop-color="#1A0E0A"></stop></linearGradient>
+      <radialGradient id="wx-vig" cx="0.5" cy="0.5" r="0.7"><stop offset="0.55" stop-color="#000" stop-opacity="0"></stop><stop offset="1" stop-color="#000" stop-opacity="0.45"></stop></radialGradient>
+      <linearGradient id="wx-iron" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#77716B"></stop><stop offset="0.3" stop-color="#2E2A27"></stop><stop offset="0.52" stop-color="#55504B"></stop><stop offset="0.78" stop-color="#1A1715"></stop><stop offset="1" stop-color="#46413D"></stop></linearGradient>
+      <linearGradient id="wx-plank" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8A6038"></stop><stop offset="0.5" stop-color="#6E4826"></stop><stop offset="1" stop-color="#4E3018"></stop></linearGradient>
+      <linearGradient id="wx-amber" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2A1204"></stop><stop offset="0.3" stop-color="#8A4A12"></stop><stop offset="0.7" stop-color="#5A2A08"></stop><stop offset="1" stop-color="#2A1204"></stop></linearGradient>
+      <linearGradient id="wx-whiskey" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6A3208"></stop><stop offset="0.32" stop-color="#E0962E"></stop><stop offset="0.62" stop-color="#B8661A"></stop><stop offset="1" stop-color="#5A2806"></stop></linearGradient>
+      <filter id="wx-grainV" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.16 0.006" numOctaves="4" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.06  0 0 0 0 0.03  0 0 0 1.7 -0.62"></feColorMatrix></filter>
+      <filter id="wx-grainH" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.008 0.22" numOctaves="4" seed="9"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.07  0 0 0 0 0.03  0 0 0 1.6 -0.55"></feColorMatrix></filter>
+      <filter id="wx-paper" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="4" seed="2"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.28  0 0 0 0 0.1  0 0 0 0.9 -0.38"></feColorMatrix></filter>
+      <filter id="wx-noise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" seed="5"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.9  0 0 0 0 0.82  0 0 0 0 0.7  0.6 0 0 0 -0.22"></feColorMatrix></filter>
+      <pattern id="wx-wall" width="483" height="1920" patternUnits="userSpaceOnUse">
+    <rect x="0" y="0" width="69" height="1920" fill="#5A3A22"></rect><rect x="69" y="0" width="69" height="1920" fill="#4E321D"></rect><rect x="138" y="0" width="69" height="1920" fill="#61402A"></rect><rect x="207" y="0" width="69" height="1920" fill="#523620"></rect><rect x="276" y="0" width="69" height="1920" fill="#5C3B24"></rect><rect x="345" y="0" width="69" height="1920" fill="#4A2F1C"></rect><rect x="414" y="0" width="69" height="1920" fill="#573823"></rect>
+      <g transform="translate(0 900) rotate(-2)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <g transform="translate(22 1603) rotate(-1)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <g transform="translate(248 935) rotate(0)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <g transform="translate(135 511) rotate(2)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <g transform="translate(67 786) rotate(1)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <g transform="translate(397 790) rotate(-4)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <g transform="translate(104 1390) rotate(1)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <g transform="translate(266 954) rotate(-3)"><ellipse rx="7" ry="13" fill="#24150B" opacity="0.75"></ellipse><ellipse rx="11" ry="22" fill="none" stroke="#24150B" stroke-width="1.2" opacity="0.45"></ellipse><ellipse rx="15" ry="32" fill="none" stroke="#24150B" stroke-width="0.8" opacity="0.3"></ellipse></g>
+      <rect x="-1.5" y="0" width="3" height="1920" fill="#120A05"></rect>
+      <rect x="1.5" y="0" width="1" height="1920" fill="#FFE2B8" opacity="0.08"></rect>
+      <rect x="67.5" y="0" width="3" height="1920" fill="#120A05"></rect>
+      <rect x="70.5" y="0" width="1" height="1920" fill="#FFE2B8" opacity="0.08"></rect>
+      <rect x="136.5" y="0" width="3" height="1920" fill="#120A05"></rect>
+      <rect x="139.5" y="0" width="1" height="1920" fill="#FFE2B8" opacity="0.08"></rect>
+      <rect x="205.5" y="0" width="3" height="1920" fill="#120A05"></rect>
+      <rect x="208.5" y="0" width="1" height="1920" fill="#FFE2B8" opacity="0.08"></rect>
+      <rect x="274.5" y="0" width="3" height="1920" fill="#120A05"></rect>
+      <rect x="277.5" y="0" width="1" height="1920" fill="#FFE2B8" opacity="0.08"></rect>
+      <rect x="343.5" y="0" width="3" height="1920" fill="#120A05"></rect>
+      <rect x="346.5" y="0" width="1" height="1920" fill="#FFE2B8" opacity="0.08"></rect>
+      <rect x="412.5" y="0" width="3" height="1920" fill="#120A05"></rect>
+      <rect x="415.5" y="0" width="1" height="1920" fill="#FFE2B8" opacity="0.08"></rect>
+    <g transform="translate(14 26)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(14 960)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(55 964)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(14 1894)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(83 26)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(83 960)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(124 964)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(83 1894)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(152 26)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(152 960)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(193 964)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(152 1894)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(221 26)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(221 960)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(262 964)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(221 1894)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(290 26)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(290 960)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(331 964)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(290 1894)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(359 26)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(359 960)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(400 964)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(359 1894)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(428 26)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(428 960)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(469 964)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g><g transform="translate(428 1894)"><circle r="3.2" fill="url(#wx-iron) #3A3633"></circle><circle r="3.2" fill="none" stroke="#000" stroke-width="0.6" opacity="0.6"></circle><path d="M0 3.2 L3 12" stroke="#5A2A10" stroke-width="2.4" opacity="0.25" stroke-linecap="round"></path></g>
+      </pattern>
+      <clipPath id="wx-bottle"><path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z"></path></clipPath>
+    </defs>
+    <rect x="0" y="0" width="100%" height="100%" fill="url(#wx-wall)"></rect>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-grainV)"></rect>
+  </svg>
+  <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%)"></div>
+  <!-- ===== HEADER: hanging sign + frontier vista ===== -->
+  <header style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px">
+    <div style="position: relative; width: 420px; height: 96px; transform-origin: 50% 0; animation: wx-sway 7s ease-in-out infinite">
+      <svg aria-hidden="true" width="420" height="96" viewBox="0 0 420 96" style="position: absolute; top: 0; left: 0; overflow: visible; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.6))">
+        <ellipse cx="70" cy="2.0" rx="3" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="70" cy="7.5" rx="1.2" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="70" cy="13.0" rx="3" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="70" cy="18.5" rx="1.2" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="70" cy="24.0" rx="3" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="350" cy="2.0" rx="3" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="350" cy="7.5" rx="1.2" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="350" cy="13.0" rx="3" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="350" cy="18.5" rx="1.2" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse><ellipse cx="350" cy="24.0" rx="3" ry="4.6" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2"></ellipse>
+        <rect x="30" y="28" width="360" height="64" rx="4" fill="url(#wx-plank) #6E4826"></rect>
+        <rect x="30" y="28" width="360" height="64" rx="4" filter="url(#wx-grainH)"></rect>
+        <line x1="31" y1="59.5" x2="389" y2="59.5" stroke="#1E1008" stroke-width="2"></line>
+        <line x1="31" y1="61" x2="389" y2="61" stroke="#FFD9A8" stroke-width="0.6" opacity="0.15"></line>
+        <rect x="30.5" y="28.5" width="359" height="63" rx="4" fill="none" stroke="#1E1008" stroke-width="1.4"></rect>
+        <rect x="32" y="30" width="356" height="2" fill="#FFD9A8" opacity="0.12"></rect>
+        <circle cx="40" cy="38" r="3" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.5"></circle><circle cx="380" cy="38" r="3" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.5"></circle><circle cx="40" cy="82" r="3" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.5"></circle><circle cx="380" cy="82" r="3" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.5"></circle>
+        <circle cx="70" cy="30" r="4" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2.2"></circle>
+        <circle cx="350" cy="30" r="4" fill="none" stroke="url(#wx-iron) #4A4540" stroke-width="2.2"></circle>
+      </svg>
+      <div style="position: absolute; left: 30px; right: 30px; top: 28px; height: 64px; display: flex; align-items: center; justify-content: center">
+        <h1 style="margin: 0; font-family: Rye, serif; font-weight: 400; font-size: 36px; line-height: 1; color: #24110A; text-shadow: 0 1px 0 rgba(255,214,160,0.35), 0 -1px 1px rgba(0,0,0,0.55); white-space: nowrap">System Sensors</h1>
+      </div>
+    </div>
+  </header>
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
+  <section class="vista">
+    <div style="position: relative; width: 432px; filter: drop-shadow(0 12px 14px rgba(0,0,0,0.65))">
+      <div style="position: relative; padding: 12px; background: linear-gradient(135deg, #6A4426 0%, #4A2C16 40%, #5E3C20 70%, #3A2210 100%); box-shadow: inset 0 0 0 1px #1A0E06, inset 0 2px 0 rgba(255,214,160,0.18), inset 0 -2px 0 rgba(0,0,0,0.4)">
+        <svg aria-hidden="true" width="432" height="316" viewBox="0 0 432 316" style="position: absolute; top: 0; left: 0; pointer-events: none"><rect x="0" y="0" width="432" height="316" filter="url(#wx-grainH)"></rect></svg>
+        <div style="position: relative; width: 408px; height: 292px; overflow: hidden; box-shadow: 0 0 0 1px #1A0E06, inset 0 0 0 1px rgba(0,0,0,0.4)">
+          <svg role="img" aria-label="Frontier landscape at sunset" width="408" height="292" viewBox="0 0 408 292" style="position: absolute; top: 0; left: 0">
+            <rect x="0" y="0" width="408" height="292" fill="url(#wx-sky) #C2522E"></rect>
+            <g class="stars"><circle cx="0.0" cy="78.9" r="1.20" fill="#FFF6E0" opacity="0.26"></circle><circle cx="270.8" cy="11.4" r="0.71" fill="#FFF6E0" opacity="0.29"></circle><circle cx="161.8" cy="80.8" r="1.33" fill="#FFF6E0" opacity="0.34"></circle><circle cx="63.2" cy="20.7" r="0.74" fill="#FFF6E0" opacity="0.36"></circle><circle cx="145.1" cy="4.6" r="1.33" fill="#FFF6E0" opacity="0.27"></circle><circle cx="35.7" cy="52.1" r="1.35" fill="#FFF6E0" opacity="0.36"></circle><circle cx="94.2" cy="76.2" r="0.91" fill="#FFF6E0" opacity="0.25"></circle><circle cx="32.6" cy="60.7" r="1.00" fill="#FFF6E0" opacity="0.40"></circle><circle cx="127.4" cy="28.5" r="1.11" fill="#FFF6E0" opacity="0.35"></circle><circle cx="66.6" cy="93.8" r="1.36" fill="#FFF6E0" opacity="0.40"></circle><circle cx="96.0" cy="109.5" r="1.05" fill="#FFF6E0" opacity="0.39"></circle><circle cx="105.1" cy="43.6" r="0.64" fill="#FFF6E0" opacity="0.29"></circle><circle cx="148.3" cy="21.8" r="1.25" fill="#FFF6E0" opacity="0.28"></circle><circle cx="77.1" cy="44.9" r="1.22" fill="#FFF6E0" opacity="0.40"></circle><circle cx="176.5" cy="58.6" r="0.99" fill="#FFF6E0" opacity="0.26"></circle><circle cx="213.5" cy="62.7" r="1.02" fill="#FFF6E0" opacity="0.34"></circle><circle cx="380.7" cy="56.4" r="0.80" fill="#FFF6E0" opacity="0.30"></circle><circle cx="301.4" cy="44.2" r="0.95" fill="#FFF6E0" opacity="0.43"></circle><circle cx="157.2" cy="68.3" r="1.08" fill="#FFF6E0" opacity="0.27"></circle><circle cx="287.6" cy="30.1" r="1.23" fill="#FFF6E0" opacity="0.41"></circle><circle cx="56.7" cy="75.2" r="0.57" fill="#FFF6E0" opacity="0.30"></circle><circle cx="139.2" cy="17.7" r="1.11" fill="#FFF6E0" opacity="0.35"></circle><circle cx="406.9" cy="53.1" r="0.65" fill="#FFF6E0" opacity="0.32"></circle><circle cx="308.1" cy="68.0" r="1.36" fill="#FFF6E0" opacity="0.24"></circle><circle cx="24.6" cy="24.9" r="0.81" fill="#FFF6E0" opacity="0.20"></circle><circle cx="280.1" cy="40.8" r="0.89" fill="#FFF6E0" opacity="0.42"></circle></g>
+            <circle data-sun-glow cx="204" cy="206" r="170" fill="url(#wx-sunGlow) rgba(0,0,0,0)"></circle>
+            <circle data-sun cx="204" cy="206" r="44" fill="url(#wx-sun) #FFE6A0"></circle>
+            <g style="animation: wx-drift 30s ease-in-out infinite">
+              <ellipse cx="90" cy="150" rx="74" ry="4.5" fill="#F3A27A" opacity="0.45"></ellipse><ellipse cx="300" cy="138" rx="96" ry="5.5" fill="#F3A27A" opacity="0.4"></ellipse><ellipse cx="180" cy="118" rx="60" ry="3.5" fill="#F3A27A" opacity="0.3"></ellipse><ellipse cx="352" cy="170" rx="52" ry="3" fill="#F3A27A" opacity="0.35"></ellipse><ellipse cx="40" cy="104" rx="50" ry="3" fill="#F3A27A" opacity="0.25"></ellipse>
+            </g>
+            <path d="M0 216 L0 200 L26 198 L34 184 L96 182 L104 198 L150 200 L162 192 L214 191 L222 200 L270 202 L280 188 L332 186 L340 199 L408 201 L408 216 Z" fill="#8A4A52"></path>
+            <rect x="0" y="168" width="408" height="70" fill="url(#wx-haze) rgba(0,0,0,0)"></rect>
+            <path d="M0 240 L0 196 L16 192 L22 160 L66 158 L72 190 L92 196 L106 240 Z" fill="#4A2430"></path>
+            <path d="M22 160 L66 158 L68 166 L24 168 Z" fill="#F08A50" opacity="0.5"></path>
+            <path d="M296 240 L312 196 L320 164 L352 162 L358 190 L384 196 L408 204 L408 240 Z" fill="#4A2430"></path>
+            <path d="M320 164 L352 162 L354 170 L321 172 Z" fill="#F08A50" opacity="0.5"></path>
+            <path d="M246 238 L252 206 L255 192 L262 192 L266 206 L272 238 Z" fill="#4A2430"></path>
+            <!-- distant windpump -->
+            <g stroke="#4A2430" stroke-width="1.1" fill="none">
+              <path d="M280 236 L285 212 L290 236 M282 226 L288 226 M283 219 L287 219"></path>
+              <g style="transform-box: view-box; transform-origin: 285px 210px; "><circle cx="285" cy="210" r="6"></circle><path d="M279 210 H291 M285 204 V216 M280.8 205.8 L289.2 214.2 M289.2 205.8 L280.8 214.2"></path></g>
+              <path d="M286 210 L296 208 L297 213 Z" fill="#4A2430"></path>
+            </g>
+            <path d="M0 236 Q104 228 204 234 T408 232 V292 H0 Z" fill="url(#wx-ground) #3A2018"></path>
+            <path d="M186 292 C194 270 200 252 204 236 L208 236 C216 252 232 270 258 292 Z" fill="#C27A4A" opacity="0.35"></path>
+            <!-- fence running into the distance -->
+            <g stroke="#140A08" stroke-linecap="round">
+              <path d="M112 270 V248 M134 260 V244 M150 253 V241 M162 248 V239 M171 244 V237.5 M177 241 V236.5" stroke-width="2.4"></path>
+              <path d="M112 252 Q124 248 134 247 Q143 244 150 243.5 Q157 241.5 162 241 Q167 239.5 171 239 Q175 238 177 238 M112 260 Q124 256 134 254 Q143 250 150 249 Q157 246 162 245 Q167 242.5 171 242" stroke-width="0.8" fill="none"></path>
+            </g>
+            <!-- saguaros -->
+              <path d="M52 292 V194" stroke="#140A08" stroke-width="13" stroke-linecap="round" fill="none"></path>
+              <path d="M52 238.1 H36.4 V210.66 M52 250.84 H66.3 V215.56" stroke="#140A08" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path d="M50.05 288 V197 M54.6 288 V198" stroke="#F08A50" stroke-width="0.8" opacity="0.35" fill="none"></path>
+              <path d="M352 286 V214" stroke="#140A08" stroke-width="10" stroke-linecap="round" fill="none"></path>
+              <path d="M352 246.4 H340 V226.24 M352 255.76 H363 V229.84" stroke="#140A08" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path d="M350.5 282 V217 M354 282 V218" stroke="#F08A50" stroke-width="0.8" opacity="0.35" fill="none"></path>
+              <path d="M386 266 V232" stroke="#140A08" stroke-width="6" stroke-linecap="round" fill="none"></path>
+              <path d="M386 247.3 H378.8 V237.78 M386 251.72 H392.6 V239.48" stroke="#140A08" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path d="M385.1 262 V235 M387.2 262 V236" stroke="#F08A50" stroke-width="0.8" opacity="0.35" fill="none"></path>
+            <ellipse cx="0" cy="261" rx="10.8" ry="4.4" fill="#140A08"></ellipse><ellipse cx="23" cy="278" rx="10.4" ry="3.6" fill="#140A08"></ellipse><ellipse cx="224" cy="284" rx="8.2" ry="4.5" fill="#140A08"></ellipse><ellipse cx="52" cy="273" rx="11.3" ry="2.0" fill="#140A08"></ellipse><ellipse cx="167" cy="257" rx="8.1" ry="2.4" fill="#140A08"></ellipse><ellipse cx="40" cy="276" rx="4.1" ry="4.5" fill="#140A08"></ellipse><ellipse cx="157" cy="286" rx="8.5" ry="2.3" fill="#140A08"></ellipse><ellipse cx="29" cy="285" rx="7.8" ry="4.9" fill="#140A08"></ellipse><ellipse cx="188" cy="281" rx="8.1" ry="3.7" fill="#140A08"></ellipse>
+            <rect x="0" y="0" width="408" height="292" fill="url(#wx-vig) rgba(0,0,0,0)"></rect>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 30px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+            <span style="font-family: Rye, serif; font-size: 80px; line-height: 1; color: var(--clock); text-shadow: 0 3px 0 rgba(0,0,0,0.35), 0 0 22px var(--clock-glow)" data-clock="0">--:--</span>
+            <span style="font-size: 15px; letter-spacing: 0.08em; color: var(--clock); text-shadow: 0 1px 2px rgba(0,0,0,0.7); white-space: nowrap" data-date>&nbsp;</span>
+          </div>
+        </div>
+        <div style="position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+      </div>
+    </div>
+  </section>
+  <!-- ===== PROCESSOR poster ===== -->
+  <section data-section="cpu" style="position: relative; z-index: 1; transform: rotate(-0.5deg); filter: drop-shadow(0 10px 10px rgba(0,0,0,0.55))">
+    <div style="position: relative; background: radial-gradient(ellipse at 18% 14%, rgba(120,70,20,0.2) 0%, rgba(120,70,20,0) 38%), radial-gradient(ellipse at 86% 82%, rgba(110,60,20,0.22) 0%, rgba(110,60,20,0) 42%), radial-gradient(ellipse at 60% 40%, rgba(255,250,235,0.35) 0%, rgba(255,250,235,0) 55%), linear-gradient(170deg, #EBDAB4 0%, #DEC596 60%, #CDAE74 100%); clip-path: polygon(0% 0.0px, 2.5% 1.3px, 5% 0.9px, 7.5% 1.2px, 10% 1.9px, 12.5% 2.1px, 15% 0.5px, 17.5% 0.1px, 20% 0.1px, 22.5% 2.6px, 25% 0.5px, 27.5% 1.8px, 30% 1.6px, 32.5% 0.3px, 35% 0.5px, 37.5% 1.9px, 40% 0.0px, 42.5% 0.1px, 45% 0.5px, 47.5% 0.6px, 50% 0.8px, 52.5% 0.2px, 55% 2.5px, 57.5% 2.5px, 60% 1.7px, 62.5% 1.9px, 65% 0.9px, 67.5% 3.1px, 70% 0.8px, 72.5% 0.3px, 75% 2.3px, 77.5% 0.9px, 80% 2.5px, 82.5% 0.5px, 85% 0.7px, 87.5% 3.2px, 90% 2.9px, 92.5% 0.9px, 95% 3.1px, 97.5% 0.3px, 100% 2.4px, calc(100% - 3.0px) 2.5%, calc(100% - 0.5px) 5%, calc(100% - 0.8px) 7.5%, calc(100% - 3.1px) 10%, calc(100% - 0.7px) 12.5%, calc(100% - 2.9px) 15%, calc(100% - 2.1px) 17.5%, calc(100% - 2.6px) 20%, calc(100% - 1.0px) 22.5%, calc(100% - 1.0px) 25%, calc(100% - 1.4px) 27.5%, calc(100% - 2.3px) 30%, calc(100% - 2.6px) 32.5%, calc(100% - 0.2px) 35%, calc(100% - 1.6px) 37.5%, calc(100% - 1.5px) 40%, calc(100% - 2.2px) 42.5%, calc(100% - 2.3px) 45%, calc(100% - 0.6px) 47.5%, calc(100% - 2.3px) 50%, calc(100% - 1.6px) 52.5%, calc(100% - 1.8px) 55%, calc(100% - 3.1px) 57.5%, calc(100% - 3.1px) 60%, calc(100% - 1.5px) 62.5%, calc(100% - 2.6px) 65%, calc(100% - 0.9px) 67.5%, calc(100% - 2.7px) 70%, calc(100% - 0.7px) 72.5%, calc(100% - 1.6px) 75%, calc(100% - 0.5px) 77.5%, calc(100% - 2.7px) 80%, calc(100% - 2.4px) 82.5%, calc(100% - 1.9px) 85%, calc(100% - 1.3px) 87.5%, calc(100% - 2.6px) 90%, calc(100% - 0.5px) 92.5%, calc(100% - 0.9px) 95%, calc(100% - 1.0px) 97.5%, 100% calc(100% - 1.5px), 97.5% calc(100% - 1.2px), 95% calc(100% - 0.2px), 92.5% calc(100% - 0.2px), 90% calc(100% - 1.9px), 87.5% calc(100% - 2.8px), 85% calc(100% - 0.7px), 82.5% calc(100% - 0.6px), 80% calc(100% - 3.2px), 77.5% calc(100% - 2.1px), 75% calc(100% - 2.2px), 72.5% calc(100% - 2.9px), 70% calc(100% - 0.2px), 67.5% calc(100% - 1.7px), 65% calc(100% - 2.5px), 62.5% calc(100% - 1.7px), 60% calc(100% - 0.8px), 57.5% calc(100% - 1.7px), 55% calc(100% - 2.6px), 52.5% calc(100% - 0.8px), 50% calc(100% - 2.0px), 47.5% calc(100% - 1.3px), 45% calc(100% - 2.8px), 42.5% calc(100% - 1.7px), 40% calc(100% - 1.5px), 37.5% calc(100% - 2.3px), 35% calc(100% - 1.3px), 32.5% calc(100% - 0.3px), 30% calc(100% - 1.9px), 27.5% calc(100% - 1.6px), 25% calc(100% - 2.8px), 22.5% calc(100% - 0.8px), 20% calc(100% - 2.1px), 17.5% calc(100% - 2.2px), 15% calc(100% - 2.8px), 12.5% calc(100% - 1.7px), 10% calc(100% - 1.5px), 7.5% calc(100% - 2.0px), 5% calc(100% - 0.5px), 2.5% calc(100% - 1.3px), 0% calc(100% - 0.9px), 2.6px 97.5%, 0.0px 95%, 0.8px 92.5%, 0.3px 90%, 0.4px 87.5%, 2.6px 85%, 2.3px 82.5%, 1.7px 80%, 3.0px 77.5%, 2.1px 75%, 3.1px 72.5%, 1.4px 70%, 0.1px 67.5%, 0.5px 65%, 0.5px 62.5%, 1.6px 60%, 1.4px 57.5%, 2.4px 55%, 1.7px 52.5%, 2.5px 50%, 2.8px 47.5%, 2.1px 45%, 1.4px 42.5%, 3.0px 40%, 0.7px 37.5%, 1.4px 35%, 2.2px 32.5%, 2.4px 30%, 1.5px 27.5%, 1.3px 25%, 2.8px 22.5%, 1.2px 20%, 1.9px 17.5%, 3.1px 15%, 2.8px 12.5%, 1.2px 10%, 3.1px 7.5%, 2.8px 5%, 1.3px 2.5%); box-shadow: inset 0 0 34px rgba(110,60,20,0.45); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 6px">
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-paper)"></rect></svg>
+      <div style="position: relative; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <h2 style="margin: 0; font-family: Rye, serif; font-weight: 400; font-size: 32px; line-height: 1; color: #2A1A0F; white-space: nowrap">Processor</h2>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+      </div>
+      <div style="position: relative; display: flex; align-items: center; gap: 14px">
+        <div data-need="5" style="position: relative; width: 180px; height: 176px; flex: none">
+          <svg data-gauge="5" role="img" aria-label="package temperature gauge" width="180" height="176" viewBox="0 0 200 196" style="position: absolute; top: 0; left: 0; overflow: visible">
+            <g style="filter: drop-shadow(2px 4px 3px rgba(40,20,5,0.55))">
+              <path d="M46.0 164.3 A84 84 0 1 1 154.0 164.3 L139.9 147.5 A62 62 0 1 0 60.1 147.5 Z" fill="url(#wx-iron) #3A3633"></path>
+              <path data-heat d="" fill="#3E3A3A" opacity="0.85"></path>
+              <path d="M45.8 148.8 A73 73 0 1 1 154.2 148.8" fill="none" stroke="#0E0B09" stroke-width="5" opacity="0.55"></path>
+              <path d="M36.4 153.4 A83 83 0 0 1 141.5 28.1" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.18"></path>
+              <rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(39.5 140.8) rotate(236.0)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(27.5 108.2) rotate(263.6)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(31.9 73.7) rotate(291.1)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(51.8 45.2) rotate(318.7)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(82.6 29.1) rotate(346.2)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(117.4 29.1) rotate(373.8)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(148.2 45.2) rotate(401.3)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(168.1 73.7) rotate(428.9)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(172.5 108.2) rotate(456.4)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(160.5 140.8) rotate(484.0)" data-hole fill="#120C08"></rect>
+            </g>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 58px; display: flex; flex-direction: column; align-items: center">
+            <span style="font-family: 'Alfa Slab One', serif; font-size: 44px; line-height: 1; color: #2A1A0F"><span data-num="5" data-places="0">--</span>°</span>
+            <span style="font-size: 12px; letter-spacing: 0.1em; color: #5E4630; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="4" data-default="package">package</span>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+          <span style="font-family: Rye, serif; font-size: 22px; line-height: 1; color: #5E4630" data-state="5">Cool</span>
+            <div data-need="9" style="display: flex; flex-direction: column; gap: 9px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; color: #5E4630">Load</span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="9" data-places="0">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="10" data-default="%">%</span></span></span>
+              </div>
+              <div data-belt="9" data-max="11" data-unit-of="10" data-scale="100" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
+              </div>
+            </div>
+            <div data-need="13" style="display: flex; flex-direction: column; gap: 9px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; color: #5E4630">Clock</span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="13" data-places="2" data-ghz>--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="14" data-default="GHz" data-ghz>GHz</span></span></span>
+              </div>
+              <div data-belt="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
+              </div>
+            </div>
+            <div data-need="17" style="display: flex; flex-direction: column; gap: 9px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; color: #5E4630">Power</span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="17" data-places="0">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="18" data-default="W">W</span></span></span>
+              </div>
+              <div data-belt="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
+              </div>
+            </div>
+        </div>
+      </div>
+    </div>
+    <div style="position: absolute; top: 7px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 6px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+  </section>
+  <!-- ===== GRAPHICS poster ===== -->
+  <section data-section="gpu" style="position: relative; z-index: 1; transform: rotate(0.45deg); filter: drop-shadow(0 10px 10px rgba(0,0,0,0.55))">
+    <div style="position: relative; background: radial-gradient(ellipse at 18% 14%, rgba(120,70,20,0.2) 0%, rgba(120,70,20,0) 38%), radial-gradient(ellipse at 86% 82%, rgba(110,60,20,0.22) 0%, rgba(110,60,20,0) 42%), radial-gradient(ellipse at 60% 40%, rgba(255,250,235,0.35) 0%, rgba(255,250,235,0) 55%), linear-gradient(170deg, #EBDAB4 0%, #DEC596 60%, #CDAE74 100%); clip-path: polygon(0% 0.0px, 2.5% 0.2px, 5% 0.1px, 7.5% 2.1px, 10% 0.8px, 12.5% 2.4px, 15% 1.2px, 17.5% 1.4px, 20% 1.4px, 22.5% 1.5px, 25% 0.2px, 27.5% 0.5px, 30% 2.1px, 32.5% 0.9px, 35% 1.4px, 37.5% 0.8px, 40% 1.2px, 42.5% 0.2px, 45% 0.2px, 47.5% 1.7px, 50% 1.1px, 52.5% 1.6px, 55% 2.3px, 57.5% 1.4px, 60% 2.5px, 62.5% 0.7px, 65% 2.4px, 67.5% 0.7px, 70% 1.0px, 72.5% 2.0px, 75% 0.9px, 77.5% 0.3px, 80% 0.3px, 82.5% 1.2px, 85% 2.8px, 87.5% 2.0px, 90% 0.2px, 92.5% 0.2px, 95% 3.0px, 97.5% 3.0px, 100% 3.1px, calc(100% - 2.8px) 2.5%, calc(100% - 2.5px) 5%, calc(100% - 0.1px) 7.5%, calc(100% - 0.7px) 10%, calc(100% - 1.9px) 12.5%, calc(100% - 0.2px) 15%, calc(100% - 0.2px) 17.5%, calc(100% - 0.6px) 20%, calc(100% - 1.6px) 22.5%, calc(100% - 0.4px) 25%, calc(100% - 2.6px) 27.5%, calc(100% - 2.9px) 30%, calc(100% - 0.6px) 32.5%, calc(100% - 2.8px) 35%, calc(100% - 1.1px) 37.5%, calc(100% - 2.9px) 40%, calc(100% - 0.6px) 42.5%, calc(100% - 0.9px) 45%, calc(100% - 1.6px) 47.5%, calc(100% - 0.8px) 50%, calc(100% - 0.1px) 52.5%, calc(100% - 0.4px) 55%, calc(100% - 1.8px) 57.5%, calc(100% - 2.9px) 60%, calc(100% - 3.0px) 62.5%, calc(100% - 0.4px) 65%, calc(100% - 2.3px) 67.5%, calc(100% - 1.9px) 70%, calc(100% - 1.9px) 72.5%, calc(100% - 0.0px) 75%, calc(100% - 0.2px) 77.5%, calc(100% - 0.7px) 80%, calc(100% - 1.0px) 82.5%, calc(100% - 0.8px) 85%, calc(100% - 2.3px) 87.5%, calc(100% - 1.7px) 90%, calc(100% - 1.3px) 92.5%, calc(100% - 0.3px) 95%, calc(100% - 0.5px) 97.5%, 100% calc(100% - 2.0px), 97.5% calc(100% - 0.0px), 95% calc(100% - 0.4px), 92.5% calc(100% - 1.6px), 90% calc(100% - 3.0px), 87.5% calc(100% - 0.1px), 85% calc(100% - 2.8px), 82.5% calc(100% - 2.6px), 80% calc(100% - 3.2px), 77.5% calc(100% - 0.3px), 75% calc(100% - 2.8px), 72.5% calc(100% - 1.4px), 70% calc(100% - 2.6px), 67.5% calc(100% - 0.3px), 65% calc(100% - 2.3px), 62.5% calc(100% - 2.5px), 60% calc(100% - 0.9px), 57.5% calc(100% - 2.3px), 55% calc(100% - 0.5px), 52.5% calc(100% - 1.0px), 50% calc(100% - 1.0px), 47.5% calc(100% - 2.4px), 45% calc(100% - 1.0px), 42.5% calc(100% - 1.4px), 40% calc(100% - 0.7px), 37.5% calc(100% - 1.8px), 35% calc(100% - 1.3px), 32.5% calc(100% - 0.8px), 30% calc(100% - 0.9px), 27.5% calc(100% - 3.2px), 25% calc(100% - 2.1px), 22.5% calc(100% - 3.2px), 20% calc(100% - 1.4px), 17.5% calc(100% - 0.4px), 15% calc(100% - 3.2px), 12.5% calc(100% - 2.4px), 10% calc(100% - 0.9px), 7.5% calc(100% - 2.2px), 5% calc(100% - 2.3px), 2.5% calc(100% - 0.1px), 0% calc(100% - 2.3px), 0.6px 97.5%, 0.1px 95%, 1.0px 92.5%, 0.7px 90%, 2.2px 87.5%, 1.6px 85%, 2.9px 82.5%, 1.4px 80%, 1.7px 77.5%, 0.3px 75%, 0.7px 72.5%, 0.6px 70%, 1.4px 67.5%, 0.3px 65%, 0.3px 62.5%, 3.2px 60%, 0.6px 57.5%, 2.2px 55%, 2.4px 52.5%, 2.3px 50%, 2.1px 47.5%, 1.4px 45%, 0.6px 42.5%, 2.8px 40%, 0.9px 37.5%, 0.4px 35%, 1.7px 32.5%, 0.1px 30%, 2.9px 27.5%, 2.3px 25%, 2.2px 22.5%, 0.0px 20%, 1.9px 17.5%, 1.8px 15%, 0.1px 12.5%, 0.0px 10%, 0.7px 7.5%, 3.1px 5%, 1.4px 2.5%); box-shadow: inset 0 0 34px rgba(110,60,20,0.45); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 6px">
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-paper)"></rect></svg>
+      <div style="position: relative; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <h2 style="margin: 0; font-family: Rye, serif; font-weight: 400; font-size: 32px; line-height: 1; color: #2A1A0F; white-space: nowrap">Graphics</h2>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+      </div>
+      <div style="position: relative; display: flex; align-items: center; gap: 14px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+          <span style="font-family: Rye, serif; font-size: 22px; line-height: 1; color: #5E4630" data-state="21">Cool</span>
+            <div data-need="25" style="display: flex; flex-direction: column; gap: 9px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; color: #5E4630">Load</span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="25" data-places="0">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="26" data-default="%">%</span></span></span>
+              </div>
+              <div data-belt="25" data-max="27" data-unit-of="26" data-scale="100" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
+              </div>
+            </div>
+            <div data-need="29" style="display: flex; flex-direction: column; gap: 9px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; color: #5E4630">Clock</span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="29" data-places="2" data-ghz>--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="30" data-default="GHz" data-ghz>GHz</span></span></span>
+              </div>
+              <div data-belt="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
+              </div>
+            </div>
+            <div data-need="33" style="display: flex; flex-direction: column; gap: 9px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; color: #5E4630">Power</span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="33" data-places="0">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="34" data-default="W">W</span></span></span>
+              </div>
+              <div data-belt="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
+              </div>
+            </div>
+        </div>
+        <div data-need="21" style="position: relative; width: 180px; height: 176px; flex: none">
+          <svg data-gauge="21" role="img" aria-label="edge temperature gauge" width="180" height="176" viewBox="0 0 200 196" style="position: absolute; top: 0; left: 0; overflow: visible">
+            <g style="filter: drop-shadow(2px 4px 3px rgba(40,20,5,0.55))">
+              <path d="M46.0 164.3 A84 84 0 1 1 154.0 164.3 L139.9 147.5 A62 62 0 1 0 60.1 147.5 Z" fill="url(#wx-iron) #3A3633"></path>
+              <path data-heat d="" fill="#3E3A3A" opacity="0.85"></path>
+              <path d="M45.8 148.8 A73 73 0 1 1 154.2 148.8" fill="none" stroke="#0E0B09" stroke-width="5" opacity="0.55"></path>
+              <path d="M36.4 153.4 A83 83 0 0 1 141.5 28.1" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.18"></path>
+              <rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(39.5 140.8) rotate(236.0)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(27.5 108.2) rotate(263.6)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(31.9 73.7) rotate(291.1)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(51.8 45.2) rotate(318.7)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(82.6 29.1) rotate(346.2)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(117.4 29.1) rotate(373.8)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(148.2 45.2) rotate(401.3)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(168.1 73.7) rotate(428.9)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(172.5 108.2) rotate(456.4)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(160.5 140.8) rotate(484.0)" data-hole fill="#120C08"></rect>
+            </g>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 58px; display: flex; flex-direction: column; align-items: center">
+            <span style="font-family: 'Alfa Slab One', serif; font-size: 44px; line-height: 1; color: #2A1A0F"><span data-num="21" data-places="0">--</span>°</span>
+            <span style="font-size: 12px; letter-spacing: 0.1em; color: #5E4630; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="20" data-default="edge">edge</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="position: absolute; top: 7px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 6px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+  </section>
+  <!-- ===== COOLING poster: windpumps ===== -->
+  <section data-section="fans" style="position: relative; z-index: 1; transform: rotate(-0.35deg); filter: drop-shadow(0 10px 10px rgba(0,0,0,0.55))">
+    <div style="position: relative; background: radial-gradient(ellipse at 18% 14%, rgba(120,70,20,0.2) 0%, rgba(120,70,20,0) 38%), radial-gradient(ellipse at 86% 82%, rgba(110,60,20,0.22) 0%, rgba(110,60,20,0) 42%), radial-gradient(ellipse at 60% 40%, rgba(255,250,235,0.35) 0%, rgba(255,250,235,0) 55%), linear-gradient(170deg, #EBDAB4 0%, #DEC596 60%, #CDAE74 100%); clip-path: polygon(0% 0.0px, 2.5% 2.3px, 5% 2.6px, 7.5% 3.1px, 10% 3.0px, 12.5% 2.7px, 15% 2.0px, 17.5% 2.6px, 20% 2.7px, 22.5% 0.5px, 25% 3.2px, 27.5% 2.4px, 30% 2.6px, 32.5% 1.4px, 35% 2.2px, 37.5% 2.8px, 40% 2.3px, 42.5% 0.3px, 45% 3.2px, 47.5% 2.8px, 50% 1.4px, 52.5% 3.0px, 55% 2.1px, 57.5% 0.3px, 60% 0.0px, 62.5% 2.7px, 65% 0.6px, 67.5% 1.6px, 70% 1.3px, 72.5% 0.4px, 75% 2.7px, 77.5% 2.9px, 80% 1.3px, 82.5% 2.0px, 85% 1.8px, 87.5% 0.9px, 90% 0.7px, 92.5% 2.7px, 95% 2.8px, 97.5% 2.4px, 100% 0.7px, calc(100% - 2.5px) 2.5%, calc(100% - 1.3px) 5%, calc(100% - 2.5px) 7.5%, calc(100% - 1.5px) 10%, calc(100% - 3.0px) 12.5%, calc(100% - 0.7px) 15%, calc(100% - 1.6px) 17.5%, calc(100% - 1.7px) 20%, calc(100% - 2.2px) 22.5%, calc(100% - 3.1px) 25%, calc(100% - 0.7px) 27.5%, calc(100% - 0.3px) 30%, calc(100% - 1.8px) 32.5%, calc(100% - 2.1px) 35%, calc(100% - 0.5px) 37.5%, calc(100% - 1.0px) 40%, calc(100% - 2.1px) 42.5%, calc(100% - 2.6px) 45%, calc(100% - 2.5px) 47.5%, calc(100% - 2.4px) 50%, calc(100% - 1.8px) 52.5%, calc(100% - 2.3px) 55%, calc(100% - 0.5px) 57.5%, calc(100% - 2.6px) 60%, calc(100% - 1.3px) 62.5%, calc(100% - 1.5px) 65%, calc(100% - 0.6px) 67.5%, calc(100% - 1.0px) 70%, calc(100% - 3.1px) 72.5%, calc(100% - 1.6px) 75%, calc(100% - 3.2px) 77.5%, calc(100% - 1.9px) 80%, calc(100% - 2.8px) 82.5%, calc(100% - 2.8px) 85%, calc(100% - 0.1px) 87.5%, calc(100% - 0.7px) 90%, calc(100% - 2.1px) 92.5%, calc(100% - 2.9px) 95%, calc(100% - 0.0px) 97.5%, 100% calc(100% - 2.4px), 97.5% calc(100% - 2.0px), 95% calc(100% - 0.7px), 92.5% calc(100% - 3.0px), 90% calc(100% - 0.9px), 87.5% calc(100% - 0.6px), 85% calc(100% - 1.8px), 82.5% calc(100% - 1.4px), 80% calc(100% - 3.2px), 77.5% calc(100% - 1.8px), 75% calc(100% - 0.1px), 72.5% calc(100% - 3.1px), 70% calc(100% - 1.8px), 67.5% calc(100% - 2.2px), 65% calc(100% - 2.2px), 62.5% calc(100% - 3.2px), 60% calc(100% - 1.1px), 57.5% calc(100% - 3.0px), 55% calc(100% - 1.6px), 52.5% calc(100% - 1.3px), 50% calc(100% - 3.2px), 47.5% calc(100% - 0.3px), 45% calc(100% - 2.3px), 42.5% calc(100% - 1.0px), 40% calc(100% - 3.2px), 37.5% calc(100% - 1.4px), 35% calc(100% - 1.4px), 32.5% calc(100% - 1.4px), 30% calc(100% - 3.0px), 27.5% calc(100% - 1.5px), 25% calc(100% - 1.3px), 22.5% calc(100% - 2.3px), 20% calc(100% - 0.7px), 17.5% calc(100% - 1.9px), 15% calc(100% - 0.4px), 12.5% calc(100% - 3.0px), 10% calc(100% - 0.2px), 7.5% calc(100% - 2.5px), 5% calc(100% - 0.9px), 2.5% calc(100% - 2.2px), 0% calc(100% - 0.6px), 1.8px 97.5%, 0.1px 95%, 1.2px 92.5%, 1.1px 90%, 0.7px 87.5%, 0.6px 85%, 0.4px 82.5%, 1.1px 80%, 0.4px 77.5%, 1.7px 75%, 1.5px 72.5%, 3.1px 70%, 2.7px 67.5%, 0.0px 65%, 0.1px 62.5%, 1.6px 60%, 2.9px 57.5%, 2.0px 55%, 3.2px 52.5%, 2.1px 50%, 1.3px 47.5%, 0.7px 45%, 3.0px 42.5%, 2.5px 40%, 1.0px 37.5%, 2.7px 35%, 1.1px 32.5%, 0.9px 30%, 1.1px 27.5%, 0.1px 25%, 1.6px 22.5%, 2.0px 20%, 1.9px 17.5%, 0.5px 15%, 0.6px 12.5%, 2.1px 10%, 1.5px 7.5%, 0.3px 5%, 1.4px 2.5%); box-shadow: inset 0 0 34px rgba(110,60,20,0.45); padding: 16px 14px 16px; display: flex; flex-direction: column; gap: 6px">
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-paper)"></rect></svg>
+      <div style="position: relative; display: flex; align-items: center; gap: 10px; padding: 0 6px">
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <h2 style="margin: 0; font-family: Rye, serif; font-weight: 400; font-size: 32px; line-height: 1; color: #2A1A0F; white-space: nowrap">Cooling</h2>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+      </div>
+      <div style="position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+          <div data-need="37" style="display: flex; flex-direction: column; align-items: center; gap: 1px">
+            <svg aria-hidden="true" width="96" height="124" viewBox="0 0 96 124">
+              <path d="M70 39 L84 39" stroke="#2A1A0F" stroke-width="1.4"></path>
+              <path d="M74 36 L91 27 L93 52 L74 43 Z" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.9"></path>
+              <path d="M78 35 L79 45 M82 33 L83 47 M86 31 L87 49 M90 29 L91 51" stroke="#2A1A0F" stroke-width="0.5" opacity="0.6"></path>
+              <path d="M44 46 L28 118 M52 46 L68 118 M48 46 V118" stroke="#2A1A0F" stroke-width="1.6" fill="none"></path>
+              <path d="M41 62 H55 M37 80 H59 M33 98 H63 M41 62 L59 80 M55 62 L37 80 M37 80 L63 98 M59 80 L33 98 M33 98 L66 114 M63 98 L30 114" stroke="#2A1A0F" stroke-width="0.7" fill="none"></path>
+              <path d="M18 119 H78" stroke="#2A1A0F" stroke-width="1.2"></path>
+              <path d="M22 121 H30 M38 121 H50 M60 121 H74" stroke="#2A1A0F" stroke-width="0.6" opacity="0.6"></path>
+              <g data-rotor="37">
+                <polygon points="60.5,38.9 81.3,35.9 81.4,42.3 60.5,40.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="60.1,43.2 80.6,47.5 78.6,53.6 59.5,44.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="58.2,47.2 76.1,58.2 72.1,63.3 57.1,48.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="55.2,50.2 68.2,66.8 62.7,70.1 53.7,51.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="51.2,52.1 57.8,72.0 51.5,73.3 49.5,52.4" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="46.9,52.5 46.2,73.5 39.9,72.5 45.2,52.2" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="42.7,51.3 34.9,70.8 29.3,67.8 41.2,50.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="39.2,48.8 25.2,64.5 20.9,59.7 38.0,47.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="36.7,45.3 18.2,55.2 15.8,49.2 36.0,43.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.5,41.1 14.7,44.1 14.6,37.7 35.5,39.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.9,36.8 15.4,32.5 17.4,26.4 36.5,35.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="37.8,32.8 19.9,21.8 23.9,16.7 38.9,31.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="40.8,29.8 27.8,13.2 33.3,9.9 42.3,28.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="44.8,27.9 38.2,8.0 44.5,6.7 46.5,27.6" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="49.1,27.5 49.8,6.5 56.1,7.5 50.8,27.8" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="53.3,28.7 61.1,9.2 66.7,12.2 54.8,29.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="56.8,31.2 70.8,15.5 75.1,20.3 58.0,32.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="59.3,34.7 77.8,24.8 80.2,30.8 60.0,36.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon>
+                <circle cx="48" cy="40" r="34" fill="none" stroke="#2A1A0F" stroke-width="1.4"></circle>
+                <circle cx="48" cy="40" r="23" fill="none" stroke="#2A1A0F" stroke-width="0.9"></circle>
+                <circle cx="48" cy="40" r="12" fill="none" stroke="#2A1A0F" stroke-width="1.1"></circle>
+                <path d="M52.4 40.8 L59.8 42.1 M49.5 44.2 L52.1 51.3 M45.1 43.4 L40.3 49.2 M43.6 39.2 L36.2 37.9 M46.5 35.8 L43.9 28.7 M50.9 36.6 L55.7 30.8 " stroke="#2A1A0F" stroke-width="0.7"></path>
+              </g>
+              <circle cx="48" cy="40" r="4.5" fill="#2A1A0F"></circle>
+              <circle cx="47" cy="39" r="1.5" fill="#CDB384" opacity="0.6"></circle>
+            </svg>
+            <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F" data-num="37" data-places="0">--</span>
+            <span style="font-size: 12px; color: #5E4630; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="36" data-default="Fan 1">Fan 1</span>
+          </div>
+          <div data-need="41" style="display: flex; flex-direction: column; align-items: center; gap: 1px">
+            <svg aria-hidden="true" width="96" height="124" viewBox="0 0 96 124">
+              <path d="M70 39 L84 39" stroke="#2A1A0F" stroke-width="1.4"></path>
+              <path d="M74 36 L91 27 L93 52 L74 43 Z" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.9"></path>
+              <path d="M78 35 L79 45 M82 33 L83 47 M86 31 L87 49 M90 29 L91 51" stroke="#2A1A0F" stroke-width="0.5" opacity="0.6"></path>
+              <path d="M44 46 L28 118 M52 46 L68 118 M48 46 V118" stroke="#2A1A0F" stroke-width="1.6" fill="none"></path>
+              <path d="M41 62 H55 M37 80 H59 M33 98 H63 M41 62 L59 80 M55 62 L37 80 M37 80 L63 98 M59 80 L33 98 M33 98 L66 114 M63 98 L30 114" stroke="#2A1A0F" stroke-width="0.7" fill="none"></path>
+              <path d="M18 119 H78" stroke="#2A1A0F" stroke-width="1.2"></path>
+              <path d="M22 121 H30 M38 121 H50 M60 121 H74" stroke="#2A1A0F" stroke-width="0.6" opacity="0.6"></path>
+              <g data-rotor="41">
+                <polygon points="60.5,38.9 81.3,35.9 81.4,42.3 60.5,40.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="60.1,43.2 80.6,47.5 78.6,53.6 59.5,44.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="58.2,47.2 76.1,58.2 72.1,63.3 57.1,48.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="55.2,50.2 68.2,66.8 62.7,70.1 53.7,51.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="51.2,52.1 57.8,72.0 51.5,73.3 49.5,52.4" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="46.9,52.5 46.2,73.5 39.9,72.5 45.2,52.2" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="42.7,51.3 34.9,70.8 29.3,67.8 41.2,50.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="39.2,48.8 25.2,64.5 20.9,59.7 38.0,47.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="36.7,45.3 18.2,55.2 15.8,49.2 36.0,43.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.5,41.1 14.7,44.1 14.6,37.7 35.5,39.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.9,36.8 15.4,32.5 17.4,26.4 36.5,35.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="37.8,32.8 19.9,21.8 23.9,16.7 38.9,31.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="40.8,29.8 27.8,13.2 33.3,9.9 42.3,28.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="44.8,27.9 38.2,8.0 44.5,6.7 46.5,27.6" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="49.1,27.5 49.8,6.5 56.1,7.5 50.8,27.8" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="53.3,28.7 61.1,9.2 66.7,12.2 54.8,29.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="56.8,31.2 70.8,15.5 75.1,20.3 58.0,32.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="59.3,34.7 77.8,24.8 80.2,30.8 60.0,36.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon>
+                <circle cx="48" cy="40" r="34" fill="none" stroke="#2A1A0F" stroke-width="1.4"></circle>
+                <circle cx="48" cy="40" r="23" fill="none" stroke="#2A1A0F" stroke-width="0.9"></circle>
+                <circle cx="48" cy="40" r="12" fill="none" stroke="#2A1A0F" stroke-width="1.1"></circle>
+                <path d="M52.4 40.8 L59.8 42.1 M49.5 44.2 L52.1 51.3 M45.1 43.4 L40.3 49.2 M43.6 39.2 L36.2 37.9 M46.5 35.8 L43.9 28.7 M50.9 36.6 L55.7 30.8 " stroke="#2A1A0F" stroke-width="0.7"></path>
+              </g>
+              <circle cx="48" cy="40" r="4.5" fill="#2A1A0F"></circle>
+              <circle cx="47" cy="39" r="1.5" fill="#CDB384" opacity="0.6"></circle>
+            </svg>
+            <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F" data-num="41" data-places="0">--</span>
+            <span style="font-size: 12px; color: #5E4630; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="40" data-default="Fan 2">Fan 2</span>
+          </div>
+          <div data-need="45" style="display: flex; flex-direction: column; align-items: center; gap: 1px">
+            <svg aria-hidden="true" width="96" height="124" viewBox="0 0 96 124">
+              <path d="M70 39 L84 39" stroke="#2A1A0F" stroke-width="1.4"></path>
+              <path d="M74 36 L91 27 L93 52 L74 43 Z" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.9"></path>
+              <path d="M78 35 L79 45 M82 33 L83 47 M86 31 L87 49 M90 29 L91 51" stroke="#2A1A0F" stroke-width="0.5" opacity="0.6"></path>
+              <path d="M44 46 L28 118 M52 46 L68 118 M48 46 V118" stroke="#2A1A0F" stroke-width="1.6" fill="none"></path>
+              <path d="M41 62 H55 M37 80 H59 M33 98 H63 M41 62 L59 80 M55 62 L37 80 M37 80 L63 98 M59 80 L33 98 M33 98 L66 114 M63 98 L30 114" stroke="#2A1A0F" stroke-width="0.7" fill="none"></path>
+              <path d="M18 119 H78" stroke="#2A1A0F" stroke-width="1.2"></path>
+              <path d="M22 121 H30 M38 121 H50 M60 121 H74" stroke="#2A1A0F" stroke-width="0.6" opacity="0.6"></path>
+              <g data-rotor="45">
+                <polygon points="60.5,38.9 81.3,35.9 81.4,42.3 60.5,40.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="60.1,43.2 80.6,47.5 78.6,53.6 59.5,44.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="58.2,47.2 76.1,58.2 72.1,63.3 57.1,48.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="55.2,50.2 68.2,66.8 62.7,70.1 53.7,51.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="51.2,52.1 57.8,72.0 51.5,73.3 49.5,52.4" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="46.9,52.5 46.2,73.5 39.9,72.5 45.2,52.2" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="42.7,51.3 34.9,70.8 29.3,67.8 41.2,50.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="39.2,48.8 25.2,64.5 20.9,59.7 38.0,47.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="36.7,45.3 18.2,55.2 15.8,49.2 36.0,43.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.5,41.1 14.7,44.1 14.6,37.7 35.5,39.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.9,36.8 15.4,32.5 17.4,26.4 36.5,35.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="37.8,32.8 19.9,21.8 23.9,16.7 38.9,31.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="40.8,29.8 27.8,13.2 33.3,9.9 42.3,28.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="44.8,27.9 38.2,8.0 44.5,6.7 46.5,27.6" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="49.1,27.5 49.8,6.5 56.1,7.5 50.8,27.8" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="53.3,28.7 61.1,9.2 66.7,12.2 54.8,29.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="56.8,31.2 70.8,15.5 75.1,20.3 58.0,32.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="59.3,34.7 77.8,24.8 80.2,30.8 60.0,36.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon>
+                <circle cx="48" cy="40" r="34" fill="none" stroke="#2A1A0F" stroke-width="1.4"></circle>
+                <circle cx="48" cy="40" r="23" fill="none" stroke="#2A1A0F" stroke-width="0.9"></circle>
+                <circle cx="48" cy="40" r="12" fill="none" stroke="#2A1A0F" stroke-width="1.1"></circle>
+                <path d="M52.4 40.8 L59.8 42.1 M49.5 44.2 L52.1 51.3 M45.1 43.4 L40.3 49.2 M43.6 39.2 L36.2 37.9 M46.5 35.8 L43.9 28.7 M50.9 36.6 L55.7 30.8 " stroke="#2A1A0F" stroke-width="0.7"></path>
+              </g>
+              <circle cx="48" cy="40" r="4.5" fill="#2A1A0F"></circle>
+              <circle cx="47" cy="39" r="1.5" fill="#CDB384" opacity="0.6"></circle>
+            </svg>
+            <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F" data-num="45" data-places="0">--</span>
+            <span style="font-size: 12px; color: #5E4630; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="44" data-default="Fan 3">Fan 3</span>
+          </div>
+          <div data-need="49" style="display: flex; flex-direction: column; align-items: center; gap: 1px">
+            <svg aria-hidden="true" width="96" height="124" viewBox="0 0 96 124">
+              <path d="M70 39 L84 39" stroke="#2A1A0F" stroke-width="1.4"></path>
+              <path d="M74 36 L91 27 L93 52 L74 43 Z" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.9"></path>
+              <path d="M78 35 L79 45 M82 33 L83 47 M86 31 L87 49 M90 29 L91 51" stroke="#2A1A0F" stroke-width="0.5" opacity="0.6"></path>
+              <path d="M44 46 L28 118 M52 46 L68 118 M48 46 V118" stroke="#2A1A0F" stroke-width="1.6" fill="none"></path>
+              <path d="M41 62 H55 M37 80 H59 M33 98 H63 M41 62 L59 80 M55 62 L37 80 M37 80 L63 98 M59 80 L33 98 M33 98 L66 114 M63 98 L30 114" stroke="#2A1A0F" stroke-width="0.7" fill="none"></path>
+              <path d="M18 119 H78" stroke="#2A1A0F" stroke-width="1.2"></path>
+              <path d="M22 121 H30 M38 121 H50 M60 121 H74" stroke="#2A1A0F" stroke-width="0.6" opacity="0.6"></path>
+              <g data-rotor="49">
+                <polygon points="60.5,38.9 81.3,35.9 81.4,42.3 60.5,40.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="60.1,43.2 80.6,47.5 78.6,53.6 59.5,44.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="58.2,47.2 76.1,58.2 72.1,63.3 57.1,48.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="55.2,50.2 68.2,66.8 62.7,70.1 53.7,51.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="51.2,52.1 57.8,72.0 51.5,73.3 49.5,52.4" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="46.9,52.5 46.2,73.5 39.9,72.5 45.2,52.2" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="42.7,51.3 34.9,70.8 29.3,67.8 41.2,50.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="39.2,48.8 25.2,64.5 20.9,59.7 38.0,47.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="36.7,45.3 18.2,55.2 15.8,49.2 36.0,43.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.5,41.1 14.7,44.1 14.6,37.7 35.5,39.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.9,36.8 15.4,32.5 17.4,26.4 36.5,35.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="37.8,32.8 19.9,21.8 23.9,16.7 38.9,31.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="40.8,29.8 27.8,13.2 33.3,9.9 42.3,28.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="44.8,27.9 38.2,8.0 44.5,6.7 46.5,27.6" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="49.1,27.5 49.8,6.5 56.1,7.5 50.8,27.8" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="53.3,28.7 61.1,9.2 66.7,12.2 54.8,29.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="56.8,31.2 70.8,15.5 75.1,20.3 58.0,32.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="59.3,34.7 77.8,24.8 80.2,30.8 60.0,36.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon>
+                <circle cx="48" cy="40" r="34" fill="none" stroke="#2A1A0F" stroke-width="1.4"></circle>
+                <circle cx="48" cy="40" r="23" fill="none" stroke="#2A1A0F" stroke-width="0.9"></circle>
+                <circle cx="48" cy="40" r="12" fill="none" stroke="#2A1A0F" stroke-width="1.1"></circle>
+                <path d="M52.4 40.8 L59.8 42.1 M49.5 44.2 L52.1 51.3 M45.1 43.4 L40.3 49.2 M43.6 39.2 L36.2 37.9 M46.5 35.8 L43.9 28.7 M50.9 36.6 L55.7 30.8 " stroke="#2A1A0F" stroke-width="0.7"></path>
+              </g>
+              <circle cx="48" cy="40" r="4.5" fill="#2A1A0F"></circle>
+              <circle cx="47" cy="39" r="1.5" fill="#CDB384" opacity="0.6"></circle>
+            </svg>
+            <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F" data-num="49" data-places="0">--</span>
+            <span style="font-size: 12px; color: #5E4630; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="48" data-default="Fan 4">Fan 4</span>
+          </div>
+      </div>
+    </div>
+    <div style="position: absolute; top: 7px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 6px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+  </section>
+  <!-- ===== MEMORY poster: whiskey bottles ===== -->
+  <section data-section="memory" style="position: relative; z-index: 1; transform: rotate(0.5deg); filter: drop-shadow(0 10px 10px rgba(0,0,0,0.55))">
+    <div style="position: relative; background: radial-gradient(ellipse at 18% 14%, rgba(120,70,20,0.2) 0%, rgba(120,70,20,0) 38%), radial-gradient(ellipse at 86% 82%, rgba(110,60,20,0.22) 0%, rgba(110,60,20,0) 42%), radial-gradient(ellipse at 60% 40%, rgba(255,250,235,0.35) 0%, rgba(255,250,235,0) 55%), linear-gradient(170deg, #EBDAB4 0%, #DEC596 60%, #CDAE74 100%); clip-path: polygon(0% 0.0px, 2.5% 2.4px, 5% 2.8px, 7.5% 2.0px, 10% 0.6px, 12.5% 1.9px, 15% 3.2px, 17.5% 0.8px, 20% 0.8px, 22.5% 2.0px, 25% 0.2px, 27.5% 2.9px, 30% 1.4px, 32.5% 2.3px, 35% 0.4px, 37.5% 0.4px, 40% 0.3px, 42.5% 0.5px, 45% 0.2px, 47.5% 1.3px, 50% 2.5px, 52.5% 1.4px, 55% 1.2px, 57.5% 1.7px, 60% 2.5px, 62.5% 0.2px, 65% 3.0px, 67.5% 2.3px, 70% 2.4px, 72.5% 2.3px, 75% 0.4px, 77.5% 0.0px, 80% 1.6px, 82.5% 3.2px, 85% 1.5px, 87.5% 2.9px, 90% 0.9px, 92.5% 2.8px, 95% 2.6px, 97.5% 2.2px, 100% 0.6px, calc(100% - 2.0px) 2.5%, calc(100% - 0.6px) 5%, calc(100% - 2.6px) 7.5%, calc(100% - 2.2px) 10%, calc(100% - 1.7px) 12.5%, calc(100% - 0.8px) 15%, calc(100% - 1.9px) 17.5%, calc(100% - 2.3px) 20%, calc(100% - 0.5px) 22.5%, calc(100% - 0.3px) 25%, calc(100% - 0.1px) 27.5%, calc(100% - 3.2px) 30%, calc(100% - 2.5px) 32.5%, calc(100% - 1.7px) 35%, calc(100% - 1.6px) 37.5%, calc(100% - 0.7px) 40%, calc(100% - 2.7px) 42.5%, calc(100% - 0.3px) 45%, calc(100% - 0.9px) 47.5%, calc(100% - 3.2px) 50%, calc(100% - 1.9px) 52.5%, calc(100% - 2.7px) 55%, calc(100% - 2.2px) 57.5%, calc(100% - 2.3px) 60%, calc(100% - 1.2px) 62.5%, calc(100% - 1.9px) 65%, calc(100% - 2.9px) 67.5%, calc(100% - 2.9px) 70%, calc(100% - 1.8px) 72.5%, calc(100% - 1.6px) 75%, calc(100% - 0.2px) 77.5%, calc(100% - 2.6px) 80%, calc(100% - 0.6px) 82.5%, calc(100% - 0.4px) 85%, calc(100% - 2.4px) 87.5%, calc(100% - 2.4px) 90%, calc(100% - 0.2px) 92.5%, calc(100% - 3.2px) 95%, calc(100% - 0.6px) 97.5%, 100% calc(100% - 1.2px), 97.5% calc(100% - 2.0px), 95% calc(100% - 1.1px), 92.5% calc(100% - 1.5px), 90% calc(100% - 0.7px), 87.5% calc(100% - 0.7px), 85% calc(100% - 1.5px), 82.5% calc(100% - 0.7px), 80% calc(100% - 3.2px), 77.5% calc(100% - 2.1px), 75% calc(100% - 2.9px), 72.5% calc(100% - 1.4px), 70% calc(100% - 1.2px), 67.5% calc(100% - 2.5px), 65% calc(100% - 1.3px), 62.5% calc(100% - 2.4px), 60% calc(100% - 2.1px), 57.5% calc(100% - 2.1px), 55% calc(100% - 2.1px), 52.5% calc(100% - 2.3px), 50% calc(100% - 0.9px), 47.5% calc(100% - 2.6px), 45% calc(100% - 0.1px), 42.5% calc(100% - 2.4px), 40% calc(100% - 0.7px), 37.5% calc(100% - 0.0px), 35% calc(100% - 2.7px), 32.5% calc(100% - 2.2px), 30% calc(100% - 0.7px), 27.5% calc(100% - 1.5px), 25% calc(100% - 0.2px), 22.5% calc(100% - 2.3px), 20% calc(100% - 2.1px), 17.5% calc(100% - 2.3px), 15% calc(100% - 0.4px), 12.5% calc(100% - 2.2px), 10% calc(100% - 1.1px), 7.5% calc(100% - 1.5px), 5% calc(100% - 0.0px), 2.5% calc(100% - 2.4px), 0% calc(100% - 2.9px), 2.5px 97.5%, 0.2px 95%, 2.2px 92.5%, 1.8px 90%, 2.9px 87.5%, 2.2px 85%, 0.1px 82.5%, 2.6px 80%, 2.1px 77.5%, 2.0px 75%, 2.2px 72.5%, 0.5px 70%, 1.0px 67.5%, 0.3px 65%, 0.5px 62.5%, 1.6px 60%, 0.3px 57.5%, 1.1px 55%, 2.4px 52.5%, 1.3px 50%, 0.2px 47.5%, 2.2px 45%, 0.4px 42.5%, 2.1px 40%, 1.9px 37.5%, 3.1px 35%, 2.8px 32.5%, 0.9px 30%, 0.8px 27.5%, 2.4px 25%, 0.6px 22.5%, 2.1px 20%, 0.6px 17.5%, 2.3px 15%, 0.7px 12.5%, 2.1px 10%, 2.2px 7.5%, 0.2px 5%, 2.8px 2.5%); box-shadow: inset 0 0 34px rgba(110,60,20,0.45); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 6px">
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-paper)"></rect></svg>
+      <div style="position: relative; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <h2 style="margin: 0; font-family: Rye, serif; font-weight: 400; font-size: 32px; line-height: 1; color: #2A1A0F; white-space: nowrap">Memory</h2>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+      </div>
+      <div style="position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+          <div data-need="53" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg data-bottle="53" data-max="55" aria-hidden="true" width="88" height="160" viewBox="0 0 80 150" style="overflow: visible; filter: drop-shadow(3px 4px 3px rgba(60,30,8,0.45))">
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="url(#wx-amber) #5A2A08" opacity="0.28"></path>
+              <path data-whiskey clip-path="url(#wx-bottle)" d="" fill="url(#wx-whiskey) #B8661A"></path>
+              <path data-surface clip-path="url(#wx-bottle)" d="" fill="none" stroke="#F4C46A" stroke-width="1.4" opacity="0.9"></path>
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="none" stroke="#2A1204" stroke-width="1.4"></path>
+              <path d="M19 86 C17 104 17 120 20 134" fill="none" stroke="#FFF4DC" stroke-width="3" opacity="0.32" stroke-linecap="round"></path>
+              <path d="M37 18 V38" stroke="#FFF4DC" stroke-width="1.6" opacity="0.3" stroke-linecap="round"></path>
+              <rect x="35" y="1" width="10" height="13" rx="1.5" fill="#8A6238" stroke="#2A1204" stroke-width="0.8"></rect>
+              <rect x="33" y="13" width="14" height="5" fill="#8E2B17" stroke="#2A1204" stroke-width="0.6"></rect>
+              <rect x="20" y="50" width="40" height="30" fill="#EEE0C0" stroke="#2A1A0F" stroke-width="1"></rect>
+              <rect x="23" y="53" width="34" height="24" fill="none" stroke="#2A1A0F" stroke-width="0.5"></rect>
+              <text x="40" y="62" text-anchor="middle" font-family="Special Elite, monospace" font-size="6" fill="#8E2B17" data-cap="52" data-default="Memory" data-short="9">Memory</text>
+              <text x="40" y="74.5" text-anchor="middle" font-family="Alfa Slab One, serif" font-size="12" fill="#2A1A0F"><tspan data-pct="53" data-max="55">--</tspan>%</text>
+            </svg>
+            <span style="font-family: Rye, serif; font-size: 16px; color: #2A1A0F; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="52" data-default="Memory">Memory</span>
+            <span style="font-size: 12px; color: #5E4630"><span data-num="53" data-places="1" data-plain>--</span> of <span data-num="55" data-places="0" data-plain>--</span> <span data-unit="54" data-default="GB">GB</span></span>
+          </div>
+          <div data-need="57" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg data-bottle="57" data-max="59" aria-hidden="true" width="88" height="160" viewBox="0 0 80 150" style="overflow: visible; filter: drop-shadow(3px 4px 3px rgba(60,30,8,0.45))">
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="url(#wx-amber) #5A2A08" opacity="0.28"></path>
+              <path data-whiskey clip-path="url(#wx-bottle)" d="" fill="url(#wx-whiskey) #B8661A"></path>
+              <path data-surface clip-path="url(#wx-bottle)" d="" fill="none" stroke="#F4C46A" stroke-width="1.4" opacity="0.9"></path>
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="none" stroke="#2A1204" stroke-width="1.4"></path>
+              <path d="M19 86 C17 104 17 120 20 134" fill="none" stroke="#FFF4DC" stroke-width="3" opacity="0.32" stroke-linecap="round"></path>
+              <path d="M37 18 V38" stroke="#FFF4DC" stroke-width="1.6" opacity="0.3" stroke-linecap="round"></path>
+              <rect x="35" y="1" width="10" height="13" rx="1.5" fill="#8A6238" stroke="#2A1204" stroke-width="0.8"></rect>
+              <rect x="33" y="13" width="14" height="5" fill="#8E2B17" stroke="#2A1204" stroke-width="0.6"></rect>
+              <rect x="20" y="50" width="40" height="30" fill="#EEE0C0" stroke="#2A1A0F" stroke-width="1"></rect>
+              <rect x="23" y="53" width="34" height="24" fill="none" stroke="#2A1A0F" stroke-width="0.5"></rect>
+              <text x="40" y="62" text-anchor="middle" font-family="Special Elite, monospace" font-size="6" fill="#8E2B17" data-cap="56" data-default="Video" data-short="9">Video</text>
+              <text x="40" y="74.5" text-anchor="middle" font-family="Alfa Slab One, serif" font-size="12" fill="#2A1A0F"><tspan data-pct="57" data-max="59">--</tspan>%</text>
+            </svg>
+            <span style="font-family: Rye, serif; font-size: 16px; color: #2A1A0F; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="56" data-default="Video">Video</span>
+            <span style="font-size: 12px; color: #5E4630"><span data-num="57" data-places="1" data-plain>--</span> of <span data-num="59" data-places="0" data-plain>--</span> <span data-unit="58" data-default="GB">GB</span></span>
+          </div>
+          <div data-need="61" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg data-bottle="61" data-max="63" aria-hidden="true" width="88" height="160" viewBox="0 0 80 150" style="overflow: visible; filter: drop-shadow(3px 4px 3px rgba(60,30,8,0.45))">
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="url(#wx-amber) #5A2A08" opacity="0.28"></path>
+              <path data-whiskey clip-path="url(#wx-bottle)" d="" fill="url(#wx-whiskey) #B8661A"></path>
+              <path data-surface clip-path="url(#wx-bottle)" d="" fill="none" stroke="#F4C46A" stroke-width="1.4" opacity="0.9"></path>
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="none" stroke="#2A1204" stroke-width="1.4"></path>
+              <path d="M19 86 C17 104 17 120 20 134" fill="none" stroke="#FFF4DC" stroke-width="3" opacity="0.32" stroke-linecap="round"></path>
+              <path d="M37 18 V38" stroke="#FFF4DC" stroke-width="1.6" opacity="0.3" stroke-linecap="round"></path>
+              <rect x="35" y="1" width="10" height="13" rx="1.5" fill="#8A6238" stroke="#2A1204" stroke-width="0.8"></rect>
+              <rect x="33" y="13" width="14" height="5" fill="#8E2B17" stroke="#2A1204" stroke-width="0.6"></rect>
+              <rect x="20" y="50" width="40" height="30" fill="#EEE0C0" stroke="#2A1A0F" stroke-width="1"></rect>
+              <rect x="23" y="53" width="34" height="24" fill="none" stroke="#2A1A0F" stroke-width="0.5"></rect>
+              <text x="40" y="62" text-anchor="middle" font-family="Special Elite, monospace" font-size="6" fill="#8E2B17" data-cap="60" data-default="Disk" data-short="9">Disk</text>
+              <text x="40" y="74.5" text-anchor="middle" font-family="Alfa Slab One, serif" font-size="12" fill="#2A1A0F"><tspan data-pct="61" data-max="63">--</tspan>%</text>
+            </svg>
+            <span style="font-family: Rye, serif; font-size: 16px; color: #2A1A0F; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="60" data-default="Disk">Disk</span>
+            <span style="font-size: 12px; color: #5E4630"><span data-num="61" data-places="1" data-plain>--</span> of <span data-num="63" data-places="0" data-plain>--</span> <span data-unit="62" data-default="GB">GB</span></span>
+          </div>
+      </div>
+    </div>
+    <div style="position: absolute; top: 7px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 6px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+  </section>
+  <!-- ===== NETWORK poster: telegraph ===== -->
+  <section data-section="network" style="position: relative; z-index: 1; transform: rotate(-0.4deg); filter: drop-shadow(0 10px 10px rgba(0,0,0,0.55))">
+    <div style="position: relative; background: radial-gradient(ellipse at 18% 14%, rgba(120,70,20,0.2) 0%, rgba(120,70,20,0) 38%), radial-gradient(ellipse at 86% 82%, rgba(110,60,20,0.22) 0%, rgba(110,60,20,0) 42%), radial-gradient(ellipse at 60% 40%, rgba(255,250,235,0.35) 0%, rgba(255,250,235,0) 55%), linear-gradient(170deg, #EBDAB4 0%, #DEC596 60%, #CDAE74 100%); clip-path: polygon(0% 0.0px, 2.5% 1.5px, 5% 2.2px, 7.5% 1.9px, 10% 0.4px, 12.5% 1.4px, 15% 1.9px, 17.5% 0.3px, 20% 0.3px, 22.5% 2.5px, 25% 0.1px, 27.5% 2.1px, 30% 0.8px, 32.5% 0.6px, 35% 2.6px, 37.5% 0.0px, 40% 2.6px, 42.5% 0.8px, 45% 0.1px, 47.5% 0.9px, 50% 0.6px, 52.5% 1.1px, 55% 0.1px, 57.5% 2.0px, 60% 2.5px, 62.5% 2.9px, 65% 0.4px, 67.5% 0.7px, 70% 0.5px, 72.5% 2.7px, 75% 3.0px, 77.5% 2.9px, 80% 3.0px, 82.5% 2.0px, 85% 0.1px, 87.5% 0.5px, 90% 1.6px, 92.5% 2.3px, 95% 2.2px, 97.5% 1.3px, 100% 1.3px, calc(100% - 1.3px) 2.5%, calc(100% - 1.8px) 5%, calc(100% - 2.0px) 7.5%, calc(100% - 0.5px) 10%, calc(100% - 1.5px) 12.5%, calc(100% - 1.5px) 15%, calc(100% - 0.3px) 17.5%, calc(100% - 0.9px) 20%, calc(100% - 2.7px) 22.5%, calc(100% - 0.2px) 25%, calc(100% - 0.8px) 27.5%, calc(100% - 0.3px) 30%, calc(100% - 1.1px) 32.5%, calc(100% - 0.7px) 35%, calc(100% - 2.1px) 37.5%, calc(100% - 1.7px) 40%, calc(100% - 1.7px) 42.5%, calc(100% - 2.9px) 45%, calc(100% - 0.2px) 47.5%, calc(100% - 2.4px) 50%, calc(100% - 0.5px) 52.5%, calc(100% - 1.8px) 55%, calc(100% - 2.7px) 57.5%, calc(100% - 1.7px) 60%, calc(100% - 2.5px) 62.5%, calc(100% - 0.2px) 65%, calc(100% - 0.3px) 67.5%, calc(100% - 0.7px) 70%, calc(100% - 1.6px) 72.5%, calc(100% - 0.1px) 75%, calc(100% - 0.2px) 77.5%, calc(100% - 1.3px) 80%, calc(100% - 0.2px) 82.5%, calc(100% - 0.0px) 85%, calc(100% - 2.5px) 87.5%, calc(100% - 3.2px) 90%, calc(100% - 2.2px) 92.5%, calc(100% - 2.9px) 95%, calc(100% - 0.6px) 97.5%, 100% calc(100% - 0.5px), 97.5% calc(100% - 0.8px), 95% calc(100% - 1.7px), 92.5% calc(100% - 1.3px), 90% calc(100% - 1.7px), 87.5% calc(100% - 1.3px), 85% calc(100% - 0.1px), 82.5% calc(100% - 2.1px), 80% calc(100% - 3.1px), 77.5% calc(100% - 0.7px), 75% calc(100% - 3.0px), 72.5% calc(100% - 1.3px), 70% calc(100% - 3.0px), 67.5% calc(100% - 1.4px), 65% calc(100% - 0.3px), 62.5% calc(100% - 2.4px), 60% calc(100% - 0.0px), 57.5% calc(100% - 2.0px), 55% calc(100% - 0.5px), 52.5% calc(100% - 0.4px), 50% calc(100% - 0.9px), 47.5% calc(100% - 2.9px), 45% calc(100% - 2.4px), 42.5% calc(100% - 0.2px), 40% calc(100% - 0.7px), 37.5% calc(100% - 1.4px), 35% calc(100% - 0.9px), 32.5% calc(100% - 0.4px), 30% calc(100% - 0.5px), 27.5% calc(100% - 3.0px), 25% calc(100% - 1.5px), 22.5% calc(100% - 1.4px), 20% calc(100% - 2.7px), 17.5% calc(100% - 0.9px), 15% calc(100% - 0.8px), 12.5% calc(100% - 2.0px), 10% calc(100% - 1.4px), 7.5% calc(100% - 0.7px), 5% calc(100% - 1.0px), 2.5% calc(100% - 1.4px), 0% calc(100% - 0.3px), 1.1px 97.5%, 0.3px 95%, 0.3px 92.5%, 2.9px 90%, 0.4px 87.5%, 2.8px 85%, 0.5px 82.5%, 0.5px 80%, 2.5px 77.5%, 0.5px 75%, 0.5px 72.5%, 0.4px 70%, 0.5px 67.5%, 0.4px 65%, 0.6px 62.5%, 3.2px 60%, 0.1px 57.5%, 3.1px 55%, 2.4px 52.5%, 0.2px 50%, 1.5px 47.5%, 2.9px 45%, 0.1px 42.5%, 1.4px 40%, 2.9px 37.5%, 2.6px 35%, 0.7px 32.5%, 1.8px 30%, 2.0px 27.5%, 2.5px 25%, 2.2px 22.5%, 0.9px 20%, 2.5px 17.5%, 2.7px 15%, 1.3px 12.5%, 1.0px 10%, 0.5px 7.5%, 0.4px 5%, 1.0px 2.5%); box-shadow: inset 0 0 34px rgba(110,60,20,0.45); padding: 16px 20px 16px; display: flex; flex-direction: column; gap: 6px">
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-paper)"></rect></svg>
+      <div style="position: relative; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <h2 style="margin: 0; font-family: Rye, serif; font-weight: 400; font-size: 32px; line-height: 1; color: #2A1A0F; white-space: nowrap">Telegraph</h2>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+      </div>
+      <div style="position: relative; display: flex; justify-content: space-between; align-items: baseline">
+        <span data-need="65" style="font-size: 13px; color: #5E4630">Incoming <span style="font-family: 'Alfa Slab One', serif; font-size: 24px; color: #8E2B17" data-num="65" data-places="1">--</span> <span data-unit="66" data-default="MB/s">MB/s</span></span>
+        <span data-need="69" style="font-size: 13px; color: #5E4630">Outgoing <span style="font-family: 'Alfa Slab One', serif; font-size: 24px; color: #2A1A0F" data-num="69" data-places="1">--</span> <span data-unit="70" data-default="MB/s">MB/s</span></span>
+      </div>
+      <svg aria-hidden="true" width="392" height="46" viewBox="0 0 392 46" style="position: relative">
+        <path d="M-1 6 Q45.5 17 92 6 M21 6 Q67.5 17 114 6 M92 6 Q138.5 17 185 6 M114 6 Q160.5 17 207 6 M185 6 Q231.5 17 278 6 M207 6 Q253.5 17 300 6 M278 6 Q324.5 17 371 6 M300 6 Q346.5 17 393 6 " fill="none" stroke="#2A1A0F" stroke-width="0.7"></path>
+          <path d="M10 44 V2 M-4 8 H24" stroke="#2A1A0F" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+          <path d="M103 44 V2 M89 8 H117" stroke="#2A1A0F" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+          <path d="M196 44 V2 M182 8 H210" stroke="#2A1A0F" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+          <path d="M289 44 V2 M275 8 H303" stroke="#2A1A0F" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+          <path d="M382 44 V2 M368 8 H396" stroke="#2A1A0F" stroke-width="2.2" fill="none" stroke-linecap="round"></path>
+        <circle cx="-1" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="21" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="92" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="114" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="185" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="207" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="278" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="300" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="371" cy="6" r="1.8" fill="#8E2B17"></circle><circle cx="393" cy="6" r="1.8" fill="#8E2B17"></circle>
+        <path d="M0 44 H392" stroke="#2A1A0F" stroke-width="1"></path>
+        <path d="M6 46 H40 M70 46 H120 M160 46 H230 M270 46 H330 M350 46 H390" stroke="#2A1A0F" stroke-width="0.6" opacity="0.5"></path>
+      </svg>
+      <svg data-chart role="img" aria-label="Network traffic over the last minute" width="392" height="104" viewBox="0 0 392 104" style="position: relative">
+        <rect x="0.5" y="0.5" width="391" height="103" fill="#F2E7CC" stroke="#2A1A0F" stroke-width="1"></rect>
+        <path d="M1 13.0 L391 13.0 M1 26.0 L391 26.0 M1 39.0 L391 39.0 M1 52.0 L391 52.0 M1 65.0 L391 65.0 M1 78.0 L391 78.0 M1 91.0 L391 91.0" fill="none" stroke="#7E9AA6" stroke-width="0.6" opacity="0.55"></path>
+        <path d="M28 1 L28 103" fill="none" stroke="#8E2B17" stroke-width="0.7" opacity="0.7"></path>
+        <path d="M31 1 L31 103" fill="none" stroke="#8E2B17" stroke-width="0.7" opacity="0.7"></path>
+        <path data-line="up" d="" fill="none" stroke="#2A1A0F" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.8"></path>
+        <path data-line="down" d="" fill="none" stroke="#8E2B17" stroke-width="2.2" stroke-linecap="round"></path>
+        <circle data-dot cx="384" cy="96" r="4" fill="#8E2B17" style="animation: wx-pulse 1.6s ease-in-out infinite"></circle>
+      </svg>
+      <div style="position: relative; display: flex; justify-content: space-between; font-size: 12px; color: #5E4630"><span>A minute ago</span><span>Now</span></div>
+    </div>
+    <div style="position: absolute; top: 7px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 6px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+  </section>
+  </div>
+  <!-- ===== FOOTER: sign between horseshoes ===== -->
+  <footer style="position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 12px">
+    <svg aria-hidden="true" width="40" height="40" viewBox="-20 -20 40 40" style="filter: drop-shadow(1px 3px 2px rgba(0,0,0,0.6))"><path d="M10.9 -5.1 A12 12 0 1 1 -10.9 -5.1" fill="none" stroke="url(#wx-iron) #3A3633" stroke-width="7" stroke-linecap="butt"></path><rect x="-1" y="-2" width="2" height="4" transform="translate(11.8 -2.1) rotate(80)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(11.3 4.1) rotate(110)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(7.7 9.2) rotate(140)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(-7.7 9.2) rotate(220)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(-11.3 4.1) rotate(250)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(-11.8 -2.1) rotate(280)" fill="#0E0B09"></rect><circle cx="0" cy="-14" r="2" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.4"></circle></svg>
+    <div style="position: relative; width: 300px; height: 52px">
+      <svg aria-hidden="true" width="300" height="52" viewBox="0 0 300 52" style="position: absolute; top: 0; left: 0; filter: drop-shadow(0 6px 6px rgba(0,0,0,0.6))">
+        <rect x="0" y="0" width="300" height="52" rx="3" fill="url(#wx-plank) #6E4826"></rect>
+        <rect x="0" y="0" width="300" height="52" rx="3" filter="url(#wx-grainH)"></rect>
+        <rect x="0.5" y="0.5" width="299" height="51" rx="3" fill="none" stroke="#1E1008" stroke-width="1.2"></rect>
+        <rect x="2" y="2" width="296" height="1.6" fill="#FFD9A8" opacity="0.12"></rect>
+        <circle cx="10" cy="26" r="2.6" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.5"></circle>
+        <circle cx="290" cy="26" r="2.6" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.5"></circle>
+      </svg>
+      <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center">
+        <span style="font-family: Rye, serif; font-size: 19px; color: #24110A; text-shadow: 0 1px 0 rgba(255,214,160,0.35), 0 -1px 1px rgba(0,0,0,0.5); white-space: nowrap" data-need="73">Up <span data-uptime="73">--</span></span>
+      </div>
+    </div>
+    <svg aria-hidden="true" width="40" height="40" viewBox="-20 -20 40 40" style="filter: drop-shadow(1px 3px 2px rgba(0,0,0,0.6))"><path d="M10.9 -5.1 A12 12 0 1 1 -10.9 -5.1" fill="none" stroke="url(#wx-iron) #3A3633" stroke-width="7" stroke-linecap="butt"></path><rect x="-1" y="-2" width="2" height="4" transform="translate(11.8 -2.1) rotate(80)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(11.3 4.1) rotate(110)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(7.7 9.2) rotate(140)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(-7.7 9.2) rotate(220)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(-11.3 4.1) rotate(250)" fill="#0E0B09"></rect><rect x="-1" y="-2" width="2" height="4" transform="translate(-11.8 -2.1) rotate(280)" fill="#0E0B09"></rect><circle cx="0" cy="-14" r="2" fill="url(#wx-iron) #3A3633" stroke="#000" stroke-width="0.4"></circle></svg>
+  </footer>
+  <svg aria-hidden="true" width="100%" height="100%" style="position: absolute; top: 0; left: 0; z-index: 3; pointer-events: none; opacity: 0.32"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-noise)"></rect></svg>
+</div>
+</div>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "sky", "label": "Sky", "type": "choice", "var": "--sky", "default": "sunset", "choices": [{"value": "sunset", "label": "Sunset"}, {"value": "noon", "label": "High Noon"}, {"value": "moon", "label": "Moonlight"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Telegraph chart full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100, WARM = 72, HOT = 85;
+  var SAMPLES = 40, SAMPLE_MS = 1500;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+  // The sky is a keyword; the stylesheet holds each one's colours and this
+  // table where its sun or moon hangs: centre, radius, radius of the glow.
+  var SKY = (css.getPropertyValue('--sky') || 'sunset').trim() || 'sunset';
+  var SUNS = { sunset: [204, 206, 44, 170], noon: [318, 64, 22, 90], moon: [312, 70, 20, 80] };
+  root.setAttribute('data-sky', SUNS[SKY] ? SKY : 'sunset');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  // A clock given in MHz is shown, and scaled, in GHz.
+  function inGhz(el, v, id) { return el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[id] || '')); }
+
+  // 13 -> 13th
+  function ordinal(n) {
+    var tens = n % 100, unit = n % 10;
+    return n + (tens >= 11 && tens <= 13 ? 'th' : unit === 1 ? 'st' : unit === 2 ? 'nd' : unit === 3 ? 'rd' : 'th');
+  }
+  // The colour of forged iron at a temperature: stops at 20, 50, 72, 85 and 100.
+  var HEAT = [[20, [62, 58, 58]], [50, [106, 28, 18]], [72, [184, 50, 26]], [85, [232, 100, 30]], [100, [255, 179, 71]]];
+  function heat(t) {
+    t = Math.max(T_MIN, Math.min(T_MAX, t));
+    for (var i = 1; i < HEAT.length; i++) {
+      if (t <= HEAT[i][0]) {
+        var a = HEAT[i - 1], b = HEAT[i], f = (t - a[0]) / (b[0] - a[0]);
+        return a[1].map(function (c, k) { return Math.round(c + (b[1][k] - c) * f); });
+      }
+    }
+    return HEAT[HEAT.length - 1][1];
+  }
+  function rgb(c) { return 'rgb(' + c.join(',') + ')'; }
+
+  // ------------------------------------------------------- drawn once
+  // Gun belts: `data-count` leather loops, each with a cartridge to show.
+  each('[data-belt]', function (el) {
+    for (var i = +el.getAttribute('data-count'); i > 0; i--) {
+      var loop = document.createElement('i');
+      loop.appendChild(document.createElement('s'));     // lead tip
+      loop.appendChild(document.createElement('b'));     // brass case
+      loop.appendChild(document.createElement('u'));     // leather loop, over the case
+      el.appendChild(loop);
+    }
+  });
+  // The sun or moon of the chosen sky.
+  var sun = SUNS[SKY] || SUNS.sunset;
+  each('[data-sun]', function (el) { el.setAttribute('cx', sun[0]); el.setAttribute('cy', sun[1]); el.setAttribute('r', sun[2]); });
+  each('[data-sun-glow]', function (el) { el.setAttribute('cx', sun[0]); el.setAttribute('cy', sun[1]); el.setAttribute('r', sun[3]); });
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-western-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  // The value the top of the chart stands for, shared by both lines. `peak`
+  // is the largest sample of the last minute, `fixed` the Network chart full
+  // scale option (0 when it is left to follow the peak).
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    // Follow the peak in steps (1, 2, 4, 8, 16 ...), so the curves do not
+    // rescale each time the peak moves a little.
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+
+  // A smooth curve through the points: each span is a cubic whose handles
+  // follow the slope between the neighbouring points.
+  function curve(pts) {
+    if (pts.length < 2) return '';
+    var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+      d += ' C' + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + ' ' +
+           (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + ' ' + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + ' ' +
+           p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return d;
+  }
+
+  // Incoming in rust, outgoing dashed in ink, on ledger paper; the newest
+  // sample at the right edge, under the pulsing dot.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var step = 348 / (SAMPLES - 1);
+    function points(values) {
+      return values.map(function (v, i) {
+        return [384 - (values.length - 1 - i) * step, 98 - clamp01(v / full) * 74];
+      });
+    }
+    var down = points(hist.down), d = curve(down);
+    attr(svg.querySelector('[data-line="down"]'), 'd', d);
+    attr(svg.querySelector('[data-line="up"]'), 'd', curve(points(hist.up)));
+    var dot = svg.querySelector('[data-dot]');
+    hide(dot, down.length === 0);          // nothing to mark before the first sample
+    if (down.length) attr(dot, 'cy', down[down.length - 1][1].toFixed(1));
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
+    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
+    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
+    each('[data-date]', function (el) {    // Friday, 13th of November
+      var day = num(v['2']);
+      var rest = [isFinite(day) ? ordinal(Math.round(day)) : '', known(v['3']) ? String(v['3']) : ''].filter(Boolean).join(' of ');
+      text(el, [known(v['1']) ? String(v['1']) : '', rest].filter(Boolean).join(', ') || '\u00a0');
+    });
+
+    each('[data-num]', function (el) {
+      var id = el.getAttribute('data-num'), n = num(v[id]);
+      if (inGhz(el, v, +id + 1)) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      text(el, inGhz(el, v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default'));
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      var name = known(c) ? String(c) : el.getAttribute('data-default'), short = +el.getAttribute('data-short');
+      text(el, short && name.length > short ? name.slice(0, short - 1) + '\u2026' : name);   // a bottle's label is small
+    });
+    each('[data-uptime]', function (el) {  // 4 days & 7 hours
+      var sec = num(v[el.getAttribute('data-uptime')]), parts = [];
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        parts = d > 0 ? [[d, 'day'], [hr, 'hour']] : hr > 0 ? [[hr, 'hour'], [mn, 'minute']] : [[mn, 'minute']];
+      }
+      text(el, parts.length ? parts.map(function (p) { return p[0] + ' ' + p[1] + (p[0] === 1 ? '' : 's'); }).join(' & ') : '--');
+    });
+
+    // Horseshoes: the heated part grows clockwise from the left heel (130
+    // degrees) over 280 degrees for the whole scale, in the colour of iron
+    // at that heat; the nail holes inside it glow as embers.
+    each('[data-gauge]', function (el) {
+      var t = num(v[el.getAttribute('data-gauge')]);
+      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var end = 130 + 280 * f, a = end * Math.PI / 180, big = 280 * f > 180 ? 1 : 0;
+      var colour = heat(isFinite(t) ? t : T_MIN), shoe = el.querySelector('[data-heat]');
+      attr(shoe, 'd', f > 0.002 ? 'M46.0 164.3 A84 84 0 ' + big + ' 1 ' +
+           (100 + 84 * Math.cos(a)).toFixed(1) + ' ' + (100 + 84 * Math.sin(a)).toFixed(1) + ' L' +
+           (100 + 62 * Math.cos(a)).toFixed(1) + ' ' + (100 + 62 * Math.sin(a)).toFixed(1) +
+           ' A62 62 0 ' + big + ' 0 60.1 147.5 Z' : '');
+      attr(shoe, 'fill', rgb(colour));
+      flag(shoe, 'ember', t >= WARM);
+      var ember = rgb(colour.map(function (c, k) { return Math.round(c + ([255, 210, 122][k] - c) * 0.45); }));
+      each('[data-hole]', function (hole) {
+        var at = +/rotate\(([\d.]+)\)/.exec(hole.getAttribute('transform'))[1] - 90;
+        attr(hole, 'fill', f > 0 && at <= end ? ember : '#120C08');
+      }, el);
+    });
+    each('[data-state]', function (el) {
+      var t = num(v[el.getAttribute('data-state')]);
+      text(el, t >= HOT ? 'Red hot!' : t >= WARM ? 'Warm' : 'Cool');
+      flag(el, 'hot', t >= HOT);
+      flag(el, 'warm', t >= WARM && t < HOT);
+    });
+
+    // Gun belts: loops filled in proportion, against the sensor's own
+    // maximum, else the limit in the stylesheet (a number, or the name of a
+    // custom property).
+    each('[data-belt]', function (el) {
+      var val = num(v[el.getAttribute('data-belt')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (scale.indexOf('clock') > 0 && /^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { val /= 1000; max /= 1000; }
+      var count = el.children.length;
+      var lit = val > 0 ? Math.max(1, Math.round(share(val, max, fallback) * count)) : 0;
+      if (el.getAttribute('data-lit') === String(lit)) return;
+      el.setAttribute('data-lit', String(lit));
+      for (var i = 0; i < count; i++) flag(el.children[i], 'on', i < lit);
+    });
+    each('[data-rotor]', function (el) {
+      var rpm = num(v[el.getAttribute('data-rotor')]);
+      fanRpm[el.getAttribute('data-rotor')] = isFinite(rpm) ? rpm : 0;
+    });
+    // Bottles: the whiskey rises from the base (y 142) to the shoulder
+    // (y 52) as the pool fills; the bottle's outline clips it.
+    each('[data-bottle]', function (el) {
+      var f = share(num(v[el.getAttribute('data-bottle')]), num(v[el.getAttribute('data-max')]), 100);
+      var y = (142 - f * 90).toFixed(1);
+      attr(el.querySelector('[data-whiskey]'), 'd', f > 0 ? 'M10 ' + y + ' H70 V146 H10 Z' : '');
+      attr(el.querySelector('[data-surface]'), 'd', f > 0 ? 'M14 ' + y + ' H66' : '');
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a horseshoe that cools cancels its
+    // animation, and stepping a cancelled one would bring it back.
+    anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    // Windpumps: one turn every 3000 / RPM seconds, but never more than about
+    // 8 degrees a frame. Eighteen blades repeat every 20 degrees, so a bigger
+    // step would read as standing still or turning backwards.
+    each('[data-rotor]', function (el) {
+      var id = el.getAttribute('data-rotor'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(360 / 3000 * rpm * dt * speed, 8 * (1 - Math.exp(-rpm / 1200)));
+      rotorAngle[id] = ((rotorAngle[id] || 0) + step) % 360;
+      el.setAttribute('transform', 'rotate(' + rotorAngle[id].toFixed(1) + ' 48 40)');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // horseshoes and bottles in their empty state before the first values arrive
+})();
+</script>
+</body>
+</html>

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1240 1440x930 2880x680">
 <title>Art Deco Sensor Panel</title>
 <!--
   Art Deco sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait.
@@ -39,13 +40,18 @@
 
   Options and size: the settings named above are also on the panel's Display
   tab in rg-Sens (Template Options, declared in the rg-template-options block
-  below), so the stylesheet need not be edited. The design is drawn for
-  480x1920 and is scaled to whatever size the panel has.
+  below), so the stylesheet need not be edited.
+
+  Size: the design is drawn for 480x1920, but its six groups re-arrange to
+  suit the panel: one column of six, two of three, three of two or six side
+  by side (the rg-layouts list gives the size each needs), and then take up
+  the panel's exact shape. The Layout option fixes the column count; the Fit
+  option can crop, letterbox or distort instead.
 -->
 <link rel="stylesheet" href="art_deco_panel.css">
 </head>
 <body>
-<div style="width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden; background-color: var(--bg); background-image: repeating-linear-gradient(90deg, var(--pin) 0px, var(--pin) 1px, transparent 1px, transparent 12px); font-family: 'Josefin Sans', sans-serif; color: var(--text); padding: 108px 38px 104px; display: flex; flex-direction: column; justify-content: space-between">
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background-color: var(--bg); background-image: repeating-linear-gradient(90deg, var(--pin) 0px, var(--pin) 1px, transparent 1px, transparent 12px); font-family: 'Josefin Sans', sans-serif; color: var(--text); padding: 108px 38px 104px; display: flex; flex-direction: column; gap: 10px">
 
   <!-- shared gold gradients -->
   <svg aria-hidden="true" width="0" height="0" style="position: absolute; top: 0; left: 0">
@@ -76,7 +82,7 @@
   <div aria-hidden="true" style="position: absolute; top: 17px; right: 17px; bottom: 17px; left: 17px; border: 1px solid var(--mid); opacity: 0.55; pointer-events: none"></div>
 
   <!-- pilasters: rising chevrons -->
-  <svg aria-hidden="true" width="14" height="1920" viewBox="0 0 14 1920" style="position: absolute; top: 0; left: 20px">
+  <svg aria-hidden="true" width="14" height="100%" viewBox="0 0 14 1920" preserveAspectRatio="xMidYMin slice" style="max-height: 1920px; position: absolute; top: 0; left: 20px">
     <line x1="0.5" y1="60" x2="0.5" y2="1860" stroke-width="1" opacity="0.5" style="stroke: var(--mid)"></line>
     <line x1="13.5" y1="60" x2="13.5" y2="1860" stroke-width="1" opacity="0.5" style="stroke: var(--mid)"></line>
     
@@ -337,7 +343,7 @@
       <path d="M2 1853 L7 1848 L12 1853" fill="none" stroke-width="1.5" opacity="0.4" style="stroke: var(--mid)"></path>
     
   </svg>
-  <svg aria-hidden="true" width="14" height="1920" viewBox="0 0 14 1920" style="position: absolute; top: 0; right: 20px">
+  <svg aria-hidden="true" width="14" height="100%" viewBox="0 0 14 1920" preserveAspectRatio="xMidYMin slice" style="max-height: 1920px; position: absolute; top: 0; right: 20px">
     <line x1="0.5" y1="60" x2="0.5" y2="1860" stroke-width="1" opacity="0.5" style="stroke: var(--mid)"></line>
     <line x1="13.5" y1="60" x2="13.5" y2="1860" stroke-width="1" opacity="0.5" style="stroke: var(--mid)"></line>
     
@@ -618,7 +624,7 @@
   </svg>
 
   <!-- ===== ZIGGURAT (top, hanging): overlaid trapeziums on one baseline ===== -->
-  <div aria-hidden="true" style="position: absolute; top: 12px; left: 80px; width: 320px; height: 90px; transform: scaleY(-1)">
+  <div aria-hidden="true" style="position: absolute; top: 12px; left: 50%; margin-left: -160px; width: 320px; height: 90px; transform: scaleY(-1)">
     
       <div style="position: absolute; bottom: 0; left: 0px; width: 320px; height: 26px; filter: drop-shadow(2px 0 0 var(--bg)) drop-shadow(-2px 0 0 var(--bg)) drop-shadow(0 -2px 0 var(--bg))">
         <div style="width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(100deg, var(--dk) 0%, var(--lt) 22%, var(--hi) 38%, var(--mid) 58%, var(--dk) 82%, var(--lt) 100%); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%)"></div>
@@ -645,7 +651,7 @@
   </div>
 
   <!-- ===== ZIGGURAT (bottom, standing) ===== -->
-  <div aria-hidden="true" style="position: absolute; bottom: 12px; left: 80px; width: 320px; height: 90px">
+  <div aria-hidden="true" style="position: absolute; bottom: 12px; left: 50%; margin-left: -160px; width: 320px; height: 90px">
     
       <div style="position: absolute; bottom: 0; left: 0px; width: 320px; height: 26px; filter: drop-shadow(2px 0 0 var(--bg)) drop-shadow(-2px 0 0 var(--bg)) drop-shadow(0 -2px 0 var(--bg))">
         <div style="width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(100deg, var(--dk) 0%, var(--lt) 22%, var(--hi) 38%, var(--mid) 58%, var(--dk) 82%, var(--lt) 100%); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%)"></div>
@@ -671,6 +677,8 @@
     <div style="position: absolute; top: 9px; left: 154px; width: 12px; height: 12px; background: var(--bg); transform: rotate(45deg)"></div>
   </div>
 
+  <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
   <!-- ===== HEADER: crown + clock ===== -->
   <header style="display: flex; flex-direction: column; align-items: center; gap: 10px">
     <div style="display: flex; align-items: center; gap: 8px; width: 100%">
@@ -1043,6 +1051,8 @@
     </div>
   </section>
 
+  </div>
+
   <!-- ===== FOOTER: frozen fountain ===== -->
   <footer style="display: flex; flex-direction: column; align-items: center; gap: 8px">
     <div data-need="73" style="font-size: 12px; font-weight: 700; letter-spacing: 0.32em; color: var(--label); padding-left: 0.32em">UPTIME · <span data-uptime="73">--</span></div>
@@ -1060,7 +1070,8 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "accent", "label": "Accent", "type": "choice", "var": "--accent", "default": "#D4AF37", "choices": [{"value": "#D4AF37", "label": "Gold"}, {"value": "#C08A5B", "label": "Copper"}, {"value": "#4FB39A", "label": "Jade"}, {"value": "#C9C6BE", "label": "Silver"}]},
-    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]}
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]}
 ]
 </script>
 
