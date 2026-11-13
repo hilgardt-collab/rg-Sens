@@ -677,7 +677,7 @@ mod tests {
         assert_eq!(mapped(&values, "min"), "--");
     }
 
-    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior, Leather & Wood, LCD and Victorian examples: every placeholder they
+    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior, Leather & Wood, LCD, Victorian, Mughal Peacock, Bauhaus and Gothic examples: every placeholder they
     /// use has an auto-configure entry, the numbering has no holes, the two
     /// share one mapping, and none loads anything from the network.
     #[test]
@@ -733,7 +733,31 @@ mod tests {
         let victorian_defaults = extract_placeholder_defaults(victorian);
         assert_eq!(victorian_defaults.len(), deco.len() + 1);
         assert_eq!(victorian_defaults[&90].field, "year");
-        for other in [nouveau, steampunk, neon, lcars, warrior, leather, lcd, victorian] {
+        // Mughal Peacock has the year on 90 too.
+        let mughal = include_str!("../../examples/mughal_peacock_panel.html");
+        assert!(detect_placeholders(mughal).is_empty());
+        assert!(!mughal.contains("fonts.googleapis.com"));
+        let mughal_defaults = extract_placeholder_defaults(mughal);
+        assert_eq!(mughal_defaults.len(), deco.len() + 1);
+        assert_eq!(mughal_defaults[&90].field, "year");
+        // So has Bauhaus.
+        let bauhaus = include_str!("../../examples/bauhaus_panel.html");
+        assert!(detect_placeholders(bauhaus).is_empty());
+        assert!(!bauhaus.contains("fonts.googleapis.com"));
+        let bauhaus_defaults = extract_placeholder_defaults(bauhaus);
+        assert_eq!(bauhaus_defaults.len(), deco.len() + 1);
+        assert_eq!(bauhaus_defaults[&90].field, "year");
+        // And Gothic.
+        let gothic = include_str!("../../examples/gothic_panel.html");
+        assert!(detect_placeholders(gothic).is_empty());
+        assert!(!gothic.contains("fonts.googleapis.com"));
+        let gothic_defaults = extract_placeholder_defaults(gothic);
+        assert_eq!(gothic_defaults.len(), deco.len() + 1);
+        assert_eq!(gothic_defaults[&90].field, "year");
+        for other in [
+            nouveau, steampunk, neon, lcars, warrior, leather, lcd, victorian, mughal, bauhaus,
+            gothic,
+        ] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {
                 assert_eq!(

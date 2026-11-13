@@ -1273,6 +1273,18 @@ mod tests {
                 include_str!("../../examples/victorian_panel.html"),
                 include_str!("../../examples/victorian_panel.css"),
             ),
+            (
+                include_str!("../../examples/mughal_peacock_panel.html"),
+                include_str!("../../examples/mughal_peacock_panel.css"),
+            ),
+            (
+                include_str!("../../examples/bauhaus_panel.html"),
+                include_str!("../../examples/bauhaus_panel.css"),
+            ),
+            (
+                include_str!("../../examples/gothic_panel.html"),
+                include_str!("../../examples/gothic_panel.css"),
+            ),
         ];
         for (html, css) in panels {
             assert!(html.contains(r#"<meta name="rg-design-size" content="480x1920">"#));

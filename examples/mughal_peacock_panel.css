@@ -1,0 +1,89 @@
+/* Mughal Peacock Sensor Panel: stylesheet for mughal_peacock_panel.html (rg-Sens CSS Template displayer).
+   Palette, fonts and the few classes the page's script switches; the
+   drawing itself is inline in the HTML. Setup notes are at the top of the
+   HTML file. */
+
+/* Bundled fonts: Rozha One and Mukta, both SIL Open Font License (OFL.txt in
+   each folder). Keep the fonts folder next to this file; without it the page
+   falls back to the system serif and sans-serif. */
+@font-face { font-family: "Rozha One"; font-weight: 400; font-style: normal;
+  src: local("Rozha One"), url("fonts/rozha-one/RozhaOne-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Mukta"; font-weight: 600; font-style: normal;
+  src: local("Mukta SemiBold"), url("fonts/mukta/Mukta-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Mukta"; font-weight: 700; font-style: normal;
+  src: local("Mukta Bold"), url("fonts/mukta/Mukta-Bold.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
+  /* Palette: wall (centre, middle, edge), jali lines, card frame and its
+     deep shade, marble panel and its vein, ink, secondary text, gold, footer
+     text. The peacock colours and the architecture's marble are the same in
+     every palette.
+       Peacock        #12586A #0B3A4A #062430  frame #0D3A47 #082A34  gold #C9A23E   (default)
+       Red Sandstone  #9A4436 #7A2E22 #5A1E16  frame #8E3A2C #6A2A20  gold #D9B455
+       White Marble   #F3EEE3 #E6DECD #D4C9B2  frame #EFE7D5 #D8CDB5  gold #B8862B */
+  --wall-1: #12586A;
+  --wall-2: #0B3A4A;
+  --wall-3: #062430;
+  --jali: rgba(110,210,220,0.16);
+  --frame: #0D3A47;
+  --deep: #082A34;
+  --panel: #F6EEDC;
+  --vein: rgba(120,110,95,0.06);
+  --ink: #1E2A2E;
+  --sub: #4F6168;
+  --gold: #C9A23E;
+  --foot: #F4EBD8;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Chain full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  --fan-max: 2400;
+
+  --blue: #1F5FAE;
+  --emerald: #1E8A6A;
+  --teal: #1FA0B0;
+  --warm: #D98A1E;
+  --hot: #C0392B;
+}
+html, body { margin: 0; background: var(--wall-2); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* The drawing's shapes carry their colour as an attribute; these follow the palette. */
+[fill="#0D3A47"] { fill: var(--frame); }
+[fill="#082A34"] { fill: var(--deep); }
+[fill="#F6EEDC"] { fill: var(--panel); }
+[fill="#4F6168"] { fill: var(--sub); }
+[fill="#C9A23E"] { fill: var(--gold); }
+[stroke="#C9A23E"] { stroke: var(--gold); }
+[stroke="#1E2A2E"] { stroke: var(--ink); }
+.jali { stroke: var(--jali); }
+
+@keyframes mg-shimmer { 0%,100% { opacity: 1; } 50% { opacity: .72; } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* Gauge feathers: faint until the reading reaches them, then lit and
+   shimmering, each at its own pace (--d) and offset (--o). */
+.feather { opacity: 0.16; }
+.feather.lit { opacity: 1; animation: mg-shimmer var(--d) ease-in-out var(--o) infinite; }
+[data-state].warm { color: var(--warm) !important; }
+[data-state].hot { color: var(--hot) !important; }
+
+/* Lozenge chains: one <i> per lozenge, written by the script; blue and teal
+   in turn up to the value, the last lit one gold. */
+[data-chain] i { width: 7px; height: 7px; transform: rotate(45deg); flex: none; background: rgba(30,42,46,0.12); }
+[data-chain] i.on { background: var(--blue); }
+[data-chain] i.on:nth-child(even) { background: var(--teal); }
+[data-chain] i.on.tip { background: var(--gold); }
+
+/* The uptime's figures are set in the display face. */
+[data-uptime] b { font-family: "Rozha One", serif; font-weight: 400; font-size: 20px; letter-spacing: 0; }

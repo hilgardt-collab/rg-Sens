@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<title>Gothic Sensor Panel</title>
+<!--
+  Gothic sensor panel for the rg-Sens CSS Template displayer, 480x1920
+  portrait: black stone, antique pewter, black lace and stained glass lit
+  from behind, with a rose-window clock under a cathedral arch. A sibling of
+  the other example panels: the same placeholders 0-73 and the same setup,
+  plus the year.
+
+  The look is black and pewter with one accent colour. Metal is a shaded
+  gradient, panel edges are shadows and glass is parted by black lead; there
+  are no bright outlines and no novelty motifs. Keep it that way when
+  editing.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names, year
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two dials ("Package", "Edge"), the fans and the memory
+  windows; set them on the sensors.
+
+  Anything left unbound is hidden: a row, a dial, a whole panel. The
+  processor's power row has no rg-Sens source and stays hidden unless you bind
+  a sensor to it by hand on the Bindings tab.
+
+  A dial reads 20 to 100 degrees: the accent arc fills round the rim and the
+  needle follows. The word beside it reads Calm, Warm from 72 or Burning from
+  85, when the arc also pulses. A memory window is a lancet of stained glass
+  that fills from the sill as the pool fills. The year is written in Roman
+  numerals.
+
+  The network chart keeps the last minute (40 samples) of inbound and
+  outbound speed in the page, on one shared scale. It starts empty and
+  survives a reload of the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of gothic_panel.css): accent
+  (Blood, Violet, Monochrome), how the design fits the panel, the frame rate,
+  and the full scale of the bars and of the network chart. The design is
+  drawn for 480x1920 and is scaled to whatever size the panel has.
+
+  Motion: the fan tracery turns with RPM, the candle flames flicker, the
+  candlelight on the page, the rose window and the memory glass wavers, and
+  the dot at the newest sample pulses, at --motion-fps frames a second. 0
+  turns motion off, as do the panel's Animation switch and the system's
+  reduced-motion setting.
+
+  Fonts: UnifrakturMaguntia (titles), Grenze Gotisch (numbers) and Spectral
+  SC (labels), loaded from the fonts folder next to this file; copy that
+  folder along with the template. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="gothic_panel.css">
+</head>
+<body>
+<div style="width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #18151B 0%, #0A090B 70%); font-family: 'Spectral SC', Georgia, serif; font-variant-numeric: lining-nums; color: #ECE8F0; padding: 22px 30px 20px; display: flex; flex-direction: column; justify-content: space-between">
+  <!-- ===== BACKGROUND: black damask, lace corners, wrought-iron columns (z 0) ===== -->
+  <svg aria-hidden="true" width="480" height="1920" viewBox="0 0 480 1920" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none">
+    <defs>
+      <linearGradient id="gx-metal" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#3E3A44"></stop><stop offset="0.22" stop-color="#B4B0BB"></stop><stop offset="0.4" stop-color="#5C5864"></stop><stop offset="0.68" stop-color="#25222A"></stop><stop offset="0.86" stop-color="#7A7682"></stop><stop offset="1" stop-color="#34313A"></stop></linearGradient>
+      <linearGradient id="gx-stone" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#211D25"></stop><stop offset="0.5" stop-color="#131116"></stop><stop offset="1" stop-color="#09080B"></stop></linearGradient>
+      <radialGradient id="gx-glass" cx="0.5" cy="0.42" r="0.68"><stop offset="0" stop-color="#A3222F"></stop><stop offset="0.45" stop-color="#7A0C1A"></stop><stop offset="1" stop-color="#240308"></stop></radialGradient>
+      <radialGradient id="gx-glassD" cx="0.5" cy="0.5" r="0.7"><stop offset="0" stop-color="#7A0C1A"></stop><stop offset="0.6" stop-color="#240308"></stop><stop offset="1" stop-color="#0A0204"></stop></radialGradient>
+      <radialGradient id="gx-face" cx="0.5" cy="0.38" r="0.62"><stop offset="0" stop-color="#1D1921"></stop><stop offset="0.7" stop-color="#0B090D"></stop><stop offset="1" stop-color="#020102"></stop></radialGradient>
+      <radialGradient id="gx-halo" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFC27A" stop-opacity="0.55"></stop><stop offset="1" stop-color="#FF8A3A" stop-opacity="0"></stop></radialGradient>
+      <linearGradient id="gx-flame" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6DC"></stop><stop offset="0.55" stop-color="#FFC768"></stop><stop offset="1" stop-color="#D9581C"></stop></linearGradient>
+      <linearGradient id="gx-wax" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#060507"></stop><stop offset="0.3" stop-color="#2B2731"></stop><stop offset="0.65" stop-color="#110F14"></stop><stop offset="1" stop-color="#040305"></stop></linearGradient>
+      <filter id="gx-mottle" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="3" seed="7"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.5 -0.6"></feColorMatrix></filter>
+      <filter id="gx-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" seed="3"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.8  0 0 0 0 0.78  0 0 0 0 0.82  0.55 0 0 0 -0.2"></feColorMatrix></filter>
+      <g id="gx-motif">
+        <path d="M40 14 C54 34 56 56 40 78 C26 56 26 34 40 14 Z" fill="#17141A"></path>
+        <path d="M40 30 C47 42 47 56 40 66 C33 56 33 42 40 30 Z" fill="#0D0B0F"></path>
+        <path d="M40 78 C32 90 18 92 14 82 C10 72 22 66 26 74 M40 78 C48 90 62 92 66 82 C70 72 58 66 54 74" fill="none" stroke="#17141A" stroke-width="3"></path>
+        <path d="M0 93 L5 100 L0 107 L-5 100 Z" fill="#17141A"></path>
+      </g>
+      <clipPath id="gx-lancet"><path d="M18.0 146.0 L18.0 58.0 L18.0 58.0 L18.1 53.8 L18.6 49.6 L19.3 45.5 L20.3 41.5 L21.6 37.5 L23.2 33.6 L25.0 29.8 L27.1 26.2 L29.5 22.7 L32.0 19.4 L34.8 16.3 L37.9 13.4 L41.1 10.7 L44.4 8.3 L48.0 6.0 L48.0 6.0 L51.6 8.3 L54.9 10.7 L58.1 13.4 L61.2 16.3 L64.0 19.4 L66.5 22.7 L68.9 26.2 L71.0 29.8 L72.8 33.6 L74.4 37.5 L75.7 41.5 L76.7 45.5 L77.4 49.6 L77.9 53.8 L78.0 58.0 L78.0 146.0 Z"></path></clipPath>
+    </defs>
+    <g><use href="#gx-motif" x="-80" y="-60"></use><use href="#gx-motif" x="-80" y="60"></use><use href="#gx-motif" x="-80" y="180"></use><use href="#gx-motif" x="-80" y="300"></use><use href="#gx-motif" x="-80" y="420"></use><use href="#gx-motif" x="-80" y="540"></use><use href="#gx-motif" x="-80" y="660"></use><use href="#gx-motif" x="-80" y="780"></use><use href="#gx-motif" x="-80" y="900"></use><use href="#gx-motif" x="-80" y="1020"></use><use href="#gx-motif" x="-80" y="1140"></use><use href="#gx-motif" x="-80" y="1260"></use><use href="#gx-motif" x="-80" y="1380"></use><use href="#gx-motif" x="-80" y="1500"></use><use href="#gx-motif" x="-80" y="1620"></use><use href="#gx-motif" x="-80" y="1740"></use><use href="#gx-motif" x="-80" y="1860"></use><use href="#gx-motif" x="-80" y="1980"></use><use href="#gx-motif" x="0" y="-120"></use><use href="#gx-motif" x="0" y="0"></use><use href="#gx-motif" x="0" y="120"></use><use href="#gx-motif" x="0" y="240"></use><use href="#gx-motif" x="0" y="360"></use><use href="#gx-motif" x="0" y="480"></use><use href="#gx-motif" x="0" y="600"></use><use href="#gx-motif" x="0" y="720"></use><use href="#gx-motif" x="0" y="840"></use><use href="#gx-motif" x="0" y="960"></use><use href="#gx-motif" x="0" y="1080"></use><use href="#gx-motif" x="0" y="1200"></use><use href="#gx-motif" x="0" y="1320"></use><use href="#gx-motif" x="0" y="1440"></use><use href="#gx-motif" x="0" y="1560"></use><use href="#gx-motif" x="0" y="1680"></use><use href="#gx-motif" x="0" y="1800"></use><use href="#gx-motif" x="0" y="1920"></use><use href="#gx-motif" x="80" y="-60"></use><use href="#gx-motif" x="80" y="60"></use><use href="#gx-motif" x="80" y="180"></use><use href="#gx-motif" x="80" y="300"></use><use href="#gx-motif" x="80" y="420"></use><use href="#gx-motif" x="80" y="540"></use><use href="#gx-motif" x="80" y="660"></use><use href="#gx-motif" x="80" y="780"></use><use href="#gx-motif" x="80" y="900"></use><use href="#gx-motif" x="80" y="1020"></use><use href="#gx-motif" x="80" y="1140"></use><use href="#gx-motif" x="80" y="1260"></use><use href="#gx-motif" x="80" y="1380"></use><use href="#gx-motif" x="80" y="1500"></use><use href="#gx-motif" x="80" y="1620"></use><use href="#gx-motif" x="80" y="1740"></use><use href="#gx-motif" x="80" y="1860"></use><use href="#gx-motif" x="80" y="1980"></use><use href="#gx-motif" x="160" y="-120"></use><use href="#gx-motif" x="160" y="0"></use><use href="#gx-motif" x="160" y="120"></use><use href="#gx-motif" x="160" y="240"></use><use href="#gx-motif" x="160" y="360"></use><use href="#gx-motif" x="160" y="480"></use><use href="#gx-motif" x="160" y="600"></use><use href="#gx-motif" x="160" y="720"></use><use href="#gx-motif" x="160" y="840"></use><use href="#gx-motif" x="160" y="960"></use><use href="#gx-motif" x="160" y="1080"></use><use href="#gx-motif" x="160" y="1200"></use><use href="#gx-motif" x="160" y="1320"></use><use href="#gx-motif" x="160" y="1440"></use><use href="#gx-motif" x="160" y="1560"></use><use href="#gx-motif" x="160" y="1680"></use><use href="#gx-motif" x="160" y="1800"></use><use href="#gx-motif" x="160" y="1920"></use><use href="#gx-motif" x="240" y="-60"></use><use href="#gx-motif" x="240" y="60"></use><use href="#gx-motif" x="240" y="180"></use><use href="#gx-motif" x="240" y="300"></use><use href="#gx-motif" x="240" y="420"></use><use href="#gx-motif" x="240" y="540"></use><use href="#gx-motif" x="240" y="660"></use><use href="#gx-motif" x="240" y="780"></use><use href="#gx-motif" x="240" y="900"></use><use href="#gx-motif" x="240" y="1020"></use><use href="#gx-motif" x="240" y="1140"></use><use href="#gx-motif" x="240" y="1260"></use><use href="#gx-motif" x="240" y="1380"></use><use href="#gx-motif" x="240" y="1500"></use><use href="#gx-motif" x="240" y="1620"></use><use href="#gx-motif" x="240" y="1740"></use><use href="#gx-motif" x="240" y="1860"></use><use href="#gx-motif" x="240" y="1980"></use><use href="#gx-motif" x="320" y="-120"></use><use href="#gx-motif" x="320" y="0"></use><use href="#gx-motif" x="320" y="120"></use><use href="#gx-motif" x="320" y="240"></use><use href="#gx-motif" x="320" y="360"></use><use href="#gx-motif" x="320" y="480"></use><use href="#gx-motif" x="320" y="600"></use><use href="#gx-motif" x="320" y="720"></use><use href="#gx-motif" x="320" y="840"></use><use href="#gx-motif" x="320" y="960"></use><use href="#gx-motif" x="320" y="1080"></use><use href="#gx-motif" x="320" y="1200"></use><use href="#gx-motif" x="320" y="1320"></use><use href="#gx-motif" x="320" y="1440"></use><use href="#gx-motif" x="320" y="1560"></use><use href="#gx-motif" x="320" y="1680"></use><use href="#gx-motif" x="320" y="1800"></use><use href="#gx-motif" x="320" y="1920"></use><use href="#gx-motif" x="400" y="-60"></use><use href="#gx-motif" x="400" y="60"></use><use href="#gx-motif" x="400" y="180"></use><use href="#gx-motif" x="400" y="300"></use><use href="#gx-motif" x="400" y="420"></use><use href="#gx-motif" x="400" y="540"></use><use href="#gx-motif" x="400" y="660"></use><use href="#gx-motif" x="400" y="780"></use><use href="#gx-motif" x="400" y="900"></use><use href="#gx-motif" x="400" y="1020"></use><use href="#gx-motif" x="400" y="1140"></use><use href="#gx-motif" x="400" y="1260"></use><use href="#gx-motif" x="400" y="1380"></use><use href="#gx-motif" x="400" y="1500"></use><use href="#gx-motif" x="400" y="1620"></use><use href="#gx-motif" x="400" y="1740"></use><use href="#gx-motif" x="400" y="1860"></use><use href="#gx-motif" x="400" y="1980"></use><use href="#gx-motif" x="480" y="-120"></use><use href="#gx-motif" x="480" y="0"></use><use href="#gx-motif" x="480" y="120"></use><use href="#gx-motif" x="480" y="240"></use><use href="#gx-motif" x="480" y="360"></use><use href="#gx-motif" x="480" y="480"></use><use href="#gx-motif" x="480" y="600"></use><use href="#gx-motif" x="480" y="720"></use><use href="#gx-motif" x="480" y="840"></use><use href="#gx-motif" x="480" y="960"></use><use href="#gx-motif" x="480" y="1080"></use><use href="#gx-motif" x="480" y="1200"></use><use href="#gx-motif" x="480" y="1320"></use><use href="#gx-motif" x="480" y="1440"></use><use href="#gx-motif" x="480" y="1560"></use><use href="#gx-motif" x="480" y="1680"></use><use href="#gx-motif" x="480" y="1800"></use><use href="#gx-motif" x="480" y="1920"></use></g>
+    <rect x="0" y="0" width="480" height="1920" filter="url(#gx-mottle)"></rect>
+      <g transform="translate(0 0)" opacity="0.32">
+        <path d="M0 0 L132.0 0.0 M0 0 L127.5 34.2 M0 0 L114.3 66.0 M0 0 L93.3 93.3 M0 0 L66.0 114.3 M0 0 L34.2 127.5 M0 0 L0.0 132.0 M34.0 0.0 Q38.1 5.0 32.8 8.8 Q35.5 14.7 29.4 17.0 Q30.5 23.4 24.0 24.0 Q23.4 30.5 17.0 29.4 Q14.7 35.5 8.8 32.8 Q5.0 38.1 0.0 34.0M62.0 0.0 Q69.5 9.1 59.9 16.0 Q64.7 26.8 53.7 31.0 Q55.6 42.6 43.8 43.8 Q42.6 55.6 31.0 53.7 Q26.8 64.7 16.0 59.9 Q9.1 69.5 0.0 62.0M92.0 0.0 Q103.1 13.6 88.9 23.8 Q96.0 39.8 79.7 46.0 Q82.5 63.3 65.1 65.1 Q63.3 82.5 46.0 79.7 Q39.8 96.0 23.8 88.9 Q13.6 103.1 0.0 92.0M124.0 0.0 Q138.9 18.3 119.8 32.1 Q129.5 53.6 107.4 62.0 Q111.2 85.3 87.7 87.7 Q85.3 111.2 62.0 107.4 Q53.6 129.5 32.1 119.8 Q18.3 138.9 0.0 124.0" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="0.8"></path>
+        <circle cx="36.1" cy="4.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="33.6" cy="13.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="28.9" cy="22.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="22.1" cy="28.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="13.9" cy="33.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="4.7" cy="36.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="65.8" cy="8.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="61.3" cy="25.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="52.6" cy="40.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="40.4" cy="52.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="25.4" cy="61.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="8.7" cy="65.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="97.6" cy="12.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="90.9" cy="37.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="78.1" cy="59.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="59.9" cy="78.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="37.7" cy="90.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="12.8" cy="97.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="131.5" cy="17.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="122.6" cy="50.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="105.3" cy="80.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="80.8" cy="105.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="50.8" cy="122.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="17.3" cy="131.5" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle>
+      </g>
+      <g transform="translate(480 0) scale(-1 1)" opacity="0.32">
+        <path d="M0 0 L132.0 0.0 M0 0 L127.5 34.2 M0 0 L114.3 66.0 M0 0 L93.3 93.3 M0 0 L66.0 114.3 M0 0 L34.2 127.5 M0 0 L0.0 132.0 M34.0 0.0 Q38.1 5.0 32.8 8.8 Q35.5 14.7 29.4 17.0 Q30.5 23.4 24.0 24.0 Q23.4 30.5 17.0 29.4 Q14.7 35.5 8.8 32.8 Q5.0 38.1 0.0 34.0M62.0 0.0 Q69.5 9.1 59.9 16.0 Q64.7 26.8 53.7 31.0 Q55.6 42.6 43.8 43.8 Q42.6 55.6 31.0 53.7 Q26.8 64.7 16.0 59.9 Q9.1 69.5 0.0 62.0M92.0 0.0 Q103.1 13.6 88.9 23.8 Q96.0 39.8 79.7 46.0 Q82.5 63.3 65.1 65.1 Q63.3 82.5 46.0 79.7 Q39.8 96.0 23.8 88.9 Q13.6 103.1 0.0 92.0M124.0 0.0 Q138.9 18.3 119.8 32.1 Q129.5 53.6 107.4 62.0 Q111.2 85.3 87.7 87.7 Q85.3 111.2 62.0 107.4 Q53.6 129.5 32.1 119.8 Q18.3 138.9 0.0 124.0" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="0.8"></path>
+        <circle cx="36.1" cy="4.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="33.6" cy="13.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="28.9" cy="22.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="22.1" cy="28.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="13.9" cy="33.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="4.7" cy="36.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="65.8" cy="8.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="61.3" cy="25.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="52.6" cy="40.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="40.4" cy="52.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="25.4" cy="61.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="8.7" cy="65.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="97.6" cy="12.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="90.9" cy="37.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="78.1" cy="59.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="59.9" cy="78.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="37.7" cy="90.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="12.8" cy="97.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="131.5" cy="17.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="122.6" cy="50.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="105.3" cy="80.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="80.8" cy="105.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="50.8" cy="122.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="17.3" cy="131.5" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle>
+      </g>
+      <g transform="translate(0 1920) scale(1 -1)" opacity="0.32">
+        <path d="M0 0 L132.0 0.0 M0 0 L127.5 34.2 M0 0 L114.3 66.0 M0 0 L93.3 93.3 M0 0 L66.0 114.3 M0 0 L34.2 127.5 M0 0 L0.0 132.0 M34.0 0.0 Q38.1 5.0 32.8 8.8 Q35.5 14.7 29.4 17.0 Q30.5 23.4 24.0 24.0 Q23.4 30.5 17.0 29.4 Q14.7 35.5 8.8 32.8 Q5.0 38.1 0.0 34.0M62.0 0.0 Q69.5 9.1 59.9 16.0 Q64.7 26.8 53.7 31.0 Q55.6 42.6 43.8 43.8 Q42.6 55.6 31.0 53.7 Q26.8 64.7 16.0 59.9 Q9.1 69.5 0.0 62.0M92.0 0.0 Q103.1 13.6 88.9 23.8 Q96.0 39.8 79.7 46.0 Q82.5 63.3 65.1 65.1 Q63.3 82.5 46.0 79.7 Q39.8 96.0 23.8 88.9 Q13.6 103.1 0.0 92.0M124.0 0.0 Q138.9 18.3 119.8 32.1 Q129.5 53.6 107.4 62.0 Q111.2 85.3 87.7 87.7 Q85.3 111.2 62.0 107.4 Q53.6 129.5 32.1 119.8 Q18.3 138.9 0.0 124.0" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="0.8"></path>
+        <circle cx="36.1" cy="4.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="33.6" cy="13.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="28.9" cy="22.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="22.1" cy="28.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="13.9" cy="33.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="4.7" cy="36.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="65.8" cy="8.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="61.3" cy="25.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="52.6" cy="40.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="40.4" cy="52.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="25.4" cy="61.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="8.7" cy="65.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="97.6" cy="12.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="90.9" cy="37.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="78.1" cy="59.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="59.9" cy="78.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="37.7" cy="90.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="12.8" cy="97.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="131.5" cy="17.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="122.6" cy="50.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="105.3" cy="80.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="80.8" cy="105.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="50.8" cy="122.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="17.3" cy="131.5" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle>
+      </g>
+      <g transform="translate(480 1920) scale(-1 -1)" opacity="0.32">
+        <path d="M0 0 L132.0 0.0 M0 0 L127.5 34.2 M0 0 L114.3 66.0 M0 0 L93.3 93.3 M0 0 L66.0 114.3 M0 0 L34.2 127.5 M0 0 L0.0 132.0 M34.0 0.0 Q38.1 5.0 32.8 8.8 Q35.5 14.7 29.4 17.0 Q30.5 23.4 24.0 24.0 Q23.4 30.5 17.0 29.4 Q14.7 35.5 8.8 32.8 Q5.0 38.1 0.0 34.0M62.0 0.0 Q69.5 9.1 59.9 16.0 Q64.7 26.8 53.7 31.0 Q55.6 42.6 43.8 43.8 Q42.6 55.6 31.0 53.7 Q26.8 64.7 16.0 59.9 Q9.1 69.5 0.0 62.0M92.0 0.0 Q103.1 13.6 88.9 23.8 Q96.0 39.8 79.7 46.0 Q82.5 63.3 65.1 65.1 Q63.3 82.5 46.0 79.7 Q39.8 96.0 23.8 88.9 Q13.6 103.1 0.0 92.0M124.0 0.0 Q138.9 18.3 119.8 32.1 Q129.5 53.6 107.4 62.0 Q111.2 85.3 87.7 87.7 Q85.3 111.2 62.0 107.4 Q53.6 129.5 32.1 119.8 Q18.3 138.9 0.0 124.0" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="0.8"></path>
+        <circle cx="36.1" cy="4.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="33.6" cy="13.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="28.9" cy="22.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="22.1" cy="28.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="13.9" cy="33.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="4.7" cy="36.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="65.8" cy="8.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="61.3" cy="25.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="52.6" cy="40.4" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="40.4" cy="52.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="25.4" cy="61.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="8.7" cy="65.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="97.6" cy="12.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="90.9" cy="37.7" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="78.1" cy="59.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="59.9" cy="78.1" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="37.7" cy="90.9" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="12.8" cy="97.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="131.5" cy="17.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="122.6" cy="50.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="105.3" cy="80.8" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="80.8" cy="105.3" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="50.8" cy="122.6" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle><circle cx="17.3" cy="131.5" r="1.6" fill="url(#gx-metal) #A6A2AC"></circle>
+      </g>
+      <g transform="translate(0 0)" opacity="0.55">
+        <path d="M17 66 V1854 M17 150 C26 152 27 164 22 167 C18.5 169 17.5 163 21 162 M17 206 C8 208 7 220 12 223 C15.5 225 16.5 219 13 218 M17 262 C26 264 27 276 22 279 C18.5 281 17.5 275 21 274 M17 318 C8 320 7 332 12 335 C15.5 337 16.5 331 13 330 M17 374 C26 376 27 388 22 391 C18.5 393 17.5 387 21 386 M17 430 C8 432 7 444 12 447 C15.5 449 16.5 443 13 442 M17 486 C26 488 27 500 22 503 C18.5 505 17.5 499 21 498 M17 542 C8 544 7 556 12 559 C15.5 561 16.5 555 13 554 M17 598 C26 600 27 612 22 615 C18.5 617 17.5 611 21 610 M17 654 C8 656 7 668 12 671 C15.5 673 16.5 667 13 666 M17 710 C26 712 27 724 22 727 C18.5 729 17.5 723 21 722 M17 766 C8 768 7 780 12 783 C15.5 785 16.5 779 13 778 M17 822 C26 824 27 836 22 839 C18.5 841 17.5 835 21 834 M17 878 C8 880 7 892 12 895 C15.5 897 16.5 891 13 890 M17 934 C26 936 27 948 22 951 C18.5 953 17.5 947 21 946 M17 990 C8 992 7 1004 12 1007 C15.5 1009 16.5 1003 13 1002 M17 1046 C26 1048 27 1060 22 1063 C18.5 1065 17.5 1059 21 1058 M17 1102 C8 1104 7 1116 12 1119 C15.5 1121 16.5 1115 13 1114 M17 1158 C26 1160 27 1172 22 1175 C18.5 1177 17.5 1171 21 1170 M17 1214 C8 1216 7 1228 12 1231 C15.5 1233 16.5 1227 13 1226 M17 1270 C26 1272 27 1284 22 1287 C18.5 1289 17.5 1283 21 1282 M17 1326 C8 1328 7 1340 12 1343 C15.5 1345 16.5 1339 13 1338 M17 1382 C26 1384 27 1396 22 1399 C18.5 1401 17.5 1395 21 1394 M17 1438 C8 1440 7 1452 12 1455 C15.5 1457 16.5 1451 13 1450 M17 1494 C26 1496 27 1508 22 1511 C18.5 1513 17.5 1507 21 1506 M17 1550 C8 1552 7 1564 12 1567 C15.5 1569 16.5 1563 13 1562 M17 1606 C26 1608 27 1620 22 1623 C18.5 1625 17.5 1619 21 1618 M17 1662 C8 1664 7 1676 12 1679 C15.5 1681 16.5 1675 13 1674 M17 1718 C26 1720 27 1732 22 1735 C18.5 1737 17.5 1731 21 1730 M17 1774 C8 1776 7 1788 12 1791 C15.5 1793 16.5 1787 13 1786" fill="none" stroke="#4F4B57" stroke-width="1.6" stroke-linecap="round"></path>
+        <path d="M17 44 L21 56 L17 66 L13 56 Z M17 1876 L21 1864 L17 1854 L13 1864 Z" fill="#4F4B57"></path>
+      </g>
+      <g transform="translate(480 0) scale(-1 1)" opacity="0.55">
+        <path d="M17 66 V1854 M17 150 C26 152 27 164 22 167 C18.5 169 17.5 163 21 162 M17 206 C8 208 7 220 12 223 C15.5 225 16.5 219 13 218 M17 262 C26 264 27 276 22 279 C18.5 281 17.5 275 21 274 M17 318 C8 320 7 332 12 335 C15.5 337 16.5 331 13 330 M17 374 C26 376 27 388 22 391 C18.5 393 17.5 387 21 386 M17 430 C8 432 7 444 12 447 C15.5 449 16.5 443 13 442 M17 486 C26 488 27 500 22 503 C18.5 505 17.5 499 21 498 M17 542 C8 544 7 556 12 559 C15.5 561 16.5 555 13 554 M17 598 C26 600 27 612 22 615 C18.5 617 17.5 611 21 610 M17 654 C8 656 7 668 12 671 C15.5 673 16.5 667 13 666 M17 710 C26 712 27 724 22 727 C18.5 729 17.5 723 21 722 M17 766 C8 768 7 780 12 783 C15.5 785 16.5 779 13 778 M17 822 C26 824 27 836 22 839 C18.5 841 17.5 835 21 834 M17 878 C8 880 7 892 12 895 C15.5 897 16.5 891 13 890 M17 934 C26 936 27 948 22 951 C18.5 953 17.5 947 21 946 M17 990 C8 992 7 1004 12 1007 C15.5 1009 16.5 1003 13 1002 M17 1046 C26 1048 27 1060 22 1063 C18.5 1065 17.5 1059 21 1058 M17 1102 C8 1104 7 1116 12 1119 C15.5 1121 16.5 1115 13 1114 M17 1158 C26 1160 27 1172 22 1175 C18.5 1177 17.5 1171 21 1170 M17 1214 C8 1216 7 1228 12 1231 C15.5 1233 16.5 1227 13 1226 M17 1270 C26 1272 27 1284 22 1287 C18.5 1289 17.5 1283 21 1282 M17 1326 C8 1328 7 1340 12 1343 C15.5 1345 16.5 1339 13 1338 M17 1382 C26 1384 27 1396 22 1399 C18.5 1401 17.5 1395 21 1394 M17 1438 C8 1440 7 1452 12 1455 C15.5 1457 16.5 1451 13 1450 M17 1494 C26 1496 27 1508 22 1511 C18.5 1513 17.5 1507 21 1506 M17 1550 C8 1552 7 1564 12 1567 C15.5 1569 16.5 1563 13 1562 M17 1606 C26 1608 27 1620 22 1623 C18.5 1625 17.5 1619 21 1618 M17 1662 C8 1664 7 1676 12 1679 C15.5 1681 16.5 1675 13 1674 M17 1718 C26 1720 27 1732 22 1735 C18.5 1737 17.5 1731 21 1730 M17 1774 C8 1776 7 1788 12 1791 C15.5 1793 16.5 1787 13 1786" fill="none" stroke="#4F4B57" stroke-width="1.6" stroke-linecap="round"></path>
+        <path d="M17 44 L21 56 L17 66 L13 56 Z M17 1876 L21 1864 L17 1854 L13 1864 Z" fill="#4F4B57"></path>
+      </g>
+  </svg>
+  <div aria-hidden="true" style="position: absolute; top: 4px; right: 4px; bottom: 4px; left: 4px; z-index: 0; pointer-events: none; border: 1px solid rgba(70,66,76,0.6); box-shadow: inset 0 0 0 3px rgba(0,0,0,0.6), inset 0 0 0 4px rgba(70,66,76,0.3), inset 0 0 80px rgba(0,0,0,0.6)"></div>
+  <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse 70% 22% at 50% 11%, color-mix(in srgb, var(--accent) 12%, transparent) 0%, rgba(0,0,0,0) 70%), radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%); animation: gx-candle 4.5s ease-in-out infinite"></div>
+  <!-- ===== HEADER: cathedral arch with rose window ===== -->
+  <header style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center">
+    <h1 style="margin: 0; font-family: UnifrakturMaguntia, serif; font-weight: 400; font-size: 42px; line-height: 1; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px #000) drop-shadow(0 0 10px var(--glow)); white-space: nowrap">System Sensors</h1>
+    <div style="position: relative; width: 420px; height: 372px">
+      <svg aria-hidden="true" width="420" height="372" viewBox="0 0 420 372" style="position: absolute; top: 0; left: 0">
+        <g transform="translate(0 30)" style="filter: drop-shadow(0 8px 12px rgba(0,0,0,0.85))">
+          <!-- pinnacles -->
+            <g transform="translate(0 0)">
+              <path d="M22 330 V140 L30 100 L38 140 V330 Z" fill="url(#gx-stone) #08070A" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path>
+              <path d="M27 300 V172 Q30 160 33 172 V300" fill="none" stroke="#4F4B57" stroke-width="1"></path>
+              <path d="M26 128 C22 124 22 118 26 118 M34 128 C38 124 38 118 34 118 M28 112 C25 108 26 104 28 104 M32 112 C35 108 34 104 32 104" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.1"></path>
+              <circle cx="30" cy="96" r="3" fill="url(#gx-metal) #A6A2AC"></circle>
+              <g transform="translate(66 128)" fill="none" stroke="#4F4B57" stroke-width="1.1">
+                <circle cx="0" cy="-5" r="5"></circle><circle cx="5" cy="0" r="5"></circle><circle cx="0" cy="5" r="5"></circle><circle cx="-5" cy="0" r="5"></circle>
+                <circle r="13" stroke="url(#gx-metal) #A6A2AC"></circle>
+              </g>
+            </g>
+            <g transform="translate(420 0) scale(-1 1)">
+              <path d="M22 330 V140 L30 100 L38 140 V330 Z" fill="url(#gx-stone) #08070A" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path>
+              <path d="M27 300 V172 Q30 160 33 172 V300" fill="none" stroke="#4F4B57" stroke-width="1"></path>
+              <path d="M26 128 C22 124 22 118 26 118 M34 128 C38 124 38 118 34 118 M28 112 C25 108 26 104 28 104 M32 112 C35 108 34 104 32 104" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.1"></path>
+              <circle cx="30" cy="96" r="3" fill="url(#gx-metal) #A6A2AC"></circle>
+              <g transform="translate(66 128)" fill="none" stroke="#4F4B57" stroke-width="1.1">
+                <circle cx="0" cy="-5" r="5"></circle><circle cx="5" cy="0" r="5"></circle><circle cx="0" cy="5" r="5"></circle><circle cx="-5" cy="0" r="5"></circle>
+                <circle r="13" stroke="url(#gx-metal) #A6A2AC"></circle>
+              </g>
+            </g>
+          <!-- arch -->
+          <path d="M60 330 V282 A300 300 0 0 1 210 22.2 A300 300 0 0 1 360 282 V330 Z" fill="url(#gx-stone) #08070A" stroke="url(#gx-metal) #A6A2AC" stroke-width="3"></path>
+          <path d="M70 322 V282 A290 290 0 0 1 210 28 A290 290 0 0 1 350 282 V322 Z" fill="#0A090C" stroke="#4F4B57" stroke-width="1.2"></path>
+            <g transform="translate(0 0)">
+              <path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(64.8 213.8) rotate(283)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(81.1 163.6) rotate(293)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(105.9 117.0) rotate(303)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(138.4 75.4) rotate(313)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(177.7 40.0) rotate(323)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path>
+            </g>
+            <g transform="translate(420 0) scale(-1 1)">
+              <path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(64.8 213.8) rotate(283)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(81.1 163.6) rotate(293)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(105.9 117.0) rotate(303)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(138.4 75.4) rotate(313)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path><path d="M0 0 C-5 -4 -4 -11 1 -11 C4 -11 4 -7 1 -7" transform="translate(177.7 40.0) rotate(323)" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></path>
+            </g>
+          <path d="M210 21 V-2" stroke="url(#gx-metal) #A6A2AC" stroke-width="2"></path>
+          <path d="M210 6 C202 2 200 -6 206 -8 C208 -4 210 -2 210 6 Z M210 6 C218 2 220 -6 214 -8 C212 -4 210 -2 210 6 Z M210 0 C206 -6 208 -14 210 -18 C212 -14 214 -6 210 0 Z" fill="url(#gx-metal) #A6A2AC"></path>
+          <!-- rose window -->
+          <circle cx="210" cy="180" r="105" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="3"></circle>
+          <g style="animation: gx-candle 4.5s ease-in-out infinite">
+            <path d="M200.7 94.5 L199.7 85.6 Q201.9 79.3 210.0 77.5 Q218.1 79.3 220.3 85.6 L219.3 94.5 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M223.2 95.0 L224.5 86.1 Q228.2 80.7 236.5 81.0 Q243.9 84.9 244.4 91.4 L241.1 99.8 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M244.7 101.3 L248.3 93.1 Q253.3 88.8 261.3 91.2 Q267.4 96.9 266.1 103.3 L260.8 110.6 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M263.9 113.0 L269.5 106.0 Q275.5 103.1 282.5 107.5 Q286.9 114.5 284.0 120.5 L277.0 126.1 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M279.4 129.2 L286.7 123.9 Q293.1 122.6 298.8 128.8 Q301.2 136.7 296.9 141.7 L288.7 145.3 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M290.2 148.9 L298.6 145.6 Q305.1 146.1 309.0 153.5 Q309.3 161.8 303.9 165.5 L295.0 166.8 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M295.5 170.7 L304.4 169.7 Q310.7 171.9 312.5 180.0 Q310.7 188.1 304.4 190.3 L295.5 189.3 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M295.0 193.2 L303.9 194.5 Q309.3 198.2 309.0 206.5 Q305.1 213.9 298.6 214.4 L290.2 211.1 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M288.7 214.7 L296.9 218.3 Q301.2 223.3 298.8 231.3 Q293.1 237.4 286.7 236.1 L279.4 230.8 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M277.0 233.9 L284.0 239.5 Q286.9 245.5 282.5 252.5 Q275.5 256.9 269.5 254.0 L263.9 247.0 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M260.8 249.4 L266.1 256.7 Q267.4 263.1 261.3 268.8 Q253.3 271.2 248.3 266.9 L244.7 258.7 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M241.1 260.2 L244.4 268.6 Q243.9 275.1 236.5 279.0 Q228.2 279.3 224.5 273.9 L223.2 265.0 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M219.3 265.5 L220.3 274.4 Q218.1 280.7 210.0 282.5 Q201.9 280.7 199.7 274.4 L200.7 265.5 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M196.8 265.0 L195.5 273.9 Q191.8 279.3 183.5 279.0 Q176.1 275.1 175.6 268.6 L178.9 260.2 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M175.3 258.7 L171.7 266.9 Q166.7 271.2 158.8 268.8 Q152.6 263.1 153.9 256.7 L159.2 249.4 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M156.1 247.0 L150.5 254.0 Q144.5 256.9 137.5 252.5 Q133.1 245.5 136.0 239.5 L143.0 233.9 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M140.6 230.8 L133.3 236.1 Q126.9 237.4 121.2 231.3 Q118.8 223.3 123.1 218.3 L131.3 214.7 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M129.8 211.1 L121.4 214.4 Q114.9 213.9 111.0 206.5 Q110.7 198.2 116.1 194.5 L125.0 193.2 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M124.5 189.3 L115.6 190.3 Q109.3 188.1 107.5 180.0 Q109.3 171.9 115.6 169.7 L124.5 170.7 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M125.0 166.8 L116.1 165.5 Q110.7 161.8 111.0 153.5 Q114.9 146.1 121.4 145.6 L129.8 148.9 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M131.3 145.3 L123.1 141.7 Q118.8 136.7 121.2 128.8 Q126.9 122.6 133.3 123.9 L140.6 129.2 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M143.0 126.1 L136.0 120.5 Q133.1 114.5 137.5 107.5 Q144.5 103.1 150.5 106.0 L156.1 113.0 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M159.2 110.6 L153.9 103.3 Q152.6 96.9 158.7 91.2 Q166.7 88.8 171.7 93.1 L175.3 101.3 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path><path d="M178.9 99.8 L175.6 91.4 Q176.1 84.9 183.5 81.0 Q191.8 80.7 195.5 86.1 L196.8 95.0 Z" fill="url(#gx-glassD) #240308" stroke="#050406" stroke-width="1.8"></path>
+          </g>
+          <circle cx="210" cy="180" r="84" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.5"></circle>
+          <circle cx="210" cy="180" r="80" fill="#0A090C" stroke="#4F4B57" stroke-width="0.8"></circle>
+          <circle cx="210" cy="180" r="75" fill="none" stroke="#4F4B57" stroke-width="0.6" stroke-dasharray="2 4"></circle>
+          <!-- arcade at the foot of the arch -->
+          <path d="M70 318 H350 M76.0 318 V302 Q76.0 292 92.0 289 Q108.0 292 108.0 302 V318 M114.3 318 V302 Q114.3 292 130.3 289 Q146.3 292 146.3 302 V318 M152.6 318 V302 Q152.6 292 168.6 289 Q184.6 292 184.6 302 V318 M190.9 318 V302 Q190.9 292 206.9 289 Q222.9 292 222.9 302 V318 M229.2 318 V302 Q229.2 292 245.2 289 Q261.2 292 261.2 302 V318 M267.5 318 V302 Q267.5 292 283.5 289 Q299.5 292 299.5 302 V318 M305.8 318 V302 Q305.8 292 321.8 289 Q337.8 292 337.8 302 V318" fill="none" stroke="#4F4B57" stroke-width="1.2"></path>
+          <rect x="14" y="330" width="392" height="8" fill="url(#gx-stone) #08070A" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.2"></rect>
+        </g>
+      </svg>
+      <div style="position: absolute; left: 130px; right: 130px; top: 152px; height: 116px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px">
+        <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 70px; line-height: 0.9; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 3px 2px #000) drop-shadow(0 0 12px var(--glow))" data-clock="0">--:--</span>
+        <span style="font-size: 12px; letter-spacing: 0.08em; color: #A49DAE; white-space: nowrap" data-date>&nbsp;</span>
+        <span style="font-size: 12px; letter-spacing: 0.4em; color: var(--accent-lt); white-space: nowrap" data-year="90">&nbsp;</span>
+      </div>
+    </div>
+  </header>
+  <!-- ===== PROCESSOR ===== -->
+  <section data-section="cpu" style="position: relative; z-index: 1">
+    <div aria-hidden="true" style="height: 14px; background: url(data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2720%27%20height%3D%2714%27%3E%3Cpath%20d%3D%27M2%2014%20V8%20Q2%202%2010%201%20Q18%202%2018%208%20V14%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%271%27%2F%3E%3Ccircle%20cx%3D%2710%27%20cy%3D%277.5%27%20r%3D%271.7%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%270.8%27%2F%3E%3C%2Fsvg%3E) 0 0 / 20px 14px repeat-x; border-bottom: 1px solid #4F4B57"></div>
+    <div style="position: relative; background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 55%), linear-gradient(180deg, #18151C 0%, #0E0C11 100%); border-left: 1px solid #26222B; border-right: 1px solid #26222B; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 38px rgba(0,0,0,0.8), 0 12px 26px rgba(0,0,0,0.75); padding: 10px 18px 12px; display: flex; flex-direction: column; gap: 8px">
+      <svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; left: 4px"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; right: 4px; transform: scaleX(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; left: 4px; transform: scaleY(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; right: 4px; transform: scale(-1, -1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 1px; background: linear-gradient(90deg, rgba(119,115,127,0), #4F4B57)"></div>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <h2 style="margin: 0; font-family: UnifrakturMaguntia, serif; font-weight: 400; font-size: 32px; line-height: 1; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px #000); white-space: nowrap">Processor</h2>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <div style="flex: 1; height: 1px; background: linear-gradient(270deg, rgba(119,115,127,0), #4F4B57)"></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px">
+        <div data-need="5" style="position: relative; width: 184px; height: 177px; flex: none">
+          <svg data-gauge="5" role="img" aria-label="Package temperature dial" width="184" height="177" viewBox="0 0 200 192" style="position: absolute; top: 0; left: 0">
+            <circle cx="100" cy="96" r="92" fill="url(#gx-face) #070608" stroke="url(#gx-metal) #A6A2AC" stroke-width="5"></circle><circle cx="100" cy="96" r="89" fill="none" stroke="#000" stroke-width="1.5" opacity="0.85"></circle><path d="M40 52 A72 72 0 0 1 160 52" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity="0.035"></path>
+            <circle cx="186.5" cy="96.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="185.2" cy="111.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="181.3" cy="125.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="174.9" cy="139.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="166.3" cy="151.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="155.6" cy="162.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="143.3" cy="170.9" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="129.6" cy="177.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="115.0" cy="181.2" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="100.0" cy="182.5" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="85.0" cy="181.2" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="70.4" cy="177.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="56.8" cy="170.9" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="44.4" cy="162.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="33.7" cy="151.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="25.1" cy="139.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="18.7" cy="125.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="14.8" cy="111.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="13.5" cy="96.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="14.8" cy="81.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="18.7" cy="66.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="25.1" cy="52.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="33.7" cy="40.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="44.4" cy="29.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="56.7" cy="21.1" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="70.4" cy="14.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="85.0" cy="10.8" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="100.0" cy="9.5" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="115.0" cy="10.8" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="129.6" cy="14.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="143.3" cy="21.1" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="155.6" cy="29.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="166.3" cy="40.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="174.9" cy="52.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="181.3" cy="66.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="185.2" cy="81.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+            <circle cx="100" cy="96" r="81" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+            <path d="M47.7 148.3 A74 74 0 1 1 152.3 148.3" fill="none" stroke="#211D25" stroke-width="10"></path>
+            <path data-arc d="" fill="none" stroke="#7A0C1A" stroke-width="10" style="filter: drop-shadow(0 0 4px var(--accent)); "></path>
+            <line x1="60.4" y1="135.6" x2="52.6" y2="143.4" stroke="#A6A2AC" stroke-width="2"></line><line x1="47.1" y1="128.4" x2="42.9" y2="131.0" stroke="#A6A2AC" stroke-width="1"></line><line x1="41.0" y1="115.2" x2="36.3" y2="116.7" stroke="#A6A2AC" stroke-width="1"></line><line x1="38.2" y1="100.9" x2="33.2" y2="101.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="38.8" y1="86.3" x2="33.8" y2="85.5" stroke="#A6A2AC" stroke-width="1"></line><line x1="48.3" y1="74.6" x2="38.1" y2="70.4" stroke="#A6A2AC" stroke-width="2"></line><line x1="49.8" y1="59.6" x2="45.8" y2="56.6" stroke="#A6A2AC" stroke-width="1"></line><line x1="59.7" y1="48.9" x2="56.5" y2="45.1" stroke="#A6A2AC" stroke-width="1"></line><line x1="71.9" y1="40.8" x2="69.6" y2="36.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="85.5" y1="35.7" x2="84.4" y2="30.9" stroke="#A6A2AC" stroke-width="1"></line><line x1="100.0" y1="40.0" x2="100.0" y2="29.0" stroke="#A6A2AC" stroke-width="2"></line><line x1="114.5" y1="35.7" x2="115.6" y2="30.9" stroke="#A6A2AC" stroke-width="1"></line><line x1="128.1" y1="40.8" x2="130.4" y2="36.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="140.3" y1="48.9" x2="143.5" y2="45.1" stroke="#A6A2AC" stroke-width="1"></line><line x1="150.2" y1="59.6" x2="154.2" y2="56.6" stroke="#A6A2AC" stroke-width="1"></line><line x1="151.7" y1="74.6" x2="161.9" y2="70.4" stroke="#A6A2AC" stroke-width="2"></line><line x1="161.2" y1="86.3" x2="166.2" y2="85.5" stroke="#A6A2AC" stroke-width="1"></line><line x1="161.8" y1="100.9" x2="166.8" y2="101.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="159.0" y1="115.2" x2="163.7" y2="116.7" stroke="#A6A2AC" stroke-width="1"></line><line x1="152.9" y1="128.4" x2="157.1" y2="131.0" stroke="#A6A2AC" stroke-width="1"></line><line x1="139.6" y1="135.6" x2="147.4" y2="143.4" stroke="#A6A2AC" stroke-width="2"></line>
+            <g data-needle transform="translate(100 96) rotate(225)">
+              <path d="M0 -72 L3.4 -58 L1.4 -55 L1.4 10 L-1.4 10 L-1.4 -55 L-3.4 -58 Z" fill="url(#gx-metal) #A6A2AC" stroke="#000" stroke-width="0.6"></path>
+            </g>
+            <g transform="translate(100 96)" fill="#070608" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.2"><circle cx="0" cy="-4" r="4"></circle><circle cx="4" cy="0" r="4"></circle><circle cx="0" cy="4" r="4"></circle><circle cx="-4" cy="0" r="4"></circle><circle r="2" fill="#7A0C1A" stroke="none"></circle></g>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 104px; display: flex; flex-direction: column; align-items: center">
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 44px; line-height: 1; color: #DDD8E2; text-shadow: 0 2px 3px #000, 0 0 10px var(--glow)"><span data-num="5" data-places="0">--</span>°</span>
+            <span style="font-size: 11px; letter-spacing: 0.16em; color: #A49DAE; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="4" data-default="Package">Package</span>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-family: UnifrakturMaguntia, serif; font-size: 24px; line-height: 1; color: #A49DAE" data-state="5">Calm</span>
+            <div data-need="9" style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; letter-spacing: 0.1em; color: #A49DAE">Load</span>
+                <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 24px; line-height: 1"><span data-num="9" data-places="0">--</span><span style="font-family: 'Spectral SC', serif; font-weight: 400; font-size: 13px; color: var(--accent-lt)"> <span data-unit="10" data-default="%">%</span></span></span>
+              </div>
+              <div style="height: 12px; padding: 2px; box-sizing: border-box; background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) calc(10% - 1px), rgba(200,200,210,0.14) calc(10% - 1px), rgba(200,200,210,0.14) 10%), #070608; border: 1px solid #4F4B57">
+                <div data-bar="9" data-max="11" data-unit-of="10" data-scale="100" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--deep), var(--accent)); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)"></div>
+              </div>
+            </div>
+            <div data-need="13" style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; letter-spacing: 0.1em; color: #A49DAE">Clock</span>
+                <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 24px; line-height: 1"><span data-num="13" data-places="2" data-ghz>--</span><span style="font-family: 'Spectral SC', serif; font-weight: 400; font-size: 13px; color: var(--accent-lt)"> <span data-unit="14" data-default="GHz" data-ghz>GHz</span></span></span>
+              </div>
+              <div style="height: 12px; padding: 2px; box-sizing: border-box; background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) calc(10% - 1px), rgba(200,200,210,0.14) calc(10% - 1px), rgba(200,200,210,0.14) 10%), #070608; border: 1px solid #4F4B57">
+                <div data-bar="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--deep), var(--accent)); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)"></div>
+              </div>
+            </div>
+            <div data-need="17" style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; letter-spacing: 0.1em; color: #A49DAE">Power</span>
+                <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 24px; line-height: 1"><span data-num="17" data-places="0">--</span><span style="font-family: 'Spectral SC', serif; font-weight: 400; font-size: 13px; color: var(--accent-lt)"> <span data-unit="18" data-default="W">W</span></span></span>
+              </div>
+              <div style="height: 12px; padding: 2px; box-sizing: border-box; background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) calc(10% - 1px), rgba(200,200,210,0.14) calc(10% - 1px), rgba(200,200,210,0.14) 10%), #070608; border: 1px solid #4F4B57">
+                <div data-bar="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--deep), var(--accent)); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)"></div>
+              </div>
+            </div>
+        </div>
+      </div>
+    </div>
+    <div aria-hidden="true" style="height: 10px; background: radial-gradient(circle at 8px 6px, #000 1.6px, transparent 2.1px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, #121015 7px, transparent 7.5px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, transparent 8px, #4F4B57 8.5px, #4F4B57 9.2px, transparent 9.7px) 0 0 / 16px 10px repeat-x"></div>
+  </section>
+  <!-- ===== GRAPHICS ===== -->
+  <section data-section="gpu" style="position: relative; z-index: 1">
+    <div aria-hidden="true" style="height: 14px; background: url(data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2720%27%20height%3D%2714%27%3E%3Cpath%20d%3D%27M2%2014%20V8%20Q2%202%2010%201%20Q18%202%2018%208%20V14%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%271%27%2F%3E%3Ccircle%20cx%3D%2710%27%20cy%3D%277.5%27%20r%3D%271.7%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%270.8%27%2F%3E%3C%2Fsvg%3E) 0 0 / 20px 14px repeat-x; border-bottom: 1px solid #4F4B57"></div>
+    <div style="position: relative; background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 55%), linear-gradient(180deg, #18151C 0%, #0E0C11 100%); border-left: 1px solid #26222B; border-right: 1px solid #26222B; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 38px rgba(0,0,0,0.8), 0 12px 26px rgba(0,0,0,0.75); padding: 10px 18px 12px; display: flex; flex-direction: column; gap: 8px">
+      <svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; left: 4px"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; right: 4px; transform: scaleX(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; left: 4px; transform: scaleY(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; right: 4px; transform: scale(-1, -1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 1px; background: linear-gradient(90deg, rgba(119,115,127,0), #4F4B57)"></div>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <h2 style="margin: 0; font-family: UnifrakturMaguntia, serif; font-weight: 400; font-size: 32px; line-height: 1; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px #000); white-space: nowrap">Graphics</h2>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <div style="flex: 1; height: 1px; background: linear-gradient(270deg, rgba(119,115,127,0), #4F4B57)"></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-family: UnifrakturMaguntia, serif; font-size: 24px; line-height: 1; color: #A49DAE" data-state="21">Calm</span>
+            <div data-need="25" style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; letter-spacing: 0.1em; color: #A49DAE">Load</span>
+                <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 24px; line-height: 1"><span data-num="25" data-places="0">--</span><span style="font-family: 'Spectral SC', serif; font-weight: 400; font-size: 13px; color: var(--accent-lt)"> <span data-unit="26" data-default="%">%</span></span></span>
+              </div>
+              <div style="height: 12px; padding: 2px; box-sizing: border-box; background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) calc(10% - 1px), rgba(200,200,210,0.14) calc(10% - 1px), rgba(200,200,210,0.14) 10%), #070608; border: 1px solid #4F4B57">
+                <div data-bar="25" data-max="27" data-unit-of="26" data-scale="100" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--deep), var(--accent)); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)"></div>
+              </div>
+            </div>
+            <div data-need="29" style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; letter-spacing: 0.1em; color: #A49DAE">Clock</span>
+                <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 24px; line-height: 1"><span data-num="29" data-places="2" data-ghz>--</span><span style="font-family: 'Spectral SC', serif; font-weight: 400; font-size: 13px; color: var(--accent-lt)"> <span data-unit="30" data-default="GHz" data-ghz>GHz</span></span></span>
+              </div>
+              <div style="height: 12px; padding: 2px; box-sizing: border-box; background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) calc(10% - 1px), rgba(200,200,210,0.14) calc(10% - 1px), rgba(200,200,210,0.14) 10%), #070608; border: 1px solid #4F4B57">
+                <div data-bar="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--deep), var(--accent)); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)"></div>
+              </div>
+            </div>
+            <div data-need="33" style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; letter-spacing: 0.1em; color: #A49DAE">Power</span>
+                <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 24px; line-height: 1"><span data-num="33" data-places="0">--</span><span style="font-family: 'Spectral SC', serif; font-weight: 400; font-size: 13px; color: var(--accent-lt)"> <span data-unit="34" data-default="W">W</span></span></span>
+              </div>
+              <div style="height: 12px; padding: 2px; box-sizing: border-box; background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) calc(10% - 1px), rgba(200,200,210,0.14) calc(10% - 1px), rgba(200,200,210,0.14) 10%), #070608; border: 1px solid #4F4B57">
+                <div data-bar="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--deep), var(--accent)); clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 0 100%)"></div>
+              </div>
+            </div>
+        </div>
+        <div data-need="21" style="position: relative; width: 184px; height: 177px; flex: none">
+          <svg data-gauge="21" role="img" aria-label="Edge temperature dial" width="184" height="177" viewBox="0 0 200 192" style="position: absolute; top: 0; left: 0">
+            <circle cx="100" cy="96" r="92" fill="url(#gx-face) #070608" stroke="url(#gx-metal) #A6A2AC" stroke-width="5"></circle><circle cx="100" cy="96" r="89" fill="none" stroke="#000" stroke-width="1.5" opacity="0.85"></circle><path d="M40 52 A72 72 0 0 1 160 52" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity="0.035"></path>
+            <circle cx="186.5" cy="96.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="185.2" cy="111.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="181.3" cy="125.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="174.9" cy="139.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="166.3" cy="151.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="155.6" cy="162.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="143.3" cy="170.9" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="129.6" cy="177.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="115.0" cy="181.2" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="100.0" cy="182.5" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="85.0" cy="181.2" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="70.4" cy="177.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="56.8" cy="170.9" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="44.4" cy="162.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="33.7" cy="151.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="25.1" cy="139.3" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="18.7" cy="125.6" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="14.8" cy="111.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="13.5" cy="96.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="14.8" cy="81.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="18.7" cy="66.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="25.1" cy="52.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="33.7" cy="40.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="44.4" cy="29.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="56.7" cy="21.1" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="70.4" cy="14.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="85.0" cy="10.8" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="100.0" cy="9.5" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="115.0" cy="10.8" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="129.6" cy="14.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="143.3" cy="21.1" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="155.6" cy="29.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="166.3" cy="40.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="174.9" cy="52.7" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="181.3" cy="66.4" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle><circle cx="185.2" cy="81.0" r="2.6" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+            <circle cx="100" cy="96" r="81" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+            <path d="M47.7 148.3 A74 74 0 1 1 152.3 148.3" fill="none" stroke="#211D25" stroke-width="10"></path>
+            <path data-arc d="" fill="none" stroke="#7A0C1A" stroke-width="10" style="filter: drop-shadow(0 0 4px var(--accent)); "></path>
+            <line x1="60.4" y1="135.6" x2="52.6" y2="143.4" stroke="#A6A2AC" stroke-width="2"></line><line x1="47.1" y1="128.4" x2="42.9" y2="131.0" stroke="#A6A2AC" stroke-width="1"></line><line x1="41.0" y1="115.2" x2="36.3" y2="116.7" stroke="#A6A2AC" stroke-width="1"></line><line x1="38.2" y1="100.9" x2="33.2" y2="101.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="38.8" y1="86.3" x2="33.8" y2="85.5" stroke="#A6A2AC" stroke-width="1"></line><line x1="48.3" y1="74.6" x2="38.1" y2="70.4" stroke="#A6A2AC" stroke-width="2"></line><line x1="49.8" y1="59.6" x2="45.8" y2="56.6" stroke="#A6A2AC" stroke-width="1"></line><line x1="59.7" y1="48.9" x2="56.5" y2="45.1" stroke="#A6A2AC" stroke-width="1"></line><line x1="71.9" y1="40.8" x2="69.6" y2="36.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="85.5" y1="35.7" x2="84.4" y2="30.9" stroke="#A6A2AC" stroke-width="1"></line><line x1="100.0" y1="40.0" x2="100.0" y2="29.0" stroke="#A6A2AC" stroke-width="2"></line><line x1="114.5" y1="35.7" x2="115.6" y2="30.9" stroke="#A6A2AC" stroke-width="1"></line><line x1="128.1" y1="40.8" x2="130.4" y2="36.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="140.3" y1="48.9" x2="143.5" y2="45.1" stroke="#A6A2AC" stroke-width="1"></line><line x1="150.2" y1="59.6" x2="154.2" y2="56.6" stroke="#A6A2AC" stroke-width="1"></line><line x1="151.7" y1="74.6" x2="161.9" y2="70.4" stroke="#A6A2AC" stroke-width="2"></line><line x1="161.2" y1="86.3" x2="166.2" y2="85.5" stroke="#A6A2AC" stroke-width="1"></line><line x1="161.8" y1="100.9" x2="166.8" y2="101.3" stroke="#A6A2AC" stroke-width="1"></line><line x1="159.0" y1="115.2" x2="163.7" y2="116.7" stroke="#A6A2AC" stroke-width="1"></line><line x1="152.9" y1="128.4" x2="157.1" y2="131.0" stroke="#A6A2AC" stroke-width="1"></line><line x1="139.6" y1="135.6" x2="147.4" y2="143.4" stroke="#A6A2AC" stroke-width="2"></line>
+            <g data-needle transform="translate(100 96) rotate(225)">
+              <path d="M0 -72 L3.4 -58 L1.4 -55 L1.4 10 L-1.4 10 L-1.4 -55 L-3.4 -58 Z" fill="url(#gx-metal) #A6A2AC" stroke="#000" stroke-width="0.6"></path>
+            </g>
+            <g transform="translate(100 96)" fill="#070608" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.2"><circle cx="0" cy="-4" r="4"></circle><circle cx="4" cy="0" r="4"></circle><circle cx="0" cy="4" r="4"></circle><circle cx="-4" cy="0" r="4"></circle><circle r="2" fill="#7A0C1A" stroke="none"></circle></g>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 104px; display: flex; flex-direction: column; align-items: center">
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 44px; line-height: 1; color: #DDD8E2; text-shadow: 0 2px 3px #000, 0 0 10px var(--glow)"><span data-num="21" data-places="0">--</span>°</span>
+            <span style="font-size: 11px; letter-spacing: 0.16em; color: #A49DAE; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="20" data-default="Edge">Edge</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div aria-hidden="true" style="height: 10px; background: radial-gradient(circle at 8px 6px, #000 1.6px, transparent 2.1px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, #121015 7px, transparent 7.5px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, transparent 8px, #4F4B57 8.5px, #4F4B57 9.2px, transparent 9.7px) 0 0 / 16px 10px repeat-x"></div>
+  </section>
+  <!-- ===== COOLING: turning rose-window tracery ===== -->
+  <section data-section="fans" style="position: relative; z-index: 1">
+    <div aria-hidden="true" style="height: 14px; background: url(data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2720%27%20height%3D%2714%27%3E%3Cpath%20d%3D%27M2%2014%20V8%20Q2%202%2010%201%20Q18%202%2018%208%20V14%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%271%27%2F%3E%3Ccircle%20cx%3D%2710%27%20cy%3D%277.5%27%20r%3D%271.7%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%270.8%27%2F%3E%3C%2Fsvg%3E) 0 0 / 20px 14px repeat-x; border-bottom: 1px solid #4F4B57"></div>
+    <div style="position: relative; background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 55%), linear-gradient(180deg, #18151C 0%, #0E0C11 100%); border-left: 1px solid #26222B; border-right: 1px solid #26222B; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 38px rgba(0,0,0,0.8), 0 12px 26px rgba(0,0,0,0.75); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px">
+      <svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; left: 4px"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; right: 4px; transform: scaleX(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; left: 4px; transform: scaleY(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; right: 4px; transform: scale(-1, -1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 1px; background: linear-gradient(90deg, rgba(119,115,127,0), #4F4B57)"></div>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <h2 style="margin: 0; font-family: UnifrakturMaguntia, serif; font-weight: 400; font-size: 32px; line-height: 1; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px #000); white-space: nowrap">Cooling</h2>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <div style="flex: 1; height: 1px; background: linear-gradient(270deg, rgba(119,115,127,0), #4F4B57)"></div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+          <div data-need="37" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg aria-hidden="true" width="80" height="80" viewBox="-40 -40 80 80">
+              <circle r="38" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.6"></circle>
+              <circle cx="34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="0.0" cy="34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-0.0" cy="-34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle>
+              <circle r="30" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+              <g data-rotor="37">
+                  <g transform="rotate(0)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(60)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(300)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+              </g>
+              <circle r="5" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.1"></circle>
+              <circle r="1.8" fill="#7A0C1A"></circle>
+            </svg>
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 22px; line-height: 1" data-num="37" data-places="0">--</span>
+            <span style="font-size: 11px; letter-spacing: 0.08em; color: #A49DAE; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="36" data-default="Fan 1">Fan 1</span>
+          </div>
+          <div data-need="41" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg aria-hidden="true" width="80" height="80" viewBox="-40 -40 80 80">
+              <circle r="38" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.6"></circle>
+              <circle cx="34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="0.0" cy="34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-0.0" cy="-34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle>
+              <circle r="30" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+              <g data-rotor="41">
+                  <g transform="rotate(0)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(60)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(300)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+              </g>
+              <circle r="5" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.1"></circle>
+              <circle r="1.8" fill="#7A0C1A"></circle>
+            </svg>
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 22px; line-height: 1" data-num="41" data-places="0">--</span>
+            <span style="font-size: 11px; letter-spacing: 0.08em; color: #A49DAE; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="40" data-default="Fan 2">Fan 2</span>
+          </div>
+          <div data-need="45" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg aria-hidden="true" width="80" height="80" viewBox="-40 -40 80 80">
+              <circle r="38" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.6"></circle>
+              <circle cx="34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="0.0" cy="34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-0.0" cy="-34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle>
+              <circle r="30" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+              <g data-rotor="45">
+                  <g transform="rotate(0)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(60)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(300)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+              </g>
+              <circle r="5" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.1"></circle>
+              <circle r="1.8" fill="#7A0C1A"></circle>
+            </svg>
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 22px; line-height: 1" data-num="45" data-places="0">--</span>
+            <span style="font-size: 11px; letter-spacing: 0.08em; color: #A49DAE; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="44" data-default="Fan 3">Fan 3</span>
+          </div>
+          <div data-need="49" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg aria-hidden="true" width="80" height="80" viewBox="-40 -40 80 80">
+              <circle r="38" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.6"></circle>
+              <circle cx="34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="0.0" cy="34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-34.0" cy="0.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="-0.0" cy="-34.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="13.0" cy="-31.4" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="24.0" cy="-24.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle><circle cx="31.4" cy="-13.0" r="2.2" fill="none" stroke="#4F4B57" stroke-width="0.7"></circle>
+              <circle r="30" fill="none" stroke="#4F4B57" stroke-width="0.8"></circle>
+              <g data-rotor="49">
+                  <g transform="rotate(0)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(60)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(120)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(180)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(240)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+                  <g transform="rotate(300)">
+                    <path d="M0 -6 C7 -12 7 -22 0 -29 C-7 -22 -7 -12 0 -6 Z" fill="url(#gx-glass) #240308" stroke="#050406" stroke-width="1.6"></path>
+                    <path d="M0 -12 C3 -15 3 -20 0 -24 C-3 -20 -3 -15 0 -12 Z" fill="#7A0C1A" opacity="0.55"></path>
+                  </g>
+              </g>
+              <circle r="5" fill="#060507" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.1"></circle>
+              <circle r="1.8" fill="#7A0C1A"></circle>
+            </svg>
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 22px; line-height: 1" data-num="49" data-places="0">--</span>
+            <span style="font-size: 11px; letter-spacing: 0.08em; color: #A49DAE; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis" data-cap="48" data-default="Fan 4">Fan 4</span>
+          </div>
+      </div>
+    </div>
+    <div aria-hidden="true" style="height: 10px; background: radial-gradient(circle at 8px 6px, #000 1.6px, transparent 2.1px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, #121015 7px, transparent 7.5px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, transparent 8px, #4F4B57 8.5px, #4F4B57 9.2px, transparent 9.7px) 0 0 / 16px 10px repeat-x"></div>
+  </section>
+  <!-- ===== MEMORY: lancet windows of stained glass ===== -->
+  <!-- ===== NETWORK ===== -->
+  <section data-section="memory" style="position: relative; z-index: 1">
+    <div aria-hidden="true" style="height: 14px; background: url(data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2720%27%20height%3D%2714%27%3E%3Cpath%20d%3D%27M2%2014%20V8%20Q2%202%2010%201%20Q18%202%2018%208%20V14%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%271%27%2F%3E%3Ccircle%20cx%3D%2710%27%20cy%3D%277.5%27%20r%3D%271.7%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%270.8%27%2F%3E%3C%2Fsvg%3E) 0 0 / 20px 14px repeat-x; border-bottom: 1px solid #4F4B57"></div>
+    <div style="position: relative; background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 55%), linear-gradient(180deg, #18151C 0%, #0E0C11 100%); border-left: 1px solid #26222B; border-right: 1px solid #26222B; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 38px rgba(0,0,0,0.8), 0 12px 26px rgba(0,0,0,0.75); padding: 10px 18px 12px; display: flex; flex-direction: column; gap: 8px">
+      <svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; left: 4px"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; right: 4px; transform: scaleX(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; left: 4px; transform: scaleY(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; right: 4px; transform: scale(-1, -1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 1px; background: linear-gradient(90deg, rgba(119,115,127,0), #4F4B57)"></div>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <h2 style="margin: 0; font-family: UnifrakturMaguntia, serif; font-weight: 400; font-size: 32px; line-height: 1; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px #000); white-space: nowrap">Memory</h2>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <div style="flex: 1; height: 1px; background: linear-gradient(270deg, rgba(119,115,127,0), #4F4B57)"></div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+          <div data-need="53" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg data-window="53" data-max="55" aria-hidden="true" width="96" height="162" viewBox="0 -8 96 162">
+              <path d="M12 70 V58 A66 66 0 0 1 48 -0.8 A66 66 0 0 1 84 58 V70" fill="none" stroke="#4F4B57" stroke-width="1.4"></path>
+              <path d="M48 -0.8 V-6 M44 -4 C46 -6 48 -6 48 -6 C48 -6 50 -6 52 -4" fill="none" stroke="#4F4B57" stroke-width="1.2"></path>
+              <path d="M18.0 146.0 L18.0 58.0 L18.0 58.0 L18.1 53.8 L18.6 49.6 L19.3 45.5 L20.3 41.5 L21.6 37.5 L23.2 33.6 L25.0 29.8 L27.1 26.2 L29.5 22.7 L32.0 19.4 L34.8 16.3 L37.9 13.4 L41.1 10.7 L44.4 8.3 L48.0 6.0 L48.0 6.0 L51.6 8.3 L54.9 10.7 L58.1 13.4 L61.2 16.3 L64.0 19.4 L66.5 22.7 L68.9 26.2 L71.0 29.8 L72.8 33.6 L74.4 37.5 L75.7 41.5 L76.7 45.5 L77.4 49.6 L77.9 53.8 L78.0 58.0 L78.0 146.0 Z" fill="#060507"></path>
+              <path data-glass clip-path="url(#gx-lancet)" d="" fill="url(#gx-glass) #3A050E"></path>
+              <path data-glass clip-path="url(#gx-lancet)" d="" fill="#7A0C1A" opacity="0.28" style="animation: gx-candle 4.5s ease-in-out infinite"></path>
+              <path d="M18.0 66.0 L26.0 58.0 M18.0 82.0 L42.0 58.0 M18.0 98.0 L58.0 58.0 M18.0 114.0 L74.0 58.0 M18.0 130.0 L78.0 70.0 M18.0 146.0 L78.0 86.0 M34.0 146.0 L78.0 102.0 M50.0 146.0 L78.0 118.0 M66.0 146.0 L78.0 134.0 M18.0 138.0 L26.0 146.0 M18.0 122.0 L42.0 146.0 M18.0 106.0 L58.0 146.0 M18.0 90.0 L74.0 146.0 M18.0 74.0 L78.0 134.0 M18.0 58.0 L78.0 118.0 M34.0 58.0 L78.0 102.0 M50.0 58.0 L78.0 86.0 M66.0 58.0 L78.0 70.0 " fill="none" stroke="#000" stroke-width="1.6"></path>
+              <path d="M18.0 66.0 L26.0 58.0 M18.0 82.0 L42.0 58.0 M18.0 98.0 L58.0 58.0 M18.0 114.0 L74.0 58.0 M18.0 130.0 L78.0 70.0 M18.0 146.0 L78.0 86.0 M34.0 146.0 L78.0 102.0 M50.0 146.0 L78.0 118.0 M66.0 146.0 L78.0 134.0 M18.0 138.0 L26.0 146.0 M18.0 122.0 L42.0 146.0 M18.0 106.0 L58.0 146.0 M18.0 90.0 L74.0 146.0 M18.0 74.0 L78.0 134.0 M18.0 58.0 L78.0 118.0 M34.0 58.0 L78.0 102.0 M50.0 58.0 L78.0 86.0 M66.0 58.0 L78.0 70.0 " fill="none" stroke="#5A5662" stroke-width="0.4" opacity="0.35"></path>
+              <path data-surface clip-path="url(#gx-lancet)" d="" fill="none" stroke="#A3222F" stroke-width="1.4"></path>
+              <g fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.3"><circle cx="48" cy="27" r="7"></circle><circle cx="41.5" cy="38" r="7"></circle><circle cx="54.5" cy="38" r="7"></circle></g>
+              <line x1="18" y1="58" x2="78" y2="58" stroke="#A6A2AC" stroke-width="1.3"></line>
+              <path d="M18.0 146.0 L18.0 58.0 L18.0 58.0 L18.1 53.8 L18.6 49.6 L19.3 45.5 L20.3 41.5 L21.6 37.5 L23.2 33.6 L25.0 29.8 L27.1 26.2 L29.5 22.7 L32.0 19.4 L34.8 16.3 L37.9 13.4 L41.1 10.7 L44.4 8.3 L48.0 6.0 L48.0 6.0 L51.6 8.3 L54.9 10.7 L58.1 13.4 L61.2 16.3 L64.0 19.4 L66.5 22.7 L68.9 26.2 L71.0 29.8 L72.8 33.6 L74.4 37.5 L75.7 41.5 L76.7 45.5 L77.4 49.6 L77.9 53.8 L78.0 58.0 L78.0 146.0 Z" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="2.6"></path>
+              <rect x="10" y="146" width="76" height="7" fill="url(#gx-stone) #08070A" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.2"></rect>
+            </svg>
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 26px; line-height: 1"><span data-pct="53" data-max="55">--</span>%</span>
+            <span style="font-size: 13px; letter-spacing: 0.08em; color: #ECE8F0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="52" data-default="Memory">Memory</span>
+            <span style="font-size: 12px; color: #A49DAE"><span data-num="53" data-places="1" data-plain>--</span> of <span data-num="55" data-places="0" data-plain>--</span> <span data-unit="54" data-default="GB">GB</span></span>
+          </div>
+          <div data-need="57" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg data-window="57" data-max="59" aria-hidden="true" width="96" height="162" viewBox="0 -8 96 162">
+              <path d="M12 70 V58 A66 66 0 0 1 48 -0.8 A66 66 0 0 1 84 58 V70" fill="none" stroke="#4F4B57" stroke-width="1.4"></path>
+              <path d="M48 -0.8 V-6 M44 -4 C46 -6 48 -6 48 -6 C48 -6 50 -6 52 -4" fill="none" stroke="#4F4B57" stroke-width="1.2"></path>
+              <path d="M18.0 146.0 L18.0 58.0 L18.0 58.0 L18.1 53.8 L18.6 49.6 L19.3 45.5 L20.3 41.5 L21.6 37.5 L23.2 33.6 L25.0 29.8 L27.1 26.2 L29.5 22.7 L32.0 19.4 L34.8 16.3 L37.9 13.4 L41.1 10.7 L44.4 8.3 L48.0 6.0 L48.0 6.0 L51.6 8.3 L54.9 10.7 L58.1 13.4 L61.2 16.3 L64.0 19.4 L66.5 22.7 L68.9 26.2 L71.0 29.8 L72.8 33.6 L74.4 37.5 L75.7 41.5 L76.7 45.5 L77.4 49.6 L77.9 53.8 L78.0 58.0 L78.0 146.0 Z" fill="#060507"></path>
+              <path data-glass clip-path="url(#gx-lancet)" d="" fill="url(#gx-glass) #3A050E"></path>
+              <path data-glass clip-path="url(#gx-lancet)" d="" fill="#7A0C1A" opacity="0.28" style="animation: gx-candle 4.5s ease-in-out infinite"></path>
+              <path d="M18.0 66.0 L26.0 58.0 M18.0 82.0 L42.0 58.0 M18.0 98.0 L58.0 58.0 M18.0 114.0 L74.0 58.0 M18.0 130.0 L78.0 70.0 M18.0 146.0 L78.0 86.0 M34.0 146.0 L78.0 102.0 M50.0 146.0 L78.0 118.0 M66.0 146.0 L78.0 134.0 M18.0 138.0 L26.0 146.0 M18.0 122.0 L42.0 146.0 M18.0 106.0 L58.0 146.0 M18.0 90.0 L74.0 146.0 M18.0 74.0 L78.0 134.0 M18.0 58.0 L78.0 118.0 M34.0 58.0 L78.0 102.0 M50.0 58.0 L78.0 86.0 M66.0 58.0 L78.0 70.0 " fill="none" stroke="#000" stroke-width="1.6"></path>
+              <path d="M18.0 66.0 L26.0 58.0 M18.0 82.0 L42.0 58.0 M18.0 98.0 L58.0 58.0 M18.0 114.0 L74.0 58.0 M18.0 130.0 L78.0 70.0 M18.0 146.0 L78.0 86.0 M34.0 146.0 L78.0 102.0 M50.0 146.0 L78.0 118.0 M66.0 146.0 L78.0 134.0 M18.0 138.0 L26.0 146.0 M18.0 122.0 L42.0 146.0 M18.0 106.0 L58.0 146.0 M18.0 90.0 L74.0 146.0 M18.0 74.0 L78.0 134.0 M18.0 58.0 L78.0 118.0 M34.0 58.0 L78.0 102.0 M50.0 58.0 L78.0 86.0 M66.0 58.0 L78.0 70.0 " fill="none" stroke="#5A5662" stroke-width="0.4" opacity="0.35"></path>
+              <path data-surface clip-path="url(#gx-lancet)" d="" fill="none" stroke="#A3222F" stroke-width="1.4"></path>
+              <g fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.3"><circle cx="48" cy="27" r="7"></circle><circle cx="41.5" cy="38" r="7"></circle><circle cx="54.5" cy="38" r="7"></circle></g>
+              <line x1="18" y1="58" x2="78" y2="58" stroke="#A6A2AC" stroke-width="1.3"></line>
+              <path d="M18.0 146.0 L18.0 58.0 L18.0 58.0 L18.1 53.8 L18.6 49.6 L19.3 45.5 L20.3 41.5 L21.6 37.5 L23.2 33.6 L25.0 29.8 L27.1 26.2 L29.5 22.7 L32.0 19.4 L34.8 16.3 L37.9 13.4 L41.1 10.7 L44.4 8.3 L48.0 6.0 L48.0 6.0 L51.6 8.3 L54.9 10.7 L58.1 13.4 L61.2 16.3 L64.0 19.4 L66.5 22.7 L68.9 26.2 L71.0 29.8 L72.8 33.6 L74.4 37.5 L75.7 41.5 L76.7 45.5 L77.4 49.6 L77.9 53.8 L78.0 58.0 L78.0 146.0 Z" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="2.6"></path>
+              <rect x="10" y="146" width="76" height="7" fill="url(#gx-stone) #08070A" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.2"></rect>
+            </svg>
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 26px; line-height: 1"><span data-pct="57" data-max="59">--</span>%</span>
+            <span style="font-size: 13px; letter-spacing: 0.08em; color: #ECE8F0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="56" data-default="Video">Video</span>
+            <span style="font-size: 12px; color: #A49DAE"><span data-num="57" data-places="1" data-plain>--</span> of <span data-num="59" data-places="0" data-plain>--</span> <span data-unit="58" data-default="GB">GB</span></span>
+          </div>
+          <div data-need="61" style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <svg data-window="61" data-max="63" aria-hidden="true" width="96" height="162" viewBox="0 -8 96 162">
+              <path d="M12 70 V58 A66 66 0 0 1 48 -0.8 A66 66 0 0 1 84 58 V70" fill="none" stroke="#4F4B57" stroke-width="1.4"></path>
+              <path d="M48 -0.8 V-6 M44 -4 C46 -6 48 -6 48 -6 C48 -6 50 -6 52 -4" fill="none" stroke="#4F4B57" stroke-width="1.2"></path>
+              <path d="M18.0 146.0 L18.0 58.0 L18.0 58.0 L18.1 53.8 L18.6 49.6 L19.3 45.5 L20.3 41.5 L21.6 37.5 L23.2 33.6 L25.0 29.8 L27.1 26.2 L29.5 22.7 L32.0 19.4 L34.8 16.3 L37.9 13.4 L41.1 10.7 L44.4 8.3 L48.0 6.0 L48.0 6.0 L51.6 8.3 L54.9 10.7 L58.1 13.4 L61.2 16.3 L64.0 19.4 L66.5 22.7 L68.9 26.2 L71.0 29.8 L72.8 33.6 L74.4 37.5 L75.7 41.5 L76.7 45.5 L77.4 49.6 L77.9 53.8 L78.0 58.0 L78.0 146.0 Z" fill="#060507"></path>
+              <path data-glass clip-path="url(#gx-lancet)" d="" fill="url(#gx-glass) #3A050E"></path>
+              <path data-glass clip-path="url(#gx-lancet)" d="" fill="#7A0C1A" opacity="0.28" style="animation: gx-candle 4.5s ease-in-out infinite"></path>
+              <path d="M18.0 66.0 L26.0 58.0 M18.0 82.0 L42.0 58.0 M18.0 98.0 L58.0 58.0 M18.0 114.0 L74.0 58.0 M18.0 130.0 L78.0 70.0 M18.0 146.0 L78.0 86.0 M34.0 146.0 L78.0 102.0 M50.0 146.0 L78.0 118.0 M66.0 146.0 L78.0 134.0 M18.0 138.0 L26.0 146.0 M18.0 122.0 L42.0 146.0 M18.0 106.0 L58.0 146.0 M18.0 90.0 L74.0 146.0 M18.0 74.0 L78.0 134.0 M18.0 58.0 L78.0 118.0 M34.0 58.0 L78.0 102.0 M50.0 58.0 L78.0 86.0 M66.0 58.0 L78.0 70.0 " fill="none" stroke="#000" stroke-width="1.6"></path>
+              <path d="M18.0 66.0 L26.0 58.0 M18.0 82.0 L42.0 58.0 M18.0 98.0 L58.0 58.0 M18.0 114.0 L74.0 58.0 M18.0 130.0 L78.0 70.0 M18.0 146.0 L78.0 86.0 M34.0 146.0 L78.0 102.0 M50.0 146.0 L78.0 118.0 M66.0 146.0 L78.0 134.0 M18.0 138.0 L26.0 146.0 M18.0 122.0 L42.0 146.0 M18.0 106.0 L58.0 146.0 M18.0 90.0 L74.0 146.0 M18.0 74.0 L78.0 134.0 M18.0 58.0 L78.0 118.0 M34.0 58.0 L78.0 102.0 M50.0 58.0 L78.0 86.0 M66.0 58.0 L78.0 70.0 " fill="none" stroke="#5A5662" stroke-width="0.4" opacity="0.35"></path>
+              <path data-surface clip-path="url(#gx-lancet)" d="" fill="none" stroke="#A3222F" stroke-width="1.4"></path>
+              <g fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.3"><circle cx="48" cy="27" r="7"></circle><circle cx="41.5" cy="38" r="7"></circle><circle cx="54.5" cy="38" r="7"></circle></g>
+              <line x1="18" y1="58" x2="78" y2="58" stroke="#A6A2AC" stroke-width="1.3"></line>
+              <path d="M18.0 146.0 L18.0 58.0 L18.0 58.0 L18.1 53.8 L18.6 49.6 L19.3 45.5 L20.3 41.5 L21.6 37.5 L23.2 33.6 L25.0 29.8 L27.1 26.2 L29.5 22.7 L32.0 19.4 L34.8 16.3 L37.9 13.4 L41.1 10.7 L44.4 8.3 L48.0 6.0 L48.0 6.0 L51.6 8.3 L54.9 10.7 L58.1 13.4 L61.2 16.3 L64.0 19.4 L66.5 22.7 L68.9 26.2 L71.0 29.8 L72.8 33.6 L74.4 37.5 L75.7 41.5 L76.7 45.5 L77.4 49.6 L77.9 53.8 L78.0 58.0 L78.0 146.0 Z" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="2.6"></path>
+              <rect x="10" y="146" width="76" height="7" fill="url(#gx-stone) #08070A" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.2"></rect>
+            </svg>
+            <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 26px; line-height: 1"><span data-pct="61" data-max="63">--</span>%</span>
+            <span style="font-size: 13px; letter-spacing: 0.08em; color: #ECE8F0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="60" data-default="Disk">Disk</span>
+            <span style="font-size: 12px; color: #A49DAE"><span data-num="61" data-places="1" data-plain>--</span> of <span data-num="63" data-places="0" data-plain>--</span> <span data-unit="62" data-default="GB">GB</span></span>
+          </div>
+      </div>
+    </div>
+    <div aria-hidden="true" style="height: 10px; background: radial-gradient(circle at 8px 6px, #000 1.6px, transparent 2.1px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, #121015 7px, transparent 7.5px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, transparent 8px, #4F4B57 8.5px, #4F4B57 9.2px, transparent 9.7px) 0 0 / 16px 10px repeat-x"></div>
+  </section>
+  <section data-section="network" style="position: relative; z-index: 1">
+    <div aria-hidden="true" style="height: 14px; background: url(data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2720%27%20height%3D%2714%27%3E%3Cpath%20d%3D%27M2%2014%20V8%20Q2%202%2010%201%20Q18%202%2018%208%20V14%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%271%27%2F%3E%3Ccircle%20cx%3D%2710%27%20cy%3D%277.5%27%20r%3D%271.7%27%20fill%3D%27none%27%20stroke%3D%27%234F4B57%27%20stroke-width%3D%270.8%27%2F%3E%3C%2Fsvg%3E) 0 0 / 20px 14px repeat-x; border-bottom: 1px solid #4F4B57"></div>
+    <div style="position: relative; background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 55%), linear-gradient(180deg, #18151C 0%, #0E0C11 100%); border-left: 1px solid #26222B; border-right: 1px solid #26222B; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 38px rgba(0,0,0,0.8), 0 12px 26px rgba(0,0,0,0.75); padding: 10px 18px 12px; display: flex; flex-direction: column; gap: 8px">
+      <svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; left: 4px"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; top: 4px; right: 4px; transform: scaleX(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; left: 4px; transform: scaleY(-1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg><svg aria-hidden="true" width="26" height="26" viewBox="0 0 26 26" style="position: absolute; bottom: 4px; right: 4px; transform: scale(-1, -1)"><path d="M2 24 C2 10 10 2 24 2 M6 24 C6 14 14 6 24 6 M2 14 C6 14 8 12 8 8 C8 4 12 4 13 6" fill="none" stroke="#4F4B57" stroke-width="1"></path></svg>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 1px; background: linear-gradient(90deg, rgba(119,115,127,0), #4F4B57)"></div>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <h2 style="margin: 0; font-family: UnifrakturMaguntia, serif; font-weight: 400; font-size: 32px; line-height: 1; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px #000); white-space: nowrap">Network</h2>
+        <svg aria-hidden="true" width="16" height="16" viewBox="-8 -8 16 16"><g fill="none" stroke="#4F4B57" stroke-width="1"><circle cx="0" cy="-3.4" r="3.4"></circle><circle cx="3.4" cy="0" r="3.4"></circle><circle cx="0" cy="3.4" r="3.4"></circle><circle cx="-3.4" cy="0" r="3.4"></circle></g><rect x="-1.5" y="-1.5" width="3" height="3" transform="rotate(45)" fill="#7A0C1A"></rect></svg>
+        <div style="flex: 1; height: 1px; background: linear-gradient(270deg, rgba(119,115,127,0), #4F4B57)"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span data-need="65" style="font-size: 13px; letter-spacing: 0.08em; color: #A49DAE">Inbound <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 26px; letter-spacing: 0; color: var(--accent-lt)" data-num="65" data-places="1">--</span> <span data-unit="66" data-default="MB/s">MB/s</span></span>
+        <span data-need="69" style="font-size: 13px; letter-spacing: 0.08em; color: #A49DAE">Outbound <span style="font-family: 'Grenze Gotisch', serif; font-weight: 600; font-size: 26px; letter-spacing: 0; color: #ECE8F0" data-num="69" data-places="1">--</span> <span data-unit="70" data-default="MB/s">MB/s</span></span>
+      </div>
+      <svg data-chart role="img" aria-label="Network traffic over the last minute" width="382" height="104" viewBox="0 0 382 104">
+        <rect x="0.5" y="0.5" width="381" height="103" fill="#060507" stroke="#4F4B57" stroke-width="1"></rect>
+        <rect x="3.5" y="3.5" width="375" height="97" fill="none" stroke="#4F4B57" stroke-width="0.5" opacity="0.5"></rect>
+        <line x1="31.8" y1="4" x2="31.8" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="63.7" y1="4" x2="63.7" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="95.5" y1="4" x2="95.5" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="127.3" y1="4" x2="127.3" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="159.2" y1="4" x2="159.2" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="191.0" y1="4" x2="191.0" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="222.8" y1="4" x2="222.8" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="254.7" y1="4" x2="254.7" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="286.5" y1="4" x2="286.5" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="318.3" y1="4" x2="318.3" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="350.2" y1="4" x2="350.2" y2="100" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line>
+        <line x1="4" y1="26.0" x2="378" y2="26.0" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="4" y1="52.0" x2="378" y2="52.0" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line><line x1="4" y1="78.0" x2="378" y2="78.0" stroke="#4F4B57" stroke-width="0.5" opacity="0.25" stroke-dasharray="1 3"></line>
+        <path data-area d="" fill="#7A0C1A" opacity="0.14"></path>
+        <path data-line="up" d="" fill="none" stroke="url(#gx-metal) #A6A2AC" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.8"></path>
+        <path data-line="down" d="" fill="none" stroke="#7A0C1A" stroke-width="2" style="filter: drop-shadow(0 0 4px var(--accent))"></path>
+        <circle data-dot cx="376" cy="96" r="3.5" fill="#A3222F" style="filter: drop-shadow(0 0 5px var(--accent)); animation: gx-pulse 1.6s ease-in-out infinite"></circle>
+      </svg>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; letter-spacing: 0.08em; color: #A49DAE"><span>A minute ago</span><span>Now</span></div>
+    </div>
+    <div aria-hidden="true" style="height: 10px; background: radial-gradient(circle at 8px 6px, #000 1.6px, transparent 2.1px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, #121015 7px, transparent 7.5px) 0 0 / 16px 10px repeat-x, radial-gradient(circle at 8px 0, transparent 8px, #4F4B57 8.5px, #4F4B57 9.2px, transparent 9.7px) 0 0 / 16px 10px repeat-x"></div>
+  </section>
+  <!-- ===== FOOTER: black candles ===== -->
+  <footer style="position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: center; gap: 14px">
+      <svg aria-hidden="true" width="22" height="54" viewBox="0 0 22 54">
+        <ellipse cx="11" cy="9" rx="11" ry="11" fill="url(#gx-halo) rgba(0,0,0,0)"></ellipse>
+        <path d="M11 2 C14 6 15 10 11 14 C7 10 8 6 11 2 Z" fill="url(#gx-flame) #FFE6B0" style="transform-box: fill-box; transform-origin: 50% 100%; animation: gx-flicker 1.3s ease-in-out infinite"></path>
+        <line x1="11" y1="13" x2="11" y2="18" stroke="#000" stroke-width="1.2"></line>
+        <path d="M4 18 H18 V54 H4 Z" fill="url(#gx-wax) #121014"></path>
+        <path d="M4 18 H18 V22 C17 26 16 28 15 23 C14 21 13 30 12 22 C10 20 9 26 8 22 C7 20 6 32 5 24 L4 22 Z" fill="url(#gx-wax) #1C1A20"></path>
+        <line x1="7" y1="28" x2="7" y2="52" stroke="#FFFFFF" stroke-width="1" opacity="0.12"></line>
+      </svg>
+    <span style="font-family: UnifrakturMaguntia, serif; font-size: 26px; line-height: 1.2; color: transparent; background: linear-gradient(180deg, #DCD8E0 0%, #A29EA9 42%, #4E4A56 58%, #8E8A96 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px #000); white-space: nowrap" data-need="73">Uptime · <span data-uptime="73">--</span></span>
+      <svg aria-hidden="true" width="22" height="54" viewBox="0 0 22 54">
+        <ellipse cx="11" cy="9" rx="11" ry="11" fill="url(#gx-halo) rgba(0,0,0,0)"></ellipse>
+        <path d="M11 2 C14 6 15 10 11 14 C7 10 8 6 11 2 Z" fill="url(#gx-flame) #FFE6B0" style="transform-box: fill-box; transform-origin: 50% 100%; animation: gx-flicker 1.3s ease-in-out infinite"></path>
+        <line x1="11" y1="13" x2="11" y2="18" stroke="#000" stroke-width="1.2"></line>
+        <path d="M4 18 H18 V54 H4 Z" fill="url(#gx-wax) #121014"></path>
+        <path d="M4 18 H18 V22 C17 26 16 28 15 23 C14 21 13 30 12 22 C10 20 9 26 8 22 C7 20 6 32 5 24 L4 22 Z" fill="url(#gx-wax) #1C1A20"></path>
+        <line x1="7" y1="28" x2="7" y2="52" stroke="#FFFFFF" stroke-width="1" opacity="0.12"></line>
+      </svg>
+  </footer>
+  <svg aria-hidden="true" width="480" height="1920" style="position: absolute; top: 0; left: 0; z-index: 3; pointer-events: none; opacity: 0.5"><rect x="0" y="0" width="480" height="1920" filter="url(#gx-grain)"></rect></svg>
+</div>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "accent", "label": "Accent", "type": "choice", "default": "blood", "choices": [{"value": "blood", "label": "Blood", "set": {"--accent": "#7A0C1A", "--accent-lt": "#A3222F", "--deep": "#240308", "--glow": "rgba(122,12,26,0.6)"}}, {"value": "violet", "label": "Violet", "set": {"--accent": "#8A3CC0", "--accent-lt": "#B57FDD", "--deep": "#260A3A", "--glow": "rgba(138,60,192,0.55)"}}, {"value": "mono", "label": "Monochrome", "set": {"--accent": "#BDBDC6", "--accent-lt": "#F0F0F5", "--deep": "#232327", "--glow": "rgba(230,230,240,0.4)"}}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Network chart full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"},
+    "90": {"hint": "Clock - Year (written in Roman numerals)", "source": "clock", "instance": 1, "field": "year", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100, WARM = 72, HOT = 85;
+  var SAMPLES = 40, SAMPLE_MS = 1500;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  // A clock given in MHz is shown, and scaled, in GHz.
+  function inGhz(el, v, id) { return el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[id] || '')); }
+
+  // 2026 -> MMXXVI
+  function roman(n) {
+    var parts = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'],
+                 [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']], out = '';
+    parts.forEach(function (p) { while (n >= p[0]) { out += p[1]; n -= p[0]; } });
+    return out;
+  }
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-gothic-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  // The value the top of the chart stands for, shared by both lines. `peak`
+  // is the largest sample of the last minute, `fixed` the Network chart full
+  // scale option (0 when it is left to follow the peak).
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    // Follow the peak in steps (1, 2, 4, 8, 16 ...), so the curves do not
+    // rescale each time the peak moves a little.
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+
+  // A smooth curve through the points: each span is a cubic whose handles
+  // follow the slope between the neighbouring points.
+  function curve(pts) {
+    if (pts.length < 2) return '';
+    var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, pts.length - 1)];
+      d += ' C' + (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + ' ' +
+           (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1) + ' ' + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + ' ' +
+           p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return d;
+  }
+
+  // Inbound in the accent over a faint fill, outbound dashed; the newest
+  // sample at the right edge, under the pulsing dot.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var step = 370 / (SAMPLES - 1);
+    function points(values) {
+      return values.map(function (v, i) {
+        return [376 - (values.length - 1 - i) * step, 96 - clamp01(v / full) * 78];
+      });
+    }
+    var down = points(hist.down), d = curve(down);
+    attr(svg.querySelector('[data-line="down"]'), 'd', d);
+    attr(svg.querySelector('[data-area]'), 'd', d ? d + ' L376 100 L' + down[0][0].toFixed(1) + ' 100 Z' : '');
+    attr(svg.querySelector('[data-line="up"]'), 'd', curve(points(hist.up)));
+    var dot = svg.querySelector('[data-dot]');
+    hide(dot, down.length === 0);          // nothing to mark before the first sample
+    if (down.length) attr(dot, 'cy', down[down.length - 1][1].toFixed(1));
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24); the
+    // year in Roman numerals.
+    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
+    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
+    each('[data-date]', function (el) {    // Friday · 13 November
+      var day = num(v['2']);
+      var rest = [isFinite(day) ? String(Math.round(day)) : '', known(v['3']) ? String(v['3']) : ''].filter(Boolean).join(' ');
+      text(el, [known(v['1']) ? String(v['1']) : '', rest].filter(Boolean).join(' \u00b7 ') || '\u00a0');
+    });
+    each('[data-year]', function (el) {    // MMXXVI
+      var y = num(v[el.getAttribute('data-year')]);
+      text(el, y >= 1 && y < 4000 ? roman(Math.round(y)) : '\u00a0');
+    });
+
+    each('[data-num]', function (el) {
+      var id = el.getAttribute('data-num'), n = num(v[id]);
+      if (inGhz(el, v, +id + 1)) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      text(el, inGhz(el, v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default'));
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      text(el, known(c) ? String(c) : el.getAttribute('data-default'));
+    });
+    each('[data-uptime]', function (el) {  // 4 days, 7 hours
+      var sec = num(v[el.getAttribute('data-uptime')]), parts = [];
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        parts = d > 0 ? [[d, 'day'], [hr, 'hour']] : hr > 0 ? [[hr, 'hour'], [mn, 'minute']] : [[mn, 'minute']];
+      }
+      text(el, parts.length ? parts.map(function (p) { return p[0] + ' ' + p[1] + (p[0] === 1 ? '' : 's'); }).join(', ') : '--');
+    });
+
+    // Dials: the arc fills round the rim from 135 degrees, 270 degrees for
+    // the whole scale, and the needle points at its end.
+    each('[data-gauge]', function (el) {
+      var t = num(v[el.getAttribute('data-gauge')]);
+      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var deg = 135 + 270 * f, a = deg * Math.PI / 180, arc = el.querySelector('[data-arc]');
+      attr(arc, 'd', f > 0.002 ? 'M47.7 148.3 A74 74 0 ' + (270 * f > 180 ? 1 : 0) + ' 1 ' +
+           (100 + 74 * Math.cos(a)).toFixed(1) + ' ' + (96 + 74 * Math.sin(a)).toFixed(1) : '');
+      flag(arc, 'burning', t >= HOT);
+      attr(el.querySelector('[data-needle]'), 'transform', 'translate(100 96) rotate(' + (deg + 90).toFixed(1) + ')');
+    });
+    each('[data-state]', function (el) {
+      var t = num(v[el.getAttribute('data-state')]);
+      text(el, t >= HOT ? 'Burning' : t >= WARM ? 'Warm' : 'Calm');
+      flag(el, 'burning', t >= HOT);
+      flag(el, 'warm', t >= WARM && t < HOT);
+    });
+
+    // Bars: against the sensor's own maximum, else the limit in the
+    // stylesheet (a number, or the name of a custom property).
+    each('[data-bar]', function (el) {
+      var val = num(v[el.getAttribute('data-bar')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (scale.indexOf('clock') > 0 && /^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { val /= 1000; max /= 1000; }
+      style(el, 'width', (share(val, max, fallback) * 100).toFixed(1) + '%');
+    });
+    each('[data-rotor]', function (el) {
+      var rpm = num(v[el.getAttribute('data-rotor')]);
+      fanRpm[el.getAttribute('data-rotor')] = isFinite(rpm) ? rpm : 0;
+    });
+    // Memory windows: the glass rises from the sill (y 146) to the tip of
+    // the lancet (y 10) as the pool fills.
+    each('[data-window]', function (el) {
+      var f = share(num(v[el.getAttribute('data-window')]), num(v[el.getAttribute('data-max')]), 100);
+      var y = (146 - f * 136).toFixed(1), d = f > 0 ? 'M18 146 L18 ' + y + ' L78 ' + y + ' L78 146 Z' : '';
+      each('[data-glass]', function (glass) { attr(glass, 'd', d); }, el);
+      attr(el.querySelector('[data-surface]'), 'd', f > 0 ? 'M18 ' + y + ' H78' : '');
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: an arc that stops burning cancels its
+    // animation, and stepping a cancelled one would bring it back.
+    anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    // Rotors: one turn every 3000 / RPM seconds, but never more than about 22
+    // degrees a frame. Six petals repeat every 60 degrees, so a bigger step
+    // would read as standing still or turning backwards.
+    each('[data-rotor]', function (el) {
+      var id = el.getAttribute('data-rotor'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(360 / 3000 * rpm * dt * speed, 22 * (1 - Math.exp(-rpm / 1200)));
+      rotorAngle[id] = ((rotorAngle[id] || 0) + step) % 360;
+      el.setAttribute('transform', 'rotate(' + rotorAngle[id].toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // dials and windows in their empty state before the first values arrive
+})();
+</script>
+</body>
+</html>

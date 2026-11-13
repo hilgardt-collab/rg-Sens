@@ -652,26 +652,33 @@ mod css_template_setup_tests {
         assert_eq!(by_index(91).slot_prefix, by_index(0).slot_prefix);
         assert_eq!(by_index(91).field, "alarm_enabled");
 
-        // The Victorian panel's year comes from the clock it already has.
-        let html = include_str!("../../../examples/victorian_panel.html");
-        let (placeholders, defaults) = (
-            detect_placeholders(html),
-            extract_placeholder_defaults(html),
-        );
-        let wanted = wanted_slots(&placeholders, &defaults);
-        assert_eq!(wanted.len(), 18, "{wanted:?}");
-        let mut cfg = ComboSourceConfig::default();
-        add_wanted_slots(&mut cfg, &wanted);
-        let mappings = auto_map(
-            &placeholders,
-            &defaults,
-            &HashMap::new(),
-            &combo_slot_kinds(&cfg),
-        );
-        assert_eq!(mappings.len(), 75);
-        let by_index = |i: u32| mappings.iter().find(|m| m.index == i).unwrap();
-        assert_eq!(by_index(90).slot_prefix, by_index(0).slot_prefix);
-        assert_eq!(by_index(90).field, "year");
+        // The Victorian, Mughal Peacock, Bauhaus and Gothic panels' year
+        // comes from the clock they already have.
+        for html in [
+            include_str!("../../../examples/victorian_panel.html"),
+            include_str!("../../../examples/mughal_peacock_panel.html"),
+            include_str!("../../../examples/bauhaus_panel.html"),
+            include_str!("../../../examples/gothic_panel.html"),
+        ] {
+            let (placeholders, defaults) = (
+                detect_placeholders(html),
+                extract_placeholder_defaults(html),
+            );
+            let wanted = wanted_slots(&placeholders, &defaults);
+            assert_eq!(wanted.len(), 18, "{wanted:?}");
+            let mut cfg = ComboSourceConfig::default();
+            add_wanted_slots(&mut cfg, &wanted);
+            let mappings = auto_map(
+                &placeholders,
+                &defaults,
+                &HashMap::new(),
+                &combo_slot_kinds(&cfg),
+            );
+            assert_eq!(mappings.len(), 75);
+            let by_index = |i: u32| mappings.iter().find(|m| m.index == i).unwrap();
+            assert_eq!(by_index(90).slot_prefix, by_index(0).slot_prefix);
+            assert_eq!(by_index(90).field, "year");
+        }
     }
 
     /// Slots the user already made are used wherever they sit, and only the

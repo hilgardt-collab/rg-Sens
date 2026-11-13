@@ -1,0 +1,137 @@
+/* Bauhaus Sensor Panel: stylesheet for bauhaus_panel.html (rg-Sens CSS Template displayer).
+   Setup notes are at the top of the HTML file. Flat colour only: no
+   gradients, no shadows, no rounded corners. */
+
+/* Bundled font: Jost, a geometric sans in the Futura tradition, SIL Open Font
+   License (OFL.txt in its folder). Keep the fonts folder next to this file;
+   without it the page falls back to the system sans-serif. */
+@font-face { font-family: "Jost"; font-weight: 100 900; font-style: normal;
+  src: local("Jost"), url("fonts/jost/Jost%5Bwght%5D.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
+  /* Palette: page, inside of shapes, ink (text, rules, borders), captions,
+     and the three primaries.
+       Primary  #F1EBDD #FBF7EE #141414 #5A5650  #D9322B #F2B91B #1F4FA0   (default)
+       Night    #151515 #222222 #F1EBDD #A8A29A  #E5432F #F5C230 #3F73D0
+       Muted    #E9E2D2 #F3EEE3 #23211E #6A6359  #B5523B #D9A441 #4A6A88 */
+  --paper: #F1EBDD;
+  --paper2: #FBF7EE;
+  --ink: #141414;
+  --sub: #5A5650;
+  --red: #D9322B;
+  --yellow: #F2B91B;
+  --blue: #1F4FA0;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Network chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+}
+html, body { margin: 0; background: var(--paper); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* All text is lowercase, after Herbert Bayer's universal alphabet. */
+.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+  background: var(--paper); font-family: "Jost", "Futura", sans-serif; font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 500; color: var(--ink); text-transform: lowercase; padding: 24px 24px 22px;
+  display: flex; flex-direction: column; justify-content: space-between; }
+.panel span { white-space: nowrap; }
+.ink { fill: var(--ink); }
+.paper2 { fill: var(--paper2); }
+.red { fill: var(--red); background-color: var(--red); }
+.yellow { fill: var(--yellow); background-color: var(--yellow); }
+.blue { fill: var(--blue); background-color: var(--blue); }
+.black { fill: var(--ink); background-color: var(--ink); }
+.line { fill: none; stroke: var(--ink); }
+
+@keyframes bh-spin { to { transform: rotate(360deg); } }
+@keyframes bh-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* ----------------------------------------------------------------- poster */
+.poster { position: relative; height: 340px; }
+.poster svg { position: absolute; top: 0; left: 0; overflow: visible; }
+.poster .turn { transform-box: fill-box; transform-origin: 50% 66%; animation: bh-spin 90s linear infinite; }
+.poster .spine { position: absolute; left: 12px; top: 0; height: 274px; display: flex; align-items: flex-end; }
+.poster .spine span, .section h2 { margin: 0; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 22px;
+  font-weight: 800; white-space: nowrap; }
+.poster .spine span { letter-spacing: 0.02em; }
+.poster .clock { position: absolute; left: 44px; top: 136px; font-size: 118px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+.poster .date { position: absolute; left: 44px; top: 286px; right: 0; display: flex; justify-content: space-between;
+  align-items: baseline; font-size: 20px; }
+.poster .date b { font-weight: 800; color: var(--red); }
+
+/* --------------------------------------------------------------- sections */
+.section { display: flex; flex-direction: column; gap: 12px; }
+.section::before, .foot::before { content: ""; height: 6px; background: var(--ink); flex: none; }
+.section > div { display: flex; gap: 12px; }
+.section .label { width: 30px; flex: none; display: flex; align-items: flex-start; }
+.section .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.sub { font-size: 13px; color: var(--sub); }
+
+/* processor and graphics */
+.unit { display: flex; align-items: center; gap: 18px; }
+.unit.mirror { justify-content: space-between; }
+.unit svg { flex: none; }
+.unit svg text { font-family: "Jost", sans-serif; font-weight: 700; font-size: 13px; text-anchor: middle; fill: var(--ink); }
+.unit .read { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.unit .temp { font-size: 76px; font-weight: 700; line-height: 0.85; letter-spacing: -0.03em; }
+.unit .name { font-size: 16px; overflow: hidden; text-overflow: ellipsis; }
+.chip { align-self: flex-start; font-size: 15px; font-weight: 800; padding: 3px 10px 4px; background: var(--blue); color: #FFFFFF; }
+.chip.warm { background: var(--yellow); color: #141414; }
+.chip.hot { background: var(--red); }
+.stat { display: grid; grid-template-columns: 62px 1fr 76px; align-items: center; gap: 10px; }
+.stat > span:first-child { font-size: 16px; }
+.stat .bar { position: relative; height: 18px; border: 3px solid var(--ink); box-sizing: border-box; }
+.stat .bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; }
+.stat .val { text-align: right; font-size: 22px; font-weight: 700; line-height: 1; }
+.stat .val span { font-size: 13px; font-weight: 500; }
+
+/* cooling */
+.fans { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.fan { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fan > div { position: relative; aspect-ratio: 1 / 1; border: 3px solid var(--ink); background: var(--paper2); }
+.fan svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.fan b { font-size: 22px; font-weight: 700; line-height: 1; }
+.fan span { font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.section > .note { display: block; padding-left: 42px; }
+
+/* memory */
+.pools { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: end; }
+.pool { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pool .pct { font-size: 30px; font-weight: 700; line-height: 1; }
+.pool .pct span { font-size: 16px; }
+.pool .col { position: relative; height: 150px; border: 3px solid var(--ink); background: var(--paper2); }
+.pool .col i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; }
+.pool .name { font-size: 16px; font-weight: 700; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
+
+/* network */
+.net { gap: 10px !important; }
+.net .now { display: flex; gap: 24px; }
+.net .now > div { display: flex; align-items: center; gap: 8px; }
+.net .now .v { font-size: 28px; font-weight: 700; line-height: 1; }
+.net .now .v span { font-size: 14px; font-weight: 500; }
+.net .tri { stroke: var(--ink); stroke-width: 2; }
+.chart { overflow: visible; display: block; }
+.chart .down { fill: var(--ink); }
+.chart .up { fill: var(--blue); }
+.chart .dot { fill: var(--red); stroke: var(--ink); stroke-width: 2; transform-box: fill-box; transform-origin: center;
+  animation: bh-pulse 1.6s ease-in-out infinite; }
+.net .ends { display: flex; justify-content: space-between; }
+
+/* footer */
+.foot { display: flex; flex-direction: column; gap: 10px; }
+.foot > div { display: flex; align-items: center; justify-content: space-between; }
+.foot .up { font-size: 20px; }
+.foot .up b { font-weight: 800; }

@@ -1,0 +1,65 @@
+/* Gothic Sensor Panel: stylesheet for gothic_panel.html (rg-Sens CSS Template displayer).
+   Accent, fonts and the few classes the page's script switches; the drawing
+   itself is inline in the HTML. Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: UnifrakturMaguntia, Grenze Gotisch and Spectral SC, all SIL
+   Open Font License (OFL.txt in each folder). Keep the fonts folder next to
+   this file; without it the page falls back to the system serif. */
+@font-face { font-family: "UnifrakturMaguntia"; font-weight: 400; font-style: normal;
+  src: local("UnifrakturMaguntia"), url("fonts/unifraktur-maguntia/UnifrakturMaguntia-Book.ttf") format("truetype"); }
+@font-face { font-family: "Grenze Gotisch"; font-weight: 100 900; font-style: normal;
+  src: local("Grenze Gotisch"), url("fonts/grenze-gotisch/GrenzeGotisch%5Bwght%5D.ttf") format("truetype"); }
+@font-face { font-family: "Spectral SC"; font-weight: 400; font-style: normal;
+  src: local("Spectral SC"), url("fonts/spectral-sc/SpectralSC-Regular.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
+  /* The one accent: colour, its light shade, its deep shade, and the glow
+     it casts.
+       Blood       #7A0C1A #A3222F #240308   (default)
+       Violet      #8A3CC0 #B57FDD #260A3A
+       Monochrome  #BDBDC6 #F0F0F5 #232327 */
+  --accent: #7A0C1A;
+  --accent-lt: #A3222F;
+  --deep: #240308;
+  --glow: rgba(122,12,26,0.6);
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Network chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  --sub: #A49DAE;
+}
+html, body { margin: 0; background: #0B0A0C; }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* The drawing's shapes carry the accent as an attribute; these follow the palette. */
+[fill="#7A0C1A"] { fill: var(--accent); }
+[stroke="#7A0C1A"] { stroke: var(--accent); }
+[fill="#A3222F"] { fill: var(--accent-lt); }
+[stroke="#A3222F"] { stroke: var(--accent-lt); }
+[stop-color="#7A0C1A"] { stop-color: var(--accent); }
+[stop-color="#A3222F"] { stop-color: var(--accent-lt); }
+[stop-color="#240308"] { stop-color: var(--deep); }
+
+@keyframes gx-pulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes gx-candle { 0%,100% { opacity: 1; } 20% { opacity: .82; } 40% { opacity: .96; } 60% { opacity: .78; } 80% { opacity: .92; } }
+@keyframes gx-flicker { 0%,100% { transform: scale(1,1); } 30% { transform: scale(.88,1.1); } 55% { transform: scale(1.06,.93); } 80% { transform: scale(.95,1.04); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* The word beside a dial: Calm, Warm in the accent, Burning in its light shade. */
+[data-state].warm { color: var(--accent) !important; }
+[data-state].burning { color: var(--accent-lt) !important; }
+/* A burning dial's arc pulses. */
+[data-arc].burning { animation: gx-pulse 1.4s ease-in-out infinite; }
