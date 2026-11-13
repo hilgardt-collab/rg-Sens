@@ -677,7 +677,7 @@ mod tests {
         assert_eq!(mapped(&values, "min"), "--");
     }
 
-    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon and LCARS-style examples: every placeholder they
+    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior and Leather & Wood examples: every placeholder they
     /// use has an auto-configure entry, the numbering has no holes, the two
     /// share one mapping, and none loads anything from the network.
     #[test]
@@ -709,7 +709,16 @@ mod tests {
         assert!(detect_placeholders(lcars).is_empty());
         assert!(!lcars.contains("fonts.googleapis.com"));
         assert_eq!(extract_placeholder_defaults(lcars).len(), 91);
-        for other in [nouveau, steampunk, neon, lcars] {
+        // Warrior keeps the shared 74 and, like Neon, writes them from script.
+        let warrior = include_str!("../../examples/warrior_panel.html");
+        assert!(detect_placeholders(warrior).is_empty());
+        assert!(!warrior.contains("fonts.googleapis.com"));
+        assert_eq!(extract_placeholder_defaults(warrior).len(), deco.len());
+        let leather = include_str!("../../examples/leather_wood_panel.html");
+        assert!(detect_placeholders(leather).is_empty());
+        assert!(!leather.contains("fonts.googleapis.com"));
+        assert_eq!(extract_placeholder_defaults(leather).len(), deco.len());
+        for other in [nouveau, steampunk, neon, lcars, warrior, leather] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {
                 assert_eq!(

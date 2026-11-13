@@ -1,0 +1,72 @@
+/* Leather & Wood Sensor Panel: stylesheet for leather_wood_panel.html (rg-Sens CSS Template displayer).
+   Materials, fonts and the animations; the drawing itself is inline in the
+   HTML. Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: Playfair Display and Lato, both SIL Open Font License
+   (OFL.txt in each folder). Keep the fonts folder next to this file; without
+   it the page falls back to the system serif and sans-serif. */
+@font-face { font-family: "Playfair Display"; font-weight: 400 900; font-style: normal;
+  src: local("Playfair Display"), url("fonts/playfair-display/PlayfairDisplay%5Bwght%5D.ttf") format("truetype"); }
+@font-face { font-family: "Playfair Display"; font-weight: 400 900; font-style: italic;
+  src: local("Playfair Display Italic"), url("fonts/playfair-display/PlayfairDisplay-Italic%5Bwght%5D.ttf") format("truetype"); }
+@font-face { font-family: "Lato"; font-weight: 400; font-style: normal;
+  src: local("Lato Regular"), url("fonts/lato/Lato-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Lato"; font-weight: 700; font-style: normal;
+  src: local("Lato Bold"), url("fonts/lato/Lato-Bold.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
+  /* Three materials, chosen independently (the panel's Display tab lists them).
+     Wood: base, highlight, shadow, grain line, light streak.
+       Walnut     #4A2C18 #6E4426 #2A170C #1A0C05 #E0A870   (default)
+       Mahogany   #5C2416 #8A3A22 #2E0F08 #1E0704 #F0A080
+       Light Oak  #9A7046 #C49A68 #6A4A28 #4A2E14 #FFE0B0
+       Ebony      #1E1612 #3A2C22 #0E0907 #000000 #C09070 */
+  --w-base: #4A2C18;
+  --w-hi: #6E4426;
+  --w-sh: #2A170C;
+  --w-grain: #1A0C05;
+  --w-streak: #E0A870;
+  /* Leather: highlight, mid, shadow, stitching.
+       Oxblood       #7E2E22 #5E1F18 #3A110C #E9D8B4   (default)
+       Saddle Tan    #A86A36 #8A5428 #5A3315 #F2E3C2
+       Black         #3A302C #221C1A #100C0B #C9A86A
+       Racing Green  #2E5440 #1F3A2C #0F2017 #E9D8B4 */
+  --l-hi: #7E2E22;
+  --l-mid: #5E1F18;
+  --l-sh: #3A110C;
+  --stitch: #E9D8B4;
+  /* Metal: hi, lt, mid, dk, dp.
+       Chrome  #FFFFFF #D9DDE2 #A7AEB6 #5B6168 #2C3035   (default)
+       Brass   #FFF0C0 #E8C77A #B8903F #6E5220 #3A2A0E */
+  --mt-hi: #FFFFFF;
+  --mt-lt: #D9DDE2;
+  --mt-mid: #A7AEB6;
+  --mt-dk: #5B6168;
+  --mt-dp: #2C3035;
+  /* Frames a second for the seconds hand and the needles; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is scaled to match). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+}
+html, body { margin: 0; background: var(--w-sh); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* The drawing's shapes carry their colour as an attribute; these follow the materials. */
+[stroke="#1A0C05"] { stroke: var(--w-grain); }
+[stroke="#2C3035"] { stroke: var(--mt-dp); }
+[stroke="#A7AEB6"] { stroke: var(--mt-mid); }
+[stroke="#E0A870"] { stroke: var(--w-streak); }
+
+@keyframes lw-quiver { 0%,100% { transform: rotate(-0.6deg); } 50% { transform: rotate(0.6deg); } }
+@keyframes lw-wobble { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }

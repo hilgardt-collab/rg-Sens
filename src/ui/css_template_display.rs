@@ -1257,6 +1257,14 @@ mod tests {
                 include_str!("../../examples/lcars_panel.html"),
                 include_str!("../../examples/lcars_panel.css"),
             ),
+            (
+                include_str!("../../examples/warrior_panel.html"),
+                include_str!("../../examples/warrior_panel.css"),
+            ),
+            (
+                include_str!("../../examples/leather_wood_panel.html"),
+                include_str!("../../examples/leather_wood_panel.css"),
+            ),
         ];
         for (html, css) in panels {
             assert!(html.contains(r#"<meta name="rg-design-size" content="480x1920">"#));

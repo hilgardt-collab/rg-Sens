@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<title>Warrior Sensor Panel</title>
+<!--
+  Warrior sensor panel for the rg-Sens CSS Template displayer, 480x1920
+  portrait. A sibling of the Art Deco, Art Nouveau, Steampunk, Neon and
+  LCARS-style panels: same placeholders, same setup.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, with day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the row label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two gauges ("Package", "Edge"), the fan rows and the
+  memory rows; set them on the sensors.
+
+  Anything left unbound is hidden: a row, a whole section. The processor's
+  power row has no rg-Sens source and stays hidden unless you bind a sensor to
+  it by hand on the Bindings tab.
+
+  The transmissions chart keeps the last 60 seconds (30 samples) of inbound
+  and outbound speed in the page, on a shared scale that follows the peak. It
+  starts empty and survives a reload of the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of warrior_panel.css): palette
+  (Blood Red, Molten, Cold Steel), how the design fits the panel, the frame
+  rate, and the full-scale values of the bars. The design is drawn for
+  480x1920 and is scaled to whatever size the panel has.
+
+  Motion: the rib slits and blade edges pulse, the clock flickers, a band
+  sweeps the two screens, the gauge geometry turns and the rotors spin, all
+  at --motion-fps frames a second. 0 turns motion off, as do the panel's
+  Animation switch and the system's reduced-motion setting. Rotors turn faster
+  with RPM, on a curve that stays readable at a low frame rate.
+
+  Fonts: Teko (numbers, plates) and Saira Condensed (labels), loaded from the
+  fonts folder next to this file; copy that folder along with the template.
+  Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="warrior_panel.css">
+</head>
+<body>
+<div style="width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden; background-color: #0B0506; background-image: radial-gradient(ellipse 90% 40% at 50% 0%, color-mix(in srgb, var(--red) 20%, transparent) 0%, rgba(0,0,0,0) 70%), radial-gradient(ellipse 90% 30% at 50% 100%, color-mix(in srgb, var(--red) 12%, transparent) 0%, rgba(0,0,0,0) 70%), repeating-linear-gradient(135deg, color-mix(in srgb, var(--red) 4.5%, transparent) 0px, color-mix(in srgb, var(--red) 4.5%, transparent) 2px, transparent 2px, transparent 9px); font-family: 'Saira Condensed', sans-serif; color: #FFD9C7; padding: 40px 26px 34px; display: flex; flex-direction: column; justify-content: space-between">
+
+  <!-- gradients -->
+  <svg aria-hidden="true" width="0" height="0" style="position: absolute; top: 0; left: 0">
+    <defs>
+      <linearGradient id="wr-metal" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" style="stop-color: var(--m-hi)"></stop>
+        <stop offset="0.35" style="stop-color: var(--metal)"></stop>
+        <stop offset="0.6" style="stop-color: var(--m-dk)"></stop>
+        <stop offset="0.8" style="stop-color: var(--metal)"></stop>
+        <stop offset="1" style="stop-color: var(--m-dp)"></stop>
+      </linearGradient>
+      <linearGradient id="wr-blood" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" style="stop-color: var(--red-dk)"></stop>
+        <stop offset="0.6" style="stop-color: var(--red)"></stop>
+        <stop offset="1" style="stop-color: var(--hot)"></stop>
+      </linearGradient>
+      <linearGradient id="wr-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" style="stop-color: var(--red); stop-opacity: 0.45"></stop>
+        <stop offset="1" style="stop-color: var(--red); stop-opacity: 0"></stop>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- ===== ARMOURED FRAME ===== -->
+  <svg aria-hidden="true" width="480" height="1920" viewBox="0 0 480 1920" style="position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none">
+    <polygon points="40,12 150,12 166,26 314,26 330,12 440,12 468,40 468,640 456,656 456,700 468,716 468,1260 456,1276 456,1320 468,1336 468,1880 440,1908 330,1908 314,1894 166,1894 150,1908 40,1908 12,1880 12,1336 24,1320 24,1276 12,1260 12,716 24,700 24,656 12,640 12,40" fill="none" stroke="#000" stroke-width="7" stroke-linejoin="miter"></polygon>
+    <polygon points="40,12 150,12 166,26 314,26 330,12 440,12 468,40 468,640 456,656 456,700 468,716 468,1260 456,1276 456,1320 468,1336 468,1880 440,1908 330,1908 314,1894 166,1894 150,1908 40,1908 12,1880 12,1336 24,1320 24,1276 12,1260 12,716 24,700 24,656 12,640 12,40" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="3.5" stroke-linejoin="miter"></polygon>
+    <polygon points="40,12 150,12 166,26 314,26 330,12 440,12 468,40 468,640 456,656 456,700 468,716 468,1260 456,1276 456,1320 468,1336 468,1880 440,1908 330,1908 314,1894 166,1894 150,1908 40,1908 12,1880 12,1336 24,1320 24,1276 12,1260 12,716 24,700 24,656 12,640 12,40" fill="none" stroke="#E0262E" stroke-width="1" opacity="0.6" transform="translate(240 960) scale(0.975 0.9965) translate(-240 -960)"></polygon>
+    
+      <polygon points="4,58 58,4 74,4 4,74" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+    
+      <polygon points="476,58 422,4 406,4 476,74" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+    
+      <polygon points="4,1862 58,1916 74,1916 4,1846" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+    
+      <polygon points="476,1862 422,1916 406,1916 476,1846" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+    
+    <g>
+      
+        <polygon points="13,100 25,112 25,164 13,176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.00s infinite"></rect>
+      
+        <polygon points="13,260 25,272 25,324 13,336" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="278" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.27s infinite"></rect>
+      
+        <polygon points="13,420 25,432 25,484 13,496" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="438" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.54s infinite"></rect>
+      
+        <polygon points="13,780 25,792 25,844 13,856" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="798" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.81s infinite"></rect>
+      
+        <polygon points="13,940 25,952 25,1004 13,1016" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="958" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.08s infinite"></rect>
+      
+        <polygon points="13,1100 25,1112 25,1164 13,1176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.35s infinite"></rect>
+      
+        <polygon points="13,1400 25,1412 25,1464 13,1476" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1418" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.62s infinite"></rect>
+      
+        <polygon points="13,1560 25,1572 25,1624 13,1636" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1578" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.89s infinite"></rect>
+      
+        <polygon points="13,1720 25,1732 25,1784 13,1796" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1738" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 2.16s infinite"></rect>
+      
+    </g>
+    <g transform="translate(480 0) scale(-1 1)">
+      
+        <polygon points="13,100 25,112 25,164 13,176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.00s infinite"></rect>
+      
+        <polygon points="13,260 25,272 25,324 13,336" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="278" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.27s infinite"></rect>
+      
+        <polygon points="13,420 25,432 25,484 13,496" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="438" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.54s infinite"></rect>
+      
+        <polygon points="13,780 25,792 25,844 13,856" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="798" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 0.81s infinite"></rect>
+      
+        <polygon points="13,940 25,952 25,1004 13,1016" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="958" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.08s infinite"></rect>
+      
+        <polygon points="13,1100 25,1112 25,1164 13,1176" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1118" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.35s infinite"></rect>
+      
+        <polygon points="13,1400 25,1412 25,1464 13,1476" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1418" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.62s infinite"></rect>
+      
+        <polygon points="13,1560 25,1572 25,1624 13,1636" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1578" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 1.89s infinite"></rect>
+      
+        <polygon points="13,1720 25,1732 25,1784 13,1796" fill="url(#wr-metal) #583d20" stroke="#000" stroke-width="1"></polygon>
+        <rect x="18" y="1738" width="2.5" height="40" fill="#E0262E" style="animation: wr-beat 2.4s ease-in-out 2.16s infinite"></rect>
+      
+    </g>
+  </svg>
+
+  <!-- ===== HEADER: crescent blade over the clock ===== -->
+  <header style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 8px; align-self: stretch; height: 30px">
+      <div style="flex: 1; position: relative; height: 30px">
+        <div style="position: absolute; right: 0; left: 18px; top: 13px; height: 4px; background: linear-gradient(270deg, var(--red), var(--red-dk)); clip-path: polygon(0 50%, 100% 0, 100% 100%)"></div>
+        <div style="position: absolute; left: 0; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); clip-path: polygon(100% 50%, 0 0, 40% 50%, 0 100%)"></div>
+      </div>
+      <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%); padding: 0 28px; height: 30px; display: flex; align-items: center">
+        <span style="font-family: Teko, sans-serif; font-weight: 600; font-size: 24px; line-height: 1; letter-spacing: 0.16em; padding-top: 4px; color: #1A0A06; white-space: nowrap">SYSTEM SENSORS</span>
+      </div>
+      <div style="flex: 1; position: relative; height: 30px">
+        <div style="position: absolute; left: 0; right: 18px; top: 13px; height: 4px; background: linear-gradient(90deg, var(--red), var(--red-dk)); clip-path: polygon(0 0, 100% 50%, 0 100%)"></div>
+        <div style="position: absolute; right: 0; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); clip-path: polygon(0 50%, 100% 0, 60% 50%, 100% 100%)"></div>
+      </div>
+    </div>
+    <div style="position: relative; width: 428px; height: 196px">
+      <svg aria-hidden="true" width="428" height="196" viewBox="0 0 428 196" style="position: absolute; top: 0; left: 0; overflow: visible">
+        <polygon points="65.0,115.3 65.4,97.8 81.8,103.6" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="109.9,87.0 111.3,66.2 128.1,78.4" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="154.7,68.8 159.3,44.7 174.5,63.9" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="202.6,60.3 214.0,26.0 225.4,60.3" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="253.5,63.9 268.7,44.7 273.3,68.8" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="299.9,78.4 316.7,66.2 318.1,87.0" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="346.2,103.6 362.6,97.8 363.0,115.3" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+        <polygon points="24,150 36,138 8,190" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+        <polygon points="404,150 392,138 420,190" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+        <path d="M24 150 Q214 -30 404 150 Q214 50 24 150 Z" fill="url(#wr-metal) #B07A40" stroke="#000" stroke-width="1.5"></path>
+        <path d="M404 150 Q214 50 24 150" fill="none" stroke="#E0262E" stroke-width="2.5" style="filter: drop-shadow(0 0 5px var(--red)); animation: wr-beat 2.4s ease-in-out infinite"></path>
+        <path d="M62.00000000000001 124.80000000000001 Q214 10 366 124.80000000000001" fill="none" stroke="#2c1f10" stroke-width="2" opacity="0.8"></path>
+      </svg>
+      <div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center">
+        <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 112px; line-height: 0.78; letter-spacing: 0.02em; color: #FFE6D8; text-shadow: 0 0 12px var(--red), 0 0 34px var(--red); animation: wr-flick 6s steps(1) infinite" data-clock="0">--:--</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px">
+      <div style="width: 26px; height: 3px; background: var(--red); clip-path: polygon(0 50%, 100% 0, 100% 100%)"></div>
+      <span style="font-size: 16px; font-weight: 700; letter-spacing: 0.32em; padding-left: 0.32em; color: var(--m-lt); white-space: nowrap" data-date>&nbsp;</span>
+      <div style="width: 26px; height: 3px; background: var(--red); clip-path: polygon(0 0, 100% 50%, 0 100%)"></div>
+    </div>
+  </header>
+
+  <!-- ===== CPU ===== -->
+  <section data-section="cpu" style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px; height: 30px">
+      <div style="width: 14px; height: 30px; background: var(--red); clip-path: polygon(0 0, 100% 0, 40% 100%, 0 100%)"></div>
+      <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%); padding: 0 26px; height: 30px; display: flex; align-items: center">
+        <h2 style="margin: 0; font-family: Teko, sans-serif; font-weight: 600; font-size: 24px; line-height: 1; letter-spacing: 0.16em; padding-top: 4px; color: #1A0A06; white-space: nowrap">PROCESSOR</h2>
+      </div>
+      <div style="flex: 1; position: relative; height: 30px">
+        <div style="position: absolute; left: 0; right: 18px; top: 13px; height: 4px; background: linear-gradient(90deg, var(--red), var(--red-dk)); clip-path: polygon(0 0, 100% 50%, 0 100%)"></div>
+        <div style="position: absolute; right: 0; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); clip-path: polygon(0 50%, 100% 0, 60% 50%, 100% 100%)"></div>
+      </div>
+      <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--m-lt); white-space: nowrap" data-state="5">STEADY</span>
+    </div>
+    <div style="background: linear-gradient(160deg, var(--m-hi) 0%, var(--metal) 30%, var(--m-dp) 60%, var(--red) 100%); padding: 2px; clip-path: polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px)">
+      <div style="position: relative; overflow: hidden; background: radial-gradient(ellipse at 30% 0%, color-mix(in srgb, var(--red) 15%, transparent) 0%, rgba(0,0,0,0) 60%), #120607; clip-path: polygon(25px 0, 100% 0, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0 100%, 0 25px); padding: 12px 16px; display: flex; align-items: center; gap: 12px">
+        <div style="position: relative; width: 196px; height: 196px; flex: none" data-gauge="5" data-need="5">
+          <svg role="img" aria-label="CPU temperature gauge" width="196" height="196" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0">
+            <g data-teeth></g>
+            <path d="M54.7 145.3 A64 64 0 1 1 145.3 145.3" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="2"></path>
+            <g style="transform-box: view-box; transform-origin: 100px 100px; animation: wr-spin 24s linear infinite">
+              <polygon points="100.0,46.0 146.8,73.0 146.8,127.0 100.0,154.0 53.2,127.0 53.2,73.0" fill="none" stroke="#E0262E" stroke-width="1" opacity="0.45"></polygon>
+            </g>
+            <g style="transform-box: view-box; transform-origin: 100px 100px; animation: wr-spin-rev 18s linear infinite">
+              <polygon points="100.0,146.0 60.2,77.0 139.8,77.0" fill="none" stroke="#B07A40" stroke-width="1" opacity="0.35"></polygon>
+            </g>
+            <polygon points="87.8,-3.3 87.5,37.2 91.5,28.5 97.5,36.0" fill="url(#wr-metal) #d8bda0" stroke="#000" stroke-width="0.8" data-needle="5" data-drawn="263.25" style="filter: drop-shadow(0 0 4px var(--red))"></polygon>
+            <text x="49.5" y="178.6" text-anchor="middle" font-family="Saira Condensed, sans-serif" font-weight="600" font-size="12" fill="#c1976a">20</text>
+            <text x="150.5" y="178.6" text-anchor="middle" font-family="Saira Condensed, sans-serif" font-weight="600" font-size="12" fill="#c1976a">100</text>
+          </svg>
+          <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center">
+            <div style="display: flex; align-items: flex-start">
+              <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 76px; line-height: 0.8; color: #FFE6D8; text-shadow: 0 0 10px var(--red), 0 0 26px var(--red)" data-num="5" data-places="0">--</span>
+              <span style="font-family: Teko, sans-serif; font-size: 24px; line-height: 1; color: var(--red); margin-left: 2px">°C</span>
+            </div>
+            <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.28em; color: var(--m-lt); margin-top: 6px" data-cap="4" data-default="PACKAGE">PACKAGE</span>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+          
+            <div style="display: flex; flex-direction: column; gap: 4px" data-need="9">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">LOAD</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="9" data-places="2">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red)"> <span data-unit="10"></span></span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="9" data-max="11" data-unit-of="10" data-scale="100" data-count="12">
+              </div>
+            </div>
+          
+            <div style="display: flex; flex-direction: column; gap: 4px" data-need="13">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">CLOCK</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="13" data-places="2">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red)"> <span data-unit="14"></span></span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" data-count="12">
+              </div>
+            </div>
+          
+            <div style="display: flex; flex-direction: column; gap: 4px" data-need="17">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">POWER</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="17" data-places="2">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red)"> <span data-unit="18"></span></span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" data-count="12">
+              </div>
+            </div>
+          
+        </div>
+        <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, transparent 1px, transparent 3px)"></div>
+        <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 50px; pointer-events: none; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--red) 10%, transparent), transparent); animation: wr-sweep 5s linear infinite"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GPU ===== -->
+  <section data-section="gpu" style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px; height: 30px">
+      <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.2em; color: var(--m-lt); white-space: nowrap" data-state="21">STEADY</span>
+      <div style="flex: 1; position: relative; height: 30px">
+        <div style="position: absolute; right: 0; left: 18px; top: 13px; height: 4px; background: linear-gradient(270deg, var(--red), var(--red-dk)); clip-path: polygon(0 50%, 100% 0, 100% 100%)"></div>
+        <div style="position: absolute; left: 0; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); clip-path: polygon(100% 50%, 0 0, 40% 50%, 0 100%)"></div>
+      </div>
+      <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 100%, 12px 100%); padding: 0 26px; height: 30px; display: flex; align-items: center">
+        <h2 style="margin: 0; font-family: Teko, sans-serif; font-weight: 600; font-size: 24px; line-height: 1; letter-spacing: 0.16em; padding-top: 4px; color: #1A0A06; white-space: nowrap">GRAPHICS</h2>
+      </div>
+      <div style="width: 14px; height: 30px; background: var(--red); clip-path: polygon(0 0, 100% 0, 100% 100%, 60% 100%)"></div>
+    </div>
+    <div style="background: linear-gradient(160deg, var(--m-hi) 0%, var(--metal) 30%, var(--m-dp) 60%, var(--red) 100%); padding: 2px; clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 26px 100%, 0 calc(100% - 26px))">
+      <div style="position: relative; overflow: hidden; background: radial-gradient(ellipse at 70% 0%, color-mix(in srgb, var(--red) 15%, transparent) 0%, rgba(0,0,0,0) 60%), #120607; clip-path: polygon(0 0, calc(100% - 25px) 0, 100% 25px, 100% 100%, 25px 100%, 0 calc(100% - 25px)); padding: 12px 16px; display: flex; align-items: center; gap: 12px">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+          
+            <div style="display: flex; flex-direction: column; gap: 4px" data-need="25">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">UTIL</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="25" data-places="2">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red)"> <span data-unit="26"></span></span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="25" data-max="27" data-unit-of="26" data-scale="100" data-count="12">
+              </div>
+            </div>
+          
+            <div style="display: flex; flex-direction: column; gap: 4px" data-need="29">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">CLOCK</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="29" data-places="2">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red)"> <span data-unit="30"></span></span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" data-count="12">
+              </div>
+            </div>
+          
+            <div style="display: flex; flex-direction: column; gap: 4px" data-need="33">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">POWER</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="33" data-places="2">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red)"> <span data-unit="34"></span></span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" data-count="12">
+              </div>
+            </div>
+          
+        </div>
+        <div style="position: relative; width: 196px; height: 196px; flex: none" data-gauge="21" data-need="21">
+          <svg role="img" aria-label="GPU temperature gauge" width="196" height="196" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0">
+            <g data-teeth></g>
+            <path d="M54.7 145.3 A64 64 0 1 1 145.3 145.3" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="2"></path>
+            <g style="transform-box: view-box; transform-origin: 100px 100px; animation: wr-spin-rev 18s linear infinite">
+              <polygon points="100.0,46.0 146.8,73.0 146.8,127.0 100.0,154.0 53.2,127.0 53.2,73.0" fill="none" stroke="#E0262E" stroke-width="1" opacity="0.45"></polygon>
+            </g>
+            <g style="transform-box: view-box; transform-origin: 100px 100px; animation: wr-spin 24s linear infinite">
+              <polygon points="100.0,146.0 60.2,77.0 139.8,77.0" fill="none" stroke="#B07A40" stroke-width="1" opacity="0.35"></polygon>
+            </g>
+            <polygon points="124.3,-1.1 110.0,36.8 116.8,30.0 119.8,39.1" fill="url(#wr-metal) #d8bda0" stroke="#000" stroke-width="0.8" data-needle="21" data-drawn="283.5" style="filter: drop-shadow(0 0 4px var(--red))"></polygon>
+            <text x="49.5" y="178.6" text-anchor="middle" font-family="Saira Condensed, sans-serif" font-weight="600" font-size="12" fill="#c1976a">20</text>
+            <text x="150.5" y="178.6" text-anchor="middle" font-family="Saira Condensed, sans-serif" font-weight="600" font-size="12" fill="#c1976a">100</text>
+          </svg>
+          <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center">
+            <div style="display: flex; align-items: flex-start">
+              <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 76px; line-height: 0.8; color: #FFE6D8; text-shadow: 0 0 10px var(--red), 0 0 26px var(--red)" data-num="21" data-places="0">--</span>
+              <span style="font-family: Teko, sans-serif; font-size: 24px; line-height: 1; color: var(--red); margin-left: 2px">°C</span>
+            </div>
+            <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.28em; color: var(--m-lt); margin-top: 6px" data-cap="20" data-default="EDGE">EDGE</span>
+          </div>
+        </div>
+        <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, transparent 1px, transparent 3px)"></div>
+        <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 50px; pointer-events: none; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--red) 10%, transparent), transparent); animation: wr-sweep 5s linear -2.5s infinite"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== COOLING ===== -->
+  <section data-section="fans" style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px; height: 30px">
+      <div style="width: 14px; height: 30px; background: var(--red); clip-path: polygon(0 0, 100% 0, 40% 100%, 0 100%)"></div>
+      <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%); padding: 0 26px; height: 30px; display: flex; align-items: center">
+        <h2 style="margin: 0; font-family: Teko, sans-serif; font-weight: 600; font-size: 24px; line-height: 1; letter-spacing: 0.16em; padding-top: 4px; color: #1A0A06; white-space: nowrap">COOLING</h2>
+      </div>
+      <div style="flex: 1; position: relative; height: 30px">
+        <div style="position: absolute; left: 0; right: 18px; top: 13px; height: 4px; background: linear-gradient(90deg, var(--red), var(--red-dk)); clip-path: polygon(0 0, 100% 50%, 0 100%)"></div>
+        <div style="position: absolute; right: 0; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); clip-path: polygon(0 50%, 100% 0, 60% 50%, 100% 100%)"></div>
+      </div>
+    </div>
+    <div style="background: linear-gradient(160deg, var(--m-hi) 0%, var(--metal) 30%, var(--m-dp) 60%, var(--red) 100%); padding: 2px; clip-path: polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px)">
+      <div style="position: relative; overflow: hidden; background: #120607; clip-path: polygon(25px 0, 100% 0, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0 100%, 0 25px); padding: 14px 18px; display: flex; flex-direction: column; gap: 12px">
+        
+          <div style="display: flex; align-items: center; gap: 12px" data-need="37">
+            <svg aria-hidden="true" width="38" height="38" viewBox="0 0 36 36" style="flex: none">
+              <polygon points="18,1 33,9.5 33,26.5 18,35 3,26.5 3,9.5" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="2"></polygon>
+              <g data-rotor="37" style="transform-box: view-box; transform-origin: 18px 18px">
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(120 18 18)"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(240 18 18)"></path>
+              </g>
+              <circle cx="18" cy="18" r="3" fill="#d8bda0"></circle>
+            </svg>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)" data-cap="36" data-default="FAN 1">FAN 1</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 28px; line-height: 0.8; color: #FFE6D8"><span data-num="37" data-places="0">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 12px; font-weight: 600; color: var(--red)"> RPM</span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="37" data-max="39" data-unit-of="38" data-scale="--fan-max" data-count="18">
+              </div>
+            </div>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px" data-need="41">
+            <svg aria-hidden="true" width="38" height="38" viewBox="0 0 36 36" style="flex: none">
+              <polygon points="18,1 33,9.5 33,26.5 18,35 3,26.5 3,9.5" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="2"></polygon>
+              <g data-rotor="41" style="transform-box: view-box; transform-origin: 18px 18px">
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(120 18 18)"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(240 18 18)"></path>
+              </g>
+              <circle cx="18" cy="18" r="3" fill="#d8bda0"></circle>
+            </svg>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)" data-cap="40" data-default="FAN 2">FAN 2</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 28px; line-height: 0.8; color: #FFE6D8"><span data-num="41" data-places="0">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 12px; font-weight: 600; color: var(--red)"> RPM</span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="41" data-max="43" data-unit-of="42" data-scale="--fan-max" data-count="18">
+              </div>
+            </div>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px" data-need="45">
+            <svg aria-hidden="true" width="38" height="38" viewBox="0 0 36 36" style="flex: none">
+              <polygon points="18,1 33,9.5 33,26.5 18,35 3,26.5 3,9.5" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="2"></polygon>
+              <g data-rotor="45" style="transform-box: view-box; transform-origin: 18px 18px">
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(120 18 18)"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(240 18 18)"></path>
+              </g>
+              <circle cx="18" cy="18" r="3" fill="#d8bda0"></circle>
+            </svg>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)" data-cap="44" data-default="FAN 3">FAN 3</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 28px; line-height: 0.8; color: #FFE6D8"><span data-num="45" data-places="0">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 12px; font-weight: 600; color: var(--red)"> RPM</span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="45" data-max="47" data-unit-of="46" data-scale="--fan-max" data-count="18">
+              </div>
+            </div>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 12px" data-need="49">
+            <svg aria-hidden="true" width="38" height="38" viewBox="0 0 36 36" style="flex: none">
+              <polygon points="18,1 33,9.5 33,26.5 18,35 3,26.5 3,9.5" fill="none" stroke="url(#wr-metal) #B07A40" stroke-width="2"></polygon>
+              <g data-rotor="49" style="transform-box: view-box; transform-origin: 18px 18px">
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(120 18 18)"></path>
+                <path d="M18 18 L16 5 L23 3 Q22 11 18 18 Z" fill="#E0262E" transform="rotate(240 18 18)"></path>
+              </g>
+              <circle cx="18" cy="18" r="3" fill="#d8bda0"></circle>
+            </svg>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+              <div style="display: flex; align-items: baseline; justify-content: space-between">
+                <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)" data-cap="48" data-default="FAN 4">FAN 4</span>
+                <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 28px; line-height: 0.8; color: #FFE6D8"><span data-num="49" data-places="0">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 12px; font-weight: 600; color: var(--red)"> RPM</span></span>
+              </div>
+              <div style="display: flex; gap: 1px; height: 12px" data-chev="49" data-max="51" data-unit-of="50" data-scale="--fan-max" data-count="18">
+              </div>
+            </div>
+          </div>
+        
+        <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, transparent 1px, transparent 3px)"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== MEMORY ===== -->
+  <section data-section="memory" style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px; height: 30px">
+      <div style="flex: 1; position: relative; height: 30px">
+        <div style="position: absolute; right: 0; left: 18px; top: 13px; height: 4px; background: linear-gradient(270deg, var(--red), var(--red-dk)); clip-path: polygon(0 50%, 100% 0, 100% 100%)"></div>
+        <div style="position: absolute; left: 0; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); clip-path: polygon(100% 50%, 0 0, 40% 50%, 0 100%)"></div>
+      </div>
+      <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 100%, 12px 100%); padding: 0 26px; height: 30px; display: flex; align-items: center">
+        <h2 style="margin: 0; font-family: Teko, sans-serif; font-weight: 600; font-size: 24px; line-height: 1; letter-spacing: 0.16em; padding-top: 4px; color: #1A0A06; white-space: nowrap">MEMORY</h2>
+      </div>
+      <div style="width: 14px; height: 30px; background: var(--red); clip-path: polygon(0 0, 100% 0, 100% 100%, 60% 100%)"></div>
+    </div>
+    <div style="background: linear-gradient(160deg, var(--m-hi) 0%, var(--metal) 30%, var(--m-dp) 60%, var(--red) 100%); padding: 2px; clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 26px 100%, 0 calc(100% - 26px))">
+      <div style="position: relative; overflow: hidden; background: #120607; clip-path: polygon(0 0, calc(100% - 25px) 0, 100% 25px, 100% 100%, 25px 100%, 0 calc(100% - 25px)); padding: 14px 18px; display: flex; flex-direction: column; gap: 14px">
+        
+          <div style="display: flex; flex-direction: column; gap: 6px" data-need="53">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)" data-cap="52" data-default="SYSTEM RAM">SYSTEM RAM</span>
+              <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 26px; line-height: 0.8; color: #FFE6D8"><span data-num="53" data-places="1">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--m-lt)"> / <span data-num="55" data-places="0">--</span> <span data-unit="54"></span></span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 700; color: var(--red)">&nbsp; <span data-fill-pct="53" data-max="55">--</span>%</span></span>
+            </div>
+            <div style="position: relative; height: 14px; background: color-mix(in srgb, var(--red) 15%, transparent); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%)">
+              <div data-fill="53" data-max="55" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: linear-gradient(90deg, var(--red-dk), var(--red) 70%, var(--hot)); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%); filter: drop-shadow(0 0 6px var(--red))"></div>
+            </div>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px" data-need="57">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)" data-cap="56" data-default="VIDEO RAM">VIDEO RAM</span>
+              <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 26px; line-height: 0.8; color: #FFE6D8"><span data-num="57" data-places="1">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--m-lt)"> / <span data-num="59" data-places="0">--</span> <span data-unit="58"></span></span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 700; color: var(--red)">&nbsp; <span data-fill-pct="57" data-max="59">--</span>%</span></span>
+            </div>
+            <div style="position: relative; height: 14px; background: color-mix(in srgb, var(--red) 15%, transparent); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%)">
+              <div data-fill="57" data-max="59" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: linear-gradient(90deg, var(--red-dk), var(--red) 70%, var(--hot)); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%); filter: drop-shadow(0 0 6px var(--red))"></div>
+            </div>
+          </div>
+        
+          <div style="display: flex; flex-direction: column; gap: 6px" data-need="61">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)" data-cap="60" data-default="DISK">DISK</span>
+              <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 26px; line-height: 0.8; color: #FFE6D8"><span data-num="61" data-places="1">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--m-lt)"> / <span data-num="63" data-places="0">--</span> <span data-unit="62"></span></span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 700; color: var(--red)">&nbsp; <span data-fill-pct="61" data-max="63">--</span>%</span></span>
+            </div>
+            <div style="position: relative; height: 14px; background: color-mix(in srgb, var(--red) 15%, transparent); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%)">
+              <div data-fill="61" data-max="63" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: linear-gradient(90deg, var(--red-dk), var(--red) 70%, var(--hot)); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%); filter: drop-shadow(0 0 6px var(--red))"></div>
+            </div>
+          </div>
+        
+        <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, transparent 1px, transparent 3px)"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== NETWORK ===== -->
+  <section data-section="network" style="position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 8px; height: 30px">
+      <div style="width: 14px; height: 30px; background: var(--red); clip-path: polygon(0 0, 100% 0, 40% 100%, 0 100%)"></div>
+      <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%); padding: 0 26px; height: 30px; display: flex; align-items: center">
+        <h2 style="margin: 0; font-family: Teko, sans-serif; font-weight: 600; font-size: 24px; line-height: 1; letter-spacing: 0.16em; padding-top: 4px; color: #1A0A06; white-space: nowrap">TRANSMISSIONS</h2>
+      </div>
+      <div style="flex: 1; position: relative; height: 30px">
+        <div style="position: absolute; left: 0; right: 18px; top: 13px; height: 4px; background: linear-gradient(90deg, var(--red), var(--red-dk)); clip-path: polygon(0 0, 100% 50%, 0 100%)"></div>
+        <div style="position: absolute; right: 0; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); clip-path: polygon(0 50%, 100% 0, 60% 50%, 100% 100%)"></div>
+      </div>
+    </div>
+    <div style="background: linear-gradient(160deg, var(--m-hi) 0%, var(--metal) 30%, var(--m-dp) 60%, var(--red) 100%); padding: 2px; clip-path: polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px)">
+      <div style="position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--red) 15%, transparent) 0%, rgba(0,0,0,0) 60%), #120607; clip-path: polygon(25px 0, 100% 0, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0 100%, 0 25px); padding: 14px 18px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+          <div style="display: flex; align-items: center; gap: 10px" data-need="65">
+            <svg aria-hidden="true" width="18" height="28" viewBox="0 0 18 28"><polygon points="9,28 0,14 6,14 6,0 12,0 12,14 18,14" fill="#E0262E"></polygon></svg>
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">INBOUND</span>
+              <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="65" data-places="1">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red)"> <span data-unit="66"></span></span></span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px" data-need="69">
+            <svg aria-hidden="true" width="18" height="28" viewBox="0 0 18 28"><polygon points="9,0 18,14 12,14 12,28 6,28 6,14 0,14" fill="#B07A40"></polygon></svg>
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)">OUTBOUND</span>
+              <span style="font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: #FFE6D8"><span data-num="69" data-places="1">--</span><span style="font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--metal)"> <span data-unit="70"></span></span></span>
+            </div>
+          </div>
+        </div>
+        <svg aria-hidden="true" width="388" height="70" viewBox="0 0 388 70" data-chart>
+          <path data-area d="" fill="url(#wr-fill) rgba(224,38,46,0.15)"></path>
+          <path data-line="down" d="" fill="none" stroke="#E0262E" stroke-width="2" stroke-linejoin="miter" style="filter: drop-shadow(0 0 4px var(--red))"></path>
+          <path data-line="up" d="" fill="none" stroke="#B07A40" stroke-width="1.5" stroke-linejoin="miter"></path>
+          <rect x="0" y="69" width="388" height="1" fill="#583d20"></rect>
+        </svg>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt)"><span>−60 S</span><span>NOW</span></div>
+        <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, transparent 1px, transparent 3px)"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px">
+    <div style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%); padding: 0 30px; height: 30px; display: flex; align-items: center">
+      <span style="font-family: Teko, sans-serif; font-weight: 600; font-size: 22px; line-height: 1; letter-spacing: 0.16em; padding-top: 4px; color: #1A0A06; white-space: nowrap" data-need="73">UPTIME <span data-uptime="73">--</span></span>
+    </div>
+    <svg aria-hidden="true" width="240" height="64" viewBox="0 0 240 64" style="overflow: visible">
+      <polygon points="52.2,29.6 56.0,44.5 69.1,36.8" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="81.8,40.8 87.0,58.5 98.8,44.4" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="110.5,45.7 120.0,70.0 129.5,45.7" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="141.2,44.4 153.0,58.5 158.2,40.8" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon><polygon points="170.9,36.8 184.0,44.5 187.8,29.6" fill="url(#wr-metal) #B07A40" stroke="#5E0A0E" stroke-width="1"></polygon>
+      <path d="M14 6 Q120 86 226 6 Q120 40 14 6 Z" fill="url(#wr-metal) #B07A40" stroke="#000" stroke-width="1.2"></path>
+      <path d="M226 6 Q120 40 14 6" fill="none" stroke="#E0262E" stroke-width="2" style="filter: drop-shadow(0 0 4px var(--red)); animation: wr-beat 2.4s ease-in-out infinite"></path>
+    </svg>
+  </footer>
+</div>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "palette", "label": "Palette", "type": "choice", "default": "blood", "choices": [{"value": "blood", "label": "Blood Red", "set": {"--red": "#E0262E", "--red-dk": "#5E0A0E", "--hot": "#FF7A1A", "--white-hot": "#FFE3B0", "--metal": "#B07A40"}}, {"value": "molten", "label": "Molten", "set": {"--red": "#FF5A14", "--red-dk": "#5E1E05", "--hot": "#FFC23A", "--white-hot": "#FFF1C8", "--metal": "#B8864A"}}, {"value": "steel", "label": "Cold Steel", "set": {"--red": "#D81E3C", "--red-dk": "#4A0812", "--hot": "#FF6A55", "--white-hot": "#FFE0E0", "--metal": "#9AA0A8"}}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "fan_max", "label": "Fan full scale (RPM)", "type": "number", "var": "--fan-max", "min": 500, "max": 10000, "step": 100, "default": 2400, "help": "Used when a fan has no maximum of its own"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100, WARM = 72, HOT = 85;
+  var TEETH = 26;
+  var SAMPLES = 30, SAMPLE_MS = 2000;   // 60 s of history
+  var SVG = 'http://www.w3.org/2000/svg';
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function polar(r, deg) { var a = deg * Math.PI / 180; return (100 + r * Math.cos(a)).toFixed(1) + ',' + (100 + r * Math.sin(a)).toFixed(1); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+
+  // ------------------------------------------------------- drawn once
+  // Gauge teeth: 26 serrations around the 270 degree arc, base at r 68, tip at r 95.
+  each('[data-teeth]', function (g) {
+    for (var i = 0; i < TEETH; i++) {
+      var deg = 135 + 270 * i / (TEETH - 1), temp = T_MIN + (T_MAX - T_MIN) * i / (TEETH - 1);
+      var tooth = document.createElementNS(SVG, 'polygon');
+      tooth.setAttribute('points', polar(68, deg - 4) + ' ' + polar(68, deg + 4) + ' ' + polar(95, deg));
+      tooth.setAttribute('class', 'tooth' + (temp >= HOT ? ' crit' : temp >= WARM ? ' warm' : ''));
+      g.appendChild(tooth);
+    }
+  });
+  // Chevron bars: dark red at the start, hot at the end.
+  each('[data-chev]', function (el) {
+    var count = +el.dataset.count;
+    for (var i = 0; i < count; i++) {
+      var c = document.createElement('i');
+      c.dataset.lit = 'color-mix(in srgb, var(--red-dk), var(--hot) ' + Math.round(100 * i / (count - 1)) + '%)';
+      el.appendChild(c);
+    }
+  });
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-warrior-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  // Jagged line, newest sample at the right edge; both lines share a scale.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var peak = Math.max.apply(null, hist.down.concat(hist.up, [0]));
+    var full = Math.max(peak * 1.1, 0.01), step = 388 / (SAMPLES - 1);
+    function trace(values) {
+      return values.map(function (v, i) {
+        var x = 388 - (values.length - 1 - i) * step, y = 67 - clamp01(v / full) * 60;
+        return x.toFixed(1) + ' ' + y.toFixed(1);
+      });
+    }
+    var down = trace(hist.down), up = trace(hist.up);
+    var d = down.length > 1 ? 'M' + down.join(' L') : '';
+    attr(svg.querySelector('[data-line="down"]'), 'd', d);
+    attr(svg.querySelector('[data-area]'), 'd', d ? d + ' L388 70 L' + down[0].split(' ')[0] + ' 70 Z' : '');
+    attr(svg.querySelector('[data-line="up"]'), 'd', up.length > 1 ? 'M' + up.join(' L') : '');
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: the first four digits of the time ("9:24 PM" shows 09:24).
+    var digits = known(v['0']) ? String(v['0']).replace(/\D/g, '') : '';
+    if (digits.length === 3 || digits.length === 5) digits = '0' + digits;
+    each('[data-clock]', function (el) {
+      text(el, digits.length >= 4 ? digits.slice(0, 2) + ':' + digits.slice(2, 4) : '--:--');
+    });
+    each('[data-date]', function (el) {    // FRIDAY · 13 NOVEMBER
+      var rest = [known(v['2']) ? String(v['2']) : '', known(v['3']) ? String(v['3']) : ''].join(' ').trim();
+      var parts = [known(v['1']) ? String(v['1']) : '', rest].filter(Boolean);
+      text(el, parts.join(' · ').toUpperCase() || ' ');
+    });
+
+    each('[data-num]', function (el) { text(el, fmt(num(v[el.dataset.num]), +el.dataset.places)); });
+    each('[data-unit]', function (el) { var u = v[el.dataset.unit]; text(el, known(u) ? String(u).toUpperCase() : ''); });
+    each('[data-cap]', function (el) {
+      var c = v[el.dataset.cap];
+      text(el, known(c) ? String(c).toUpperCase() : el.dataset.default);
+    });
+    each('[data-uptime]', function (el) {  // 4D 07:12
+      var sec = num(v[el.dataset.uptime]);
+      if (!isFinite(sec)) { text(el, '--'); return; }
+      var d = Math.floor(sec / 86400), h = Math.floor(sec / 3600) % 24, m = Math.floor(sec / 60) % 60;
+      var two = function (n) { return (n < 10 ? '0' : '') + n; };
+      text(el, (d > 0 ? d + 'D ' : '') + two(h) + ':' + two(m));
+    });
+
+    // Gauges: lit teeth and the spear at the value.
+    each('[data-gauge]', function (el) {
+      var t = num(v[el.dataset.gauge]);
+      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var lit = isFinite(t) ? Math.round(f * (TEETH - 1)) + 1 : 0;
+      if (el.dataset.lit !== String(lit)) {
+        el.dataset.lit = String(lit);
+        each('.tooth', function (tooth, i) { tooth.classList.toggle('on', i < lit); }, el);
+      }
+    });
+    each('[data-needle]', function (el) {  // 135 degrees + 270 x fraction, clockwise
+      var t = num(v[el.dataset.needle]);
+      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      attr(el, 'transform', 'rotate(' + (135 + 270 * f - +el.dataset.drawn).toFixed(1) + ' 100 100)');
+    });
+    each('[data-state]', function (el) {
+      var t = num(v[el.dataset.state]);
+      text(el, t >= HOT ? 'CRITICAL' : t >= WARM ? 'RISING' : 'STEADY');
+      el.classList.toggle('crit', t >= HOT);
+    });
+
+    // Chevron bars: against the sensor's own maximum, else the limit in the
+    // stylesheet (a number, or the name of a custom property).
+    each('[data-chev]', function (el) {
+      var val = num(v[el.dataset.chev]), max = num(v[el.dataset.max]);
+      var scale = el.dataset.scale, fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (/mhz/i.test(String(v[el.dataset.unitOf] || '')) && scale.indexOf('clock') > 0) fallback *= 1000;
+      var count = el.children.length;
+      var lit = val > 0 ? Math.max(1, Math.round(share(val, max, fallback) * count)) : 0;
+      if (scale === '--fan-max') fanRpm[el.dataset.chev] = isFinite(val) ? val : 0;
+      if (el.dataset.shown === String(lit)) return;
+      el.dataset.shown = String(lit);
+      for (var i = 0; i < count; i++) {
+        var c = el.children[i];
+        style(c, 'background', i < lit ? c.dataset.lit : '');
+        c.classList.toggle('tip', i === lit - 1);
+      }
+    });
+    each('[data-fill]', function (el) {    // memory bar
+      var val = num(v[el.dataset.fill]), max = num(v[el.dataset.max]);
+      style(el, 'width', (share(val, max, 100) * 100).toFixed(1) + '%');
+    });
+    each('[data-fill-pct]', function (el) {
+      var val = num(v[el.dataset.fillPct]), max = num(v[el.dataset.max]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      var hide = anyMapped && !isFinite(num(v[el.dataset.need]));
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+    each('[data-section]', function (el) {
+      var hide = el.querySelector('[data-need]') !== null &&
+                 el.querySelector('[data-need]:not([hidden])') === null;
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], tick = 0, rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    if (tick % (fps * 5 | 0 || 1) === 0) anims = document.getAnimations();   // sections may have appeared
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    // Rotors: one turn every 1200 / RPM seconds, but never more than about 44
+    // degrees a frame. Three blades repeat every 120 degrees, so a bigger
+    // step would read as standing still or turning backwards.
+    each('[data-rotor]', function (el) {
+      var id = el.dataset.rotor, rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(0.3 * rpm * dt * speed, 44 * (1 - Math.exp(-rpm / 1200)));
+      rotorAngle[id] = ((rotorAngle[id] || 0) + step) % 360;
+      el.style.transform = 'rotate(' + rotorAngle[id].toFixed(1) + 'deg)';
+    });
+    tick++;
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now(); tick = 0;
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+})();
+</script>
+</body>
+</html>
