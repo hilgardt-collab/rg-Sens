@@ -419,8 +419,8 @@ sections becomes columns with a few lines of CSS:
 
 Give each arrangement a height in which whole sections fit under one another.
 The Neon and LCARS-style examples do this; the Art Deco, Art Nouveau,
-Steampunk, Warrior, Leather & Wood and LCD examples are drawn as one 480x1920
-picture and only scale. All eight declare a `fit` option (and the two a
+Steampunk, Warrior, Leather & Wood, LCD and Victorian examples are drawn as
+one 480x1920 picture and only scale. All nine declare a `fit` option (and the two a
 `columns` option) for the Display tab.
 
 ### Memory Usage
@@ -509,8 +509,9 @@ CSS Template panels are enabled by default; start rg-Sens with
   [Neon](../examples/neon_panel.html),
   [LCARS-style](../examples/lcars_panel.html),
   [Warrior](../examples/warrior_panel.html),
-  [Leather & Wood](../examples/leather_wood_panel.html) and
-  [LCD](../examples/lcd_panel.html) panel examples - full 480x1920
+  [Leather & Wood](../examples/leather_wood_panel.html),
+  [LCD](../examples/lcd_panel.html) and
+  [Victorian](../examples/victorian_panel.html) panel examples - full 480x1920
   panels sharing one placeholder mapping: gauges, fan meters, bars, sections
   that hide when unmapped; setup steps are in the comment at the top of each.
   They load their fonts from `examples/fonts/` (SIL Open Font License; Special

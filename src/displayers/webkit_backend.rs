@@ -677,7 +677,7 @@ mod tests {
         assert_eq!(mapped(&values, "min"), "--");
     }
 
-    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior, Leather & Wood and LCD examples: every placeholder they
+    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior, Leather & Wood, LCD and Victorian examples: every placeholder they
     /// use has an auto-configure entry, the numbering has no holes, the two
     /// share one mapping, and none loads anything from the network.
     #[test]
@@ -726,7 +726,14 @@ mod tests {
         let lcd_defaults = extract_placeholder_defaults(lcd);
         assert_eq!(lcd_defaults.len(), 91);
         assert!(!lcd_defaults.contains_key(&90));
-        for other in [nouveau, steampunk, neon, lcars, warrior, leather, lcd] {
+        // Victorian adds the year, on 90 as LCARS has it.
+        let victorian = include_str!("../../examples/victorian_panel.html");
+        assert!(detect_placeholders(victorian).is_empty());
+        assert!(!victorian.contains("fonts.googleapis.com"));
+        let victorian_defaults = extract_placeholder_defaults(victorian);
+        assert_eq!(victorian_defaults.len(), deco.len() + 1);
+        assert_eq!(victorian_defaults[&90].field, "year");
+        for other in [nouveau, steampunk, neon, lcars, warrior, leather, lcd, victorian] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {
                 assert_eq!(

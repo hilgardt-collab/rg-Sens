@@ -1,0 +1,151 @@
+/* Victorian Sensor Panel: stylesheet for victorian_panel.html (rg-Sens CSS Template displayer).
+   Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: Abril Fatface, IM Fell English (roman and italic) and
+   IM Fell English SC, all SIL Open Font License (OFL.txt in each folder).
+   Keep the fonts folder next to this file; without it the page falls back
+   to the system serif. */
+@font-face { font-family: "Abril Fatface"; font-weight: 400; font-style: normal;
+  src: local("Abril Fatface"), url("fonts/abril-fatface/AbrilFatface-Regular.ttf") format("truetype"); }
+@font-face { font-family: "IM Fell English"; font-weight: 400; font-style: normal;
+  src: local("IM FELL English Roman"), url("fonts/im-fell-english/IMFeENrm28P.ttf") format("truetype"); }
+@font-face { font-family: "IM Fell English"; font-weight: 400; font-style: italic;
+  src: local("IM FELL English Italic"), url("fonts/im-fell-english/IMFeENit28P.ttf") format("truetype"); }
+@font-face { font-family: "IM Fell English SC"; font-weight: 400; font-style: normal;
+  src: local("IM FELL English SC"), url("fonts/im-fell-english-sc/IMFeENsc28P.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
+  /* Wallpaper: the wall and its damask motif.
+       Burgundy       #3A0E14 #521821   (default)
+       Bottle Green   #0F2A1E #1C4432
+       Midnight Blue  #101A33 #1C2C52 */
+  --wall: #3A0E14;
+  --motif: #521821;
+  /* Frames a second for what moves: the gaslight and the watch's seconds
+     dial. 0 turns motion off. */
+  --motion-fps: 4;
+  /* Fan bar full scale when a fan has no maximum of its own. */
+  --fan-max: 2400;
+  /* Traffic chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  --ink: #2B1A12;
+  --red: #8E1B1B;
+  --sepia: #6E4A2E;
+  --gilt-edge: #5A3E12;
+}
+html, body { margin: 0; background: var(--wall); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* ------------------------------------------------------------ the room */
+.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+  background: var(--wall); font-family: "IM Fell English", Georgia, serif; color: var(--ink);
+  padding: 26px 22px 24px; display: flex; flex-direction: column; justify-content: space-between; }
+.wall, .gas { position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none; }
+#vc-motif .m { fill: var(--motif); }
+#vc-motif .w { fill: var(--wall); }
+#vc-motif .s { fill: none; stroke: var(--motif); }
+/* Gaslight from above, and the dark of the room's edges. */
+.gas { right: 0; bottom: 0; will-change: opacity;
+  background: radial-gradient(ellipse 70% 30% at 50% 0%, rgba(255,205,120,0.22) 0%, rgba(255,205,120,0) 70%),
+    radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.5) 100%);
+  animation: vc-gas 7s ease-in-out infinite; }
+@keyframes vc-gas { 0%,100% { opacity: 1; } 12% { opacity: .86; } 20% { opacity: .97; } 47% { opacity: .9; } 53% { opacity: 1; } 78% { opacity: .88; } 84% { opacity: .98; } }
+/* The script steps the animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* --------------------------------------------- gilt frame and paper card */
+.frame { position: relative; z-index: 1; padding: 10px; border-radius: 3px;
+  background: linear-gradient(135deg, #7A5A1E 0%, #E8C766 18%, #9C7A2E 36%, #F5DC8A 52%, #8A6420 72%, #D9B455 100%);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.65), inset 0 0 0 1px rgba(255,240,200,0.6), inset 0 0 0 3px rgba(80,50,10,0.55); }
+/* beading */
+.frame::before { content: ""; position: absolute; top: 4px; right: 4px; bottom: 4px; left: 4px;
+  border: 2px dotted rgba(90,60,15,0.75); pointer-events: none; }
+.card { position: relative; padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 10px;
+  background: radial-gradient(circle at 18% 22%, rgba(150,100,40,0.10) 0%, rgba(150,100,40,0) 6%),
+    radial-gradient(circle at 82% 70%, rgba(150,100,40,0.09) 0%, rgba(150,100,40,0) 5%),
+    radial-gradient(ellipse at 50% 40%, #F7ECD4 0%, #EBDCB8 70%, #DAC49A 100%);
+  box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 4px rgba(247,236,212,0), inset 0 0 0 5px var(--ink),
+    inset 0 0 28px rgba(120,80,30,0.28), 0 0 0 2px var(--gilt-edge); }
+.card.wide { padding: 16px 22px 18px; }
+/* corner flourishes, added to every card by the script */
+.corner { position: absolute; }
+#vc-corner path { fill: none; stroke: var(--ink); stroke-width: 1.1; }
+#vc-corner circle { fill: var(--red); }
+.corner.tl { top: 8px; left: 8px; }
+.corner.tr { top: 8px; right: 8px; transform: scaleX(-1); }
+.corner.bl { bottom: 8px; left: 8px; transform: scaleY(-1); }
+.corner.br { bottom: 8px; right: 8px; transform: scale(-1, -1); }
+
+/* Section heading: a leaf either side of the title, over a thick-thin rule. */
+.heading { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.heading h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-family: "IM Fell English SC", serif;
+  font-weight: 400; font-size: 22px; letter-spacing: 0.1em; color: var(--red); white-space: nowrap; }
+.heading h2::before, .heading h2::after { content: ""; width: 22px; height: 14px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 14'%3E%3Cpath d='M0 7 H9' stroke='%238E1B1B' stroke-width='1.2'/%3E%3Cpath d='M8 7 C10 1.5 16 1 21 7 C16 13 10 12.5 8 7 Z' fill='%238E1B1B'/%3E%3Cpath d='M10 7 H18' stroke='%23F7ECD4' stroke-width='0.8'/%3E%3C/svg%3E") no-repeat; }
+.heading h2::after { transform: scaleX(-1); }
+.heading i { align-self: stretch; height: 4px; box-sizing: border-box; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+
+/* A row: label, dotted leader, fat-face value, italic unit. */
+.row { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.row > span:first-child { font-style: italic; font-size: 17px; overflow: hidden; text-overflow: ellipsis; }
+.row i { flex: 1; min-width: 12px; border-bottom: 2px dotted rgba(43,26,18,0.55); transform: translateY(-4px); }
+.row b, .fat { font-family: "Abril Fatface", serif; font-weight: 400; font-style: normal; font-size: 22px; line-height: 1; }
+.row em { font-style: italic; font-size: 14px; }
+/* A hatched bar in a ruled box. */
+.bar { position: relative; height: 12px; border: 1.2px solid var(--ink); background: rgba(255,250,235,0.5); }
+.bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-right: 1.2px solid var(--ink);
+  background: repeating-linear-gradient(45deg, var(--ink) 0px, var(--ink) 1.2px, transparent 1.2px, transparent 4px); }
+.bar.red i { background: repeating-linear-gradient(-45deg, var(--red) 0px, var(--red) 1.2px, transparent 1.2px, transparent 4px); }
+.bar i.none { border-right: 0; }
+.item { display: flex; flex-direction: column; gap: 4px; }
+.note { font-style: italic; font-size: 13px; color: var(--sepia); }
+
+/* ----------------------------------------------------------------- header */
+.card.head { padding: 18px; flex-direction: row; align-items: center; gap: 12px; }
+.watch { flex: none; filter: drop-shadow(0 3px 3px rgba(60,30,10,0.35)); }
+.watch text { font-family: "IM Fell English", serif; font-size: 14px; fill: var(--ink); text-anchor: middle; }
+.watch .tick { stroke: var(--ink); }
+.watch .steel { fill: #1E3570; }
+.watch .pomme { fill: #FBF8EF; stroke: #1E3570; }
+.masthead { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; white-space: nowrap; }
+.masthead .the { font-style: italic; font-size: 15px; color: var(--red); }
+.masthead .system { font-family: "Abril Fatface", serif; font-size: 44px; line-height: 1; letter-spacing: 0.02em; }
+.masthead .sensors { font-family: "IM Fell English SC", serif; font-size: 22px; letter-spacing: 0.32em; padding-left: 0.32em; color: var(--red); }
+.masthead i { align-self: stretch; height: 5px; box-sizing: content-box; margin: 6px 0; border-top: 2.5px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.masthead .date { font-style: italic; font-size: 17px; }
+.masthead .anno { font-family: "IM Fell English SC", serif; font-size: 13px; letter-spacing: 0.2em; color: var(--sepia); }
+
+/* ------------------------------------------------ processor and graphics */
+.engine { display: flex; align-items: center; gap: 14px; }
+.thermo { flex: none; }
+.thermo text { font-family: "IM Fell English", serif; font-size: 10px; fill: var(--ink); }
+.thermo text.n { font-style: italic; font-size: 9px; }
+.thermo .tick { stroke: var(--ink); }
+.reads { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.reads .big { display: flex; flex-direction: column; align-items: center; white-space: nowrap; }
+.reads .big b { font-family: "Abril Fatface", serif; font-weight: 400; font-size: 64px; line-height: 1; }
+.reads .big span { font-style: italic; font-size: 15px; }
+.reads .big .state { font-family: "IM Fell English SC", serif; font-style: normal; font-size: 16px; letter-spacing: 0.12em; color: #2E5A2E; }
+.reads .big .state.warm { color: #8E1B1B; }
+.reads .big .state.fever { color: #B01414; }
+.reads > i { height: 1px; background: var(--ink); margin: 4px 0; }
+
+/* ---------------------------------------------------------------- traffic */
+.card.traffic { padding: 16px 20px; gap: 8px; }
+.traffic .now { display: flex; justify-content: space-between; align-items: baseline; font-style: italic; font-size: 16px; white-space: nowrap; }
+.traffic .now .in { color: var(--red); }
+.chart { display: block; }
+.chart text { font-family: "IM Fell English", serif; font-style: italic; font-size: 10px; fill: var(--ink); }
+.traffic .ends { display: flex; justify-content: space-between; margin-top: -4px; padding: 0 22px; }
+
+/* ----------------------------------------------------------------- ribbon */
+.ribbon { position: relative; z-index: 1; align-self: center; width: 420px; height: 56px; }
+.ribbon svg { position: absolute; top: 0; left: 0; filter: drop-shadow(0 3px 3px rgba(0,0,0,0.5)); }
+.ribbon div { position: absolute; left: 30px; right: 30px; top: 4px; height: 40px; display: flex; align-items: center;
+  justify-content: center; font-style: italic; font-size: 16px; color: #F6EBD3; white-space: nowrap; }
