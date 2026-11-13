@@ -27,6 +27,23 @@ static PLACEHOLDER_CONFIG_REGEX: Lazy<Regex> = Lazy::new(|| {
     .expect("Invalid placeholder config regex")
 });
 
+static TEMPLATE_OPTIONS_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r#"<script\s+type\s*=\s*["']application/json["']\s+id\s*=\s*["']rg-template-options["']\s*>([\s\S]*?)</script>"#,
+    )
+    .expect("Invalid template options regex")
+});
+static CSS_VAR_NAME: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^--[A-Za-z0-9-]+$").expect("Invalid css var regex"));
+/// What an option may write as a CSS value: words, numbers, colours and
+/// simple functions. Nothing that can close the declaration or the block.
+static CSS_SAFE_VALUE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[A-Za-z0-9 #.,%()+-]*$").expect("Invalid css value regex"));
+static CSS_HEX_COLOR: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^#(?:[0-9A-Fa-f]{3,4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+        .expect("Invalid colour regex")
+});
+
 // Re-export CSS template config types from rg-sens-types
 pub use rg_sens_types::display_configs::css_template::{
     CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping,
@@ -168,6 +185,244 @@ pub fn extract_placeholder_defaults(
     }
 
     defaults
+}
+
+/// One choice of a [`OptionKind::Choice`] option.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct OptionChoice {
+    pub value: String,
+    #[serde(default)]
+    pub label: String,
+    /// Custom properties this choice sets (a palette sets several). Empty
+    /// when the option has a `var` of its own, which then gets `value`.
+    #[serde(default)]
+    pub set: std::collections::BTreeMap<String, String>,
+}
+
+/// What kind of control an option is.
+#[derive(Debug, Clone, PartialEq)]
+pub enum OptionKind {
+    Choice(Vec<OptionChoice>),
+    Number {
+        min: f64,
+        max: f64,
+        step: f64,
+    },
+    /// `#RRGGBB`
+    Color,
+    /// Written as `1` or `0`.
+    Toggle,
+}
+
+/// A setting a template offers, shown on the dialog's Display tab and
+/// applied as CSS custom properties on `:root`.
+///
+/// Declared in the template:
+/// ```html
+/// <script type="application/json" id="rg-template-options">
+/// [
+///   {"id": "fps", "label": "Frames per second", "type": "number",
+///    "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6},
+///   {"id": "palette", "label": "Palette", "type": "choice", "default": "cyan",
+///    "choices": [{"value": "cyan", "label": "Cyan + Magenta",
+///                 "set": {"--a": "#22E4FF", "--b": "#FF2BD6"}}]},
+///   {"id": "glow", "label": "Glow", "type": "color", "var": "--glow", "default": "#FF7A1A"},
+///   {"id": "alert", "label": "Alert when hot", "type": "toggle", "var": "--auto-alert", "default": true}
+/// ]
+/// </script>
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct TemplateOption {
+    pub id: String,
+    pub label: String,
+    /// Shown under the label.
+    pub help: String,
+    pub kind: OptionKind,
+    /// The custom property the value is written to (`--motion-fps`).
+    pub var: Option<String>,
+    pub default: String,
+}
+
+impl TemplateOption {
+    /// `value` as this option accepts it: a declared choice, a number inside
+    /// the range, a hex colour, `1`/`0`. `None` for anything else.
+    pub fn normalize(&self, value: &str) -> Option<String> {
+        let value = value.trim();
+        match &self.kind {
+            OptionKind::Choice(choices) => choices
+                .iter()
+                .find(|c| c.value == value)
+                .map(|c| c.value.clone()),
+            OptionKind::Number { min, max, .. } => value
+                .parse::<f64>()
+                .ok()
+                .filter(|n| n.is_finite())
+                .map(|n| trim_number(n.clamp(*min, *max))),
+            OptionKind::Color => CSS_HEX_COLOR
+                .is_match(value)
+                .then(|| value.to_ascii_uppercase()),
+            OptionKind::Toggle => match value {
+                "1" | "true" => Some("1".to_string()),
+                "0" | "false" => Some("0".to_string()),
+                _ => None,
+            },
+        }
+    }
+
+    /// The declarations this option writes for `value` (already normalised).
+    fn declarations(&self, value: &str) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        if let Some(var) = &self.var {
+            out.push((var.clone(), value.to_string()));
+        }
+        if let OptionKind::Choice(choices) = &self.kind {
+            if let Some(choice) = choices.iter().find(|c| c.value == value) {
+                out.extend(choice.set.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+        }
+        out
+    }
+}
+
+fn trim_number(n: f64) -> String {
+    let s = format!("{n:.3}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// The options a template declares (see [`TemplateOption`]). Entries that are
+/// malformed, name an unusable custom property or repeat an id are dropped.
+pub fn extract_template_options(html: &str) -> Vec<TemplateOption> {
+    let Some(json) = TEMPLATE_OPTIONS_REGEX
+        .captures(html)
+        .and_then(|caps| caps.get(1))
+    else {
+        return Vec::new();
+    };
+    let Ok(serde_json::Value::Array(entries)) =
+        serde_json::from_str::<serde_json::Value>(json.as_str().trim())
+    else {
+        log::warn!("CSS template: rg-template-options is not a JSON array");
+        return Vec::new();
+    };
+    let text = |v: &serde_json::Value, key: &str| -> String {
+        match v.get(key) {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(serde_json::Value::Bool(b)) => if *b { "1" } else { "0" }.to_string(),
+            Some(serde_json::Value::Number(n)) => n.as_f64().map(trim_number).unwrap_or_default(),
+            _ => String::new(),
+        }
+    };
+    let number = |v: &serde_json::Value, key: &str, fallback: f64| {
+        v.get(key).and_then(|n| n.as_f64()).unwrap_or(fallback)
+    };
+    let mut out: Vec<TemplateOption> = Vec::new();
+    for entry in &entries {
+        let id = text(entry, "id");
+        if id.is_empty() || out.iter().any(|o| o.id == id) {
+            continue;
+        }
+        let var = Some(text(entry, "var")).filter(|v| !v.is_empty());
+        if var.as_deref().is_some_and(|v| !CSS_VAR_NAME.is_match(v)) {
+            continue;
+        }
+        let kind = match text(entry, "type").as_str() {
+            "choice" => {
+                let choices: Vec<OptionChoice> = entry
+                    .get("choices")
+                    .cloned()
+                    .and_then(|c| serde_json::from_value(c).ok())
+                    .unwrap_or_default();
+                let usable = !choices.is_empty()
+                    && choices.iter().all(|c| {
+                        CSS_SAFE_VALUE.is_match(&c.value)
+                            && c.set.iter().all(|(k, v)| {
+                                CSS_VAR_NAME.is_match(k) && CSS_SAFE_VALUE.is_match(v)
+                            })
+                    });
+                if !usable {
+                    continue;
+                }
+                OptionKind::Choice(choices)
+            }
+            "number" => {
+                let (min, max) = (number(entry, "min", 0.0), number(entry, "max", 100.0));
+                if min.partial_cmp(&max) != Some(std::cmp::Ordering::Less) {
+                    continue;
+                }
+                OptionKind::Number {
+                    min,
+                    max,
+                    step: number(entry, "step", 1.0).max(0.001),
+                }
+            }
+            "color" => OptionKind::Color,
+            "toggle" => OptionKind::Toggle,
+            _ => continue,
+        };
+        let label = Some(text(entry, "label"))
+            .filter(|l| !l.is_empty())
+            .unwrap_or_else(|| id.clone());
+        let mut option = TemplateOption {
+            id,
+            label,
+            help: text(entry, "help"),
+            kind,
+            var,
+            default: String::new(),
+        };
+        // A default the option itself rejects would make the dialog lie.
+        match option.normalize(&text(entry, "default")) {
+            Some(default) => option.default = default,
+            None => continue,
+        }
+        out.push(option);
+    }
+    out
+}
+
+/// The stylesheet that applies the chosen option values: one `:root` block
+/// holding only declared custom properties with validated values. Options
+/// left at their default write nothing (the template's own stylesheet has
+/// them). Appended after the template's stylesheet, so it wins.
+pub fn options_css(
+    options: &[TemplateOption],
+    values: &std::collections::BTreeMap<String, String>,
+) -> String {
+    let mut body = String::new();
+    for option in options {
+        let Some(value) = values.get(&option.id).and_then(|v| option.normalize(v)) else {
+            continue;
+        };
+        if value == option.default {
+            continue;
+        }
+        for (name, value) in option.declarations(&value) {
+            body.push_str(&format!("{name}: {value};"));
+        }
+    }
+    if body.is_empty() {
+        String::new()
+    } else {
+        format!(":root{{{body}}}")
+    }
+}
+
+/// The document a backend loads for `html`: placeholders turned into spans,
+/// the template's option values, the user and embedded stylesheets and the
+/// bridge script. Every loader goes through here.
+pub fn build_document(
+    html: &str,
+    config: &CssTemplateDisplayConfig,
+    user_css: Option<&str>,
+) -> String {
+    let options = options_css(&extract_template_options(html), &config.options);
+    let embedded = match (config.embedded_css.as_deref(), options.is_empty()) {
+        (Some(css), false) => Some(format!("{css}\n{options}")),
+        (Some(css), true) => Some(css.to_string()),
+        (None, false) => Some(options),
+        (None, true) => None,
+    };
+    prepare_html_document(&transform_template(html), user_css, embedded.as_deref())
 }
 
 /// One slot of the panel's combination source, as auto-mapping sees it.
@@ -590,6 +845,72 @@ pub fn generate_update_script() -> &'static str {
         if (colors.color4) root.style.setProperty('--rg-theme-color4', colors.color4);
     };
 
+    // Fit to the panel. A template that states the size it was drawn for
+    //   <meta name="rg-design-size" content="480x1920">
+    // is scaled to the panel it is shown in. It may list other arrangements
+    // of the same design, narrowest first
+    //   <meta name="rg-layouts" content="480x1920 960x1040 1440x800">
+    // and the one that fills the panel best is chosen; the page lays itself
+    // out from --rg-w / --rg-h and data-rg-columns on <html>. Two custom
+    // properties steer it (template options usually set them):
+    //   --rg-fit      cover (default: fill the panel, cropping) | contain | stretch
+    //   --rg-columns  0 = choose (default), N = use the Nth layout
+    // A template without the meta tag is left exactly as it is.
+    (function () {
+        var meta = document.querySelector('meta[name="rg-design-size"]');
+        if (!meta) return;
+        var size = function (text) {
+            var m = /^(\d+)x(\d+)$/.exec(text);
+            return m ? { w: +m[1], h: +m[2] } : null;
+        };
+        var design = size(meta.content.trim());
+        if (!design) return;
+        var more = document.querySelector('meta[name="rg-layouts"]');
+        var layouts = more ? more.content.trim().split(/\s+/).map(size).filter(Boolean) : [];
+        if (!layouts.length) layouts = [design];
+        var root = document.documentElement, body = document.body;
+        var css = getComputedStyle(root);
+        var fit = (css.getPropertyValue('--rg-fit') || '').trim() || 'cover';
+        var columns = parseInt(css.getPropertyValue('--rg-columns'), 10) || 0;
+        root.style.overflow = 'hidden';
+        body.style.position = 'absolute';
+        body.style.left = '0';
+        body.style.top = '0';
+        body.style.transformOrigin = '0 0';
+        var shown = '';
+        function apply() {
+            var iw = window.innerWidth, ih = window.innerHeight;
+            if (!(iw > 0 && ih > 0)) return;
+            var at = 0;
+            if (columns > 0) {
+                at = Math.min(columns, layouts.length) - 1;
+            } else {
+                var best = 0;
+                layouts.forEach(function (l, i) {
+                    var s = Math.min(iw / l.w, ih / l.h);
+                    if (s > best * 1.02) { best = s; at = i; }
+                });
+            }
+            var l = layouts[at];
+            var sx = iw / l.w, sy = ih / l.h;
+            if (fit === 'contain') sx = sy = Math.min(sx, sy);
+            else if (fit !== 'stretch') sx = sy = Math.max(sx, sy);
+            var key = [at, l.w, l.h, sx.toFixed(4), sy.toFixed(4), iw, ih].join(' ');
+            if (key === shown) return;
+            shown = key;
+            root.style.setProperty('--rg-w', l.w + 'px');
+            root.style.setProperty('--rg-h', l.h + 'px');
+            root.setAttribute('data-rg-columns', String(at + 1));
+            body.style.width = l.w + 'px';
+            body.style.height = l.h + 'px';
+            body.style.transform = 'translate(' + ((iw - l.w * sx) / 2).toFixed(2) + 'px,' +
+                ((ih - l.h * sy) / 2).toFixed(2) + 'px) scale(' + sx.toFixed(5) + ',' + sy.toFixed(5) + ')';
+            window.dispatchEvent(new CustomEvent('rg-layout', { detail: { columns: at + 1, width: l.w, height: l.h } }));
+        }
+        window.addEventListener('resize', apply);
+        apply();
+    })();
+
     // Signal that the bridge is ready
     window.rgBridgeReady = true;
     console.log('rg-sens CSS Template bridge initialized');
@@ -854,6 +1175,144 @@ mod tests {
         assert_eq!(all.len(), 2);
         assert_eq!(all[1].title, "Placeholder {{3}}");
         assert_eq!(all[1].indices, [3]);
+    }
+
+    const OPTIONS: &str = r##"<script type="application/json" id="rg-template-options">[
+        {"id": "fps", "label": "FPS", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "default": 6},
+        {"id": "palette", "type": "choice", "default": "cyan", "choices": [
+            {"value": "cyan", "set": {"--a": "#22E4FF", "--b": "#FF2BD6"}},
+            {"value": "lime", "set": {"--a": "#B6FF3B", "--b": "#22E4FF"}}]},
+        {"id": "glow", "type": "color", "var": "--glow", "default": "#ff7a1a"},
+        {"id": "alert", "type": "toggle", "var": "--auto-alert", "default": true},
+        {"id": "evil", "type": "choice", "var": "--x", "default": "a", "choices": [{"value": "a;} body{display:none"}]},
+        {"id": "badvar", "type": "number", "var": "color", "default": 1},
+        {"id": "fps", "type": "toggle", "var": "--dup", "default": false}
+    ]</script>"##;
+
+    #[test]
+    fn template_options_are_parsed_and_unsafe_ones_dropped() {
+        let options = extract_template_options(OPTIONS);
+        let ids: Vec<&str> = options.iter().map(|o| o.id.as_str()).collect();
+        assert_eq!(ids, ["fps", "palette", "glow", "alert"]);
+        assert_eq!(options[0].default, "6");
+        assert_eq!(options[2].default, "#FF7A1A");
+        assert_eq!(options[3].default, "1");
+    }
+
+    /// Only declared properties with values the option accepts reach the page.
+    #[test]
+    fn options_css_writes_only_validated_values() {
+        let options = extract_template_options(OPTIONS);
+        let values = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
+        assert_eq!(options_css(&options, &values(&[])), "");
+        assert_eq!(
+            options_css(&options, &values(&[("fps", "6"), ("palette", "cyan")])),
+            "",
+            "defaults write nothing"
+        );
+        assert_eq!(
+            options_css(
+                &options,
+                &values(&[("fps", "99"), ("palette", "lime"), ("alert", "0")])
+            ),
+            ":root{--motion-fps: 30;--a: #B6FF3B;--b: #22E4FF;--auto-alert: 0;}"
+        );
+        // not a choice, not a colour, not declared: nothing
+        let hostile = values(&[
+            ("palette", "x;} body{display:none}"),
+            ("glow", "red;} *{display:none"),
+            ("unknown", "1"),
+        ]);
+        assert_eq!(options_css(&options, &hostile), "");
+    }
+
+    /// The shipped panels: every option writes custom properties their
+    /// stylesheet really has, and the declared default is the stylesheet's
+    /// value, so the dialog shows what the panel does before anything is set.
+    #[test]
+    fn example_panel_options_match_their_stylesheets() {
+        let panels = [
+            (
+                include_str!("../../examples/art_deco_panel.html"),
+                include_str!("../../examples/art_deco_panel.css"),
+            ),
+            (
+                include_str!("../../examples/art_nouveau_panel.html"),
+                include_str!("../../examples/art_nouveau_panel.css"),
+            ),
+            (
+                include_str!("../../examples/steampunk_panel.html"),
+                include_str!("../../examples/steampunk_panel.css"),
+            ),
+            (
+                include_str!("../../examples/neon_panel.html"),
+                include_str!("../../examples/neon_panel.css"),
+            ),
+            (
+                include_str!("../../examples/lcars_panel.html"),
+                include_str!("../../examples/lcars_panel.css"),
+            ),
+        ];
+        for (html, css) in panels {
+            assert!(html.contains(r#"<meta name="rg-design-size" content="480x1920">"#));
+            let options = extract_template_options(html);
+            assert!(
+                options.iter().any(|o| o.id == "fit"),
+                "every panel can be fitted"
+            );
+            // the first `:root { ... }` block holds the defaults
+            let root = css
+                .split_once(":root {")
+                .and_then(|(_, rest)| rest.split_once('}'))
+                .unwrap()
+                .0;
+            let declared = |name: &str| -> Option<String> {
+                root.lines()
+                    .filter_map(|line| line.trim().strip_suffix(';')?.split_once(':'))
+                    .find(|(k, _)| k.trim() == name)
+                    .map(|(_, v)| v.trim().to_string())
+            };
+            for option in &options {
+                let values: std::collections::BTreeMap<String, String> =
+                    [(option.id.clone(), option.default.clone())].into();
+                assert_eq!(
+                    options_css(&options, &values),
+                    "",
+                    "{}: the default writes nothing",
+                    option.id
+                );
+                for (name, value) in option.declarations(&option.default) {
+                    let in_css = declared(&name)
+                        .unwrap_or_else(|| panic!("{name} is not in the stylesheet"));
+                    assert!(
+                        in_css.eq_ignore_ascii_case(&value)
+                            || in_css.parse::<f64>().ok() == value.parse::<f64>().ok()
+                                && value.parse::<f64>().is_ok(),
+                        "{}: default {value} but the stylesheet has {in_css}",
+                        option.id
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn build_document_applies_options_after_the_template_stylesheet() {
+        let html = format!("<html><head><link rel=\"stylesheet\" href=\"x.css\"></head><body>{{{{0}}}}{OPTIONS}</body></html>");
+        let mut config = CssTemplateDisplayConfig::default();
+        config.options.insert("fps".to_string(), "12".to_string());
+        let doc = build_document(&html, &config, None);
+        let (link, style) = (
+            doc.find("x.css").unwrap(),
+            doc.find(":root{--motion-fps: 12;}").unwrap(),
+        );
+        assert!(link < style);
+        assert!(doc.contains("data-placeholder=\"0\""));
     }
 
     #[test]

@@ -17,7 +17,7 @@ CSS Template panels use a WebView to render HTML/CSS content, with placeholder v
 1. **Create a new panel** - In rg-Sens, add a new panel and select "CSS Template" as the displayer type
 2. **Select your template** - Point to your HTML file in the Template tab (its stylesheet is linked from the HTML, or set it as the CSS file)
 3. **Scan Placeholders** - Adds the sources the template asks for under Content and maps each placeholder to its slot
-4. **Adjust** - Pick sensors, captions and units on the slots under Content; change individual mappings on the Mappings tab
+4. **Adjust** - Pick sensors and their settings on the Bindings tab; set the template's own options (palette, layout, frame rate) on the Display tab
 
 ## Creating a Template
 
@@ -348,6 +348,79 @@ function updateGauge(percent) {
 - Some changes may require panel restart
 
 ## Known Limitations
+
+### Template Options
+
+A template can offer settings (a palette, a frame rate, a full-scale value)
+that appear on the panel's **Display** tab under *Template Options*. Declare
+them in a JSON block:
+
+```html
+<script type="application/json" id="rg-template-options">
+[
+  {"id": "palette", "label": "Palette", "type": "choice", "default": "cyan",
+   "choices": [
+     {"value": "cyan", "label": "Cyan + Magenta", "set": {"--a": "#22E4FF", "--b": "#FF2BD6"}},
+     {"value": "lime", "label": "Lime + Cyan",    "set": {"--a": "#B6FF3B", "--b": "#22E4FF"}}]},
+  {"id": "scheme", "label": "Scheme", "type": "choice", "var": "--scheme", "default": "classic",
+   "choices": [{"value": "classic", "label": "Classic"}, {"value": "alert", "label": "Alert"}]},
+  {"id": "fps", "label": "Frames per second", "type": "number", "var": "--motion-fps",
+   "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off"},
+  {"id": "glow", "label": "Glow", "type": "color", "var": "--glow", "default": "#FF7A1A"},
+  {"id": "alert", "label": "Alert when hot", "type": "toggle", "var": "--auto-alert", "default": true}
+]
+</script>
+```
+
+| Type | Control | Written to the page |
+|------|---------|---------------------|
+| `choice` | dropdown | `var: value`, and every property in the choice's `set` |
+| `number` | spin button (`min`, `max`, `step`) | `var: number` |
+| `color` | colour button | `var: #RRGGBB` |
+| `toggle` | switch | `var: 1` or `var: 0` |
+
+The chosen values are saved with the panel and applied as CSS custom
+properties on `:root`, in a stylesheet placed after the template's own, so
+the template only has to use `var(--name)` (or read it from script with
+`getComputedStyle`). An option left at its default writes nothing: make the
+`default` the value your stylesheet already has. Changing an option reloads
+the page. Only declared properties are written, and only with values the
+option accepts.
+
+### Fitting the Panel
+
+A template drawn for one size can be scaled to any panel. State the size:
+
+```html
+<meta name="rg-design-size" content="480x1920">
+```
+
+rg-Sens then scales the page to the panel and centres it. `--rg-fit` chooses
+how: `cover` (the default: fill the panel, cropping what does not fit),
+`contain` (everything visible, with empty bands) or `stretch`. A template without the tag is left exactly as it is, so a template
+that is already responsive needs nothing.
+
+A design can also offer other arrangements of itself for other shapes:
+
+```html
+<meta name="rg-layouts" content="480x1920 960x1070 1440x720">
+```
+
+The arrangement that fills the panel best is chosen (or the Nth, when
+`--rg-columns` is N), and the page is told through `--rg-w` / `--rg-h` and
+`data-rg-columns` on `<html>` (and an `rg-layout` event). A column of
+sections becomes columns with a few lines of CSS:
+
+```css
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px);
+         display: flex; flex-flow: column wrap; align-content: space-between; }
+.panel > section { width: 432px; }
+```
+
+Give each arrangement a height in which whole sections fit under one another.
+The Neon and LCARS-style examples do this; the Art Deco, Art Nouveau and
+Steampunk examples are drawn as one 480x1920 picture and only scale. All five
+declare `fit` (and the two a `columns`) option for the Display tab.
 
 ### Memory Usage
 

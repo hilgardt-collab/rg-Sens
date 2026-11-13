@@ -10,6 +10,8 @@
 @font-face { font-family: "Josefin Sans"; font-weight: 100 700; font-style: normal;
   src: local("Josefin Sans"), url("fonts/josefin-sans/JosefinSans%5Bwght%5D.ttf") format("truetype"); }
 :root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
   --accent: #D4AF37;
   --mid: var(--accent);
   --hi: color-mix(in srgb, var(--accent), white 68%);

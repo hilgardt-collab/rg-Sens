@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
 <title>Art Deco Sensor Panel</title>
 <!--
   Art Deco sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait.
@@ -35,6 +36,11 @@
 
   Accent: change the one colour at the top of art_deco_panel.css. Gold #D4AF37, copper #C08A5B,
   jade #4FB39A, silver #C9C6BE. Every metal shade is derived from it.
+
+  Options and size: the settings named above are also on the panel's Display
+  tab in rg-Sens (Template Options, declared in the rg-template-options block
+  below), so the stylesheet need not be edited. The design is drawn for
+  480x1920 and is scaled to whatever size the panel has.
 -->
 <link rel="stylesheet" href="art_deco_panel.css">
 </head>
@@ -1051,6 +1057,13 @@
 <div hidden>{{72}} {{73}} {{7}} {{65}} {{69}} {{13}} {{29}} {{8}} {{11}} {{12}} {{15}} {{16}} {{19}} {{23}} {{24}} {{27}} {{28}} {{31}} {{32}} {{35}} {{37}} {{39}} {{41}} {{43}} {{45}} {{47}} {{49}} {{51}} {{55}} {{59}} {{63}} {{64}} {{67}} {{68}} {{71}}</div>
 
 <!-- Auto-configuration: which source and field each placeholder wants -->
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "accent", "label": "Accent", "type": "choice", "var": "--accent", "default": "#D4AF37", "choices": [{"value": "#D4AF37", "label": "Gold"}, {"value": "#C08A5B", "label": "Copper"}, {"value": "#4FB39A", "label": "Jade"}, {"value": "#C9C6BE", "label": "Silver"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]}
+]
+</script>
+
 <script type="application/json" id="rg-placeholder-config">
 {
     "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},

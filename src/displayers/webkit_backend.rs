@@ -19,9 +19,7 @@ use webkit6::prelude::WebViewExt;
 use webkit6::{CacheModel, WebView};
 
 use crate::displayers::css_template_backend::{DisplayData, TemplateBackend};
-use crate::ui::css_template_display::{
-    prepare_html_document, transform_template, write_mapped_value,
-};
+use crate::ui::css_template_display::{build_document, write_mapped_value};
 
 /// Global shutdown flag - when set, all CSS template timers will stop
 static SHUTDOWN_FLAG: AtomicBool = AtomicBool::new(false);
@@ -630,13 +628,8 @@ fn load_html_content(data: &Arc<Mutex<DisplayData>>) -> Option<(String, Option<S
     });
 
     html.map(|h| {
-        let transformed = transform_template(&h);
         (
-            prepare_html_document(
-                &transformed,
-                css.as_deref(),
-                data_guard.config.embedded_css.as_deref(),
-            ),
+            build_document(&h, &data_guard.config, css.as_deref()),
             base_uri,
         )
     })

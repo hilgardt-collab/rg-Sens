@@ -100,7 +100,7 @@ pub trait TemplateBackend: Send + Sync {
 
     /// Load and transform the template HTML
     fn load_template(config: &CssTemplateDisplayConfig) -> Option<String> {
-        use crate::ui::css_template_display::{prepare_html_document, transform_template};
+        use crate::ui::css_template_display::build_document;
         use std::fs;
 
         // Get HTML content (from file or embedded)
@@ -162,14 +162,10 @@ pub trait TemplateBackend: Send + Sync {
             None
         };
 
-        // Transform placeholders
-        let transformed = transform_template(&html_content);
-
-        // Prepare complete document
-        Some(prepare_html_document(
-            &transformed,
+        Some(build_document(
+            &html_content,
+            config,
             css_content.as_deref(),
-            config.embedded_css.as_deref(),
         ))
     }
 }

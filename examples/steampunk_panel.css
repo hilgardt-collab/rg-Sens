@@ -13,6 +13,8 @@
 @font-face { font-family: "Special Elite"; font-weight: 400; font-style: normal;
   src: local("Special Elite"), url("fonts/special-elite/SpecialElite-Regular.ttf") format("truetype"); }
 :root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
   --metal: #B5883E;
   --glow: #FF7A1A;
   --motion-fps: 6;

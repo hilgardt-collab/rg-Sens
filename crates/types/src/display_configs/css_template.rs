@@ -91,6 +91,12 @@ pub struct CssTemplateDisplayConfig {
     /// Embedded CSS content (used when no file is specified)
     #[serde(default)]
     pub embedded_css: Option<String>,
+    /// Values chosen for the options the template declares
+    /// (`rg-template-options`), by option id. An option at its default has
+    /// no entry; entries for options the current template does not declare
+    /// are kept but not applied.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub options: std::collections::BTreeMap<String, String>,
 }
 
 fn default_hot_reload() -> bool {
@@ -121,6 +127,7 @@ impl Default for CssTemplateDisplayConfig {
             animation_speed: default_animation_speed(),
             embedded_html: None,
             embedded_css: None,
+            options: std::collections::BTreeMap::new(),
         }
     }
 }

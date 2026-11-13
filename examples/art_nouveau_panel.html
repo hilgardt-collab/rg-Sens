@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
 <title>Art Nouveau Sensor Panel</title>
 <!--
   Art Nouveau sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -37,6 +38,11 @@
   Colours: change the two at the top of art_nouveau_panel.css. Every tint is derived from them.
     metal    gold #C9A24A, copper #B87A4B, rose gold #C98B7A, pewter #BFC3BA
     foliage  sage #8FAE8B, teal #5E9C93, olive #9AA05A, plum #9A7A9E
+
+  Options and size: the settings named above are also on the panel's Display
+  tab in rg-Sens (Template Options, declared in the rg-template-options block
+  below), so the stylesheet need not be edited. The design is drawn for
+  480x1920 and is scaled to whatever size the panel has.
 -->
 <link rel="stylesheet" href="art_nouveau_panel.css">
 </head>
@@ -741,6 +747,14 @@
 <div hidden>{{73}} {{1}} {{2}} {{3}} {{7}} {{8}} {{9}} {{10}} {{11}} {{12}} {{13}} {{14}} {{15}} {{16}} {{17}} {{18}} {{19}} {{23}} {{24}} {{25}} {{26}} {{27}} {{28}} {{29}} {{30}} {{31}} {{32}} {{33}} {{34}} {{35}} {{37}} {{38}} {{39}} {{41}} {{42}} {{43}} {{45}} {{46}} {{47}} {{49}} {{50}} {{51}} {{53}} {{55}} {{57}} {{59}} {{61}} {{63}} {{64}} {{65}} {{67}} {{68}} {{69}} {{71}} {{72}}</div>
 
 <!-- Auto-configuration: which source and field each placeholder wants -->
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "metal", "label": "Metal", "type": "choice", "var": "--metal", "default": "#C9A24A", "choices": [{"value": "#C9A24A", "label": "Gold"}, {"value": "#B87A4B", "label": "Copper"}, {"value": "#C98B7A", "label": "Rose gold"}, {"value": "#BFC3BA", "label": "Pewter"}]},
+    {"id": "foliage", "label": "Foliage", "type": "choice", "var": "--foliage", "default": "#8FAE8B", "choices": [{"value": "#8FAE8B", "label": "Sage"}, {"value": "#5E9C93", "label": "Teal"}, {"value": "#9AA05A", "label": "Olive"}, {"value": "#9A7A9E", "label": "Plum"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]}
+]
+</script>
+
 <script type="application/json" id="rg-placeholder-config">
 {
     "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},

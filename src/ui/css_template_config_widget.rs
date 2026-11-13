@@ -16,8 +16,9 @@ use std::rc::Rc;
 
 use crate::ui::css_template_display::{
     auto_map, bindings, detect_placeholders, extract_placeholder_defaults,
-    extract_placeholder_hints, mapped_value, source_matches, split_hint, wanted_slots, Binding,
-    CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping, SlotKind,
+    extract_placeholder_hints, extract_template_options, mapped_value, source_matches, split_hint,
+    wanted_slots, Binding, CssTemplateDisplayConfig, OptionKind, PlaceholderDefault,
+    PlaceholderMapping, SlotKind, TemplateOption,
 };
 use crate::ui::editor_registry::SlotHost;
 use crate::ui::widget_builder::{create_page_container, create_section_header};
@@ -41,6 +42,8 @@ pub struct CssTemplateConfigWidget {
     hot_reload_check: CheckButton,
     scan_btn: Button,
     bindings: Rc<BindingsPage>,
+    /// The template's own options, on the Display tab.
+    options: Rc<OptionsPane>,
     // Display widgets
     animation_check: CheckButton,
     animation_speed_spin: SpinButton,
@@ -70,6 +73,8 @@ impl CssTemplateConfigWidget {
 
         let (display_page, animation_check, animation_speed_spin) =
             Self::create_display_tab(config.clone(), on_change.clone());
+        let options = OptionsPane::new(config.clone(), on_change.clone());
+        display_page.append(&options.pane);
         notebook.append_page(&display_page, Some(&Label::new(Some("Display"))));
 
         container.append(&notebook);
@@ -84,6 +89,7 @@ impl CssTemplateConfigWidget {
             hot_reload_check,
             scan_btn,
             bindings,
+            options,
             animation_check,
             animation_speed_spin,
         };
@@ -98,6 +104,7 @@ impl CssTemplateConfigWidget {
     fn connect_html_path_handler(&self) {
         let scan_btn = self.scan_btn.clone();
         let bindings = Rc::downgrade(&self.bindings);
+        let options = Rc::downgrade(&self.options);
         let debounce_id: Rc<Cell<u32>> = Rc::new(Cell::new(0));
 
         self.html_path_entry.connect_changed(move |_| {
@@ -105,6 +112,7 @@ impl CssTemplateConfigWidget {
             debounce_id.set(current_id);
             let scan_btn = scan_btn.clone();
             let bindings = bindings.clone();
+            let options = options.clone();
             let debounce_check = debounce_id.clone();
             glib::timeout_add_local_once(
                 std::time::Duration::from_millis(HTML_PATH_DEBOUNCE_MS),
@@ -115,6 +123,9 @@ impl CssTemplateConfigWidget {
                     if let Some(bindings) = bindings.upgrade() {
                         bindings.rebuild();
                         scan_btn.set_sensitive(bindings.template.borrow().readable);
+                    }
+                    if let Some(options) = options.upgrade() {
+                        options.rebuild();
                     }
                 },
             );
@@ -446,6 +457,7 @@ impl CssTemplateConfigWidget {
         self.animation_speed_spin.set_value(config.animation_speed);
 
         self.bindings.rebuild();
+        self.options.rebuild();
         self.scan_btn
             .set_sensitive(self.bindings.template.borrow().readable);
     }
@@ -486,6 +498,201 @@ fn read_template(config: &CssTemplateDisplayConfig) -> Option<String> {
         }
     }
     config.embedded_html.clone()
+}
+
+/// The options the template declares (`rg-template-options`): palette,
+/// scheme, frame rate, how it fits the panel. One row each, on the Display
+/// tab; a value at its default is not stored.
+struct OptionsPane {
+    pane: GtkBox,
+    config: Rc<RefCell<CssTemplateDisplayConfig>>,
+    on_change: ChangeHook,
+}
+
+impl OptionsPane {
+    fn new(config: Rc<RefCell<CssTemplateDisplayConfig>>, on_change: ChangeHook) -> Rc<Self> {
+        let pane = GtkBox::new(Orientation::Vertical, 6);
+        pane.set_margin_top(12);
+        Rc::new(Self {
+            pane,
+            config,
+            on_change,
+        })
+    }
+
+    /// Store a value; the default is stored as "no entry".
+    fn set(&self, option: &TemplateOption, value: &str) {
+        let Some(value) = option.normalize(value) else {
+            return;
+        };
+        {
+            let mut config = self.config.borrow_mut();
+            let current = config.options.get(&option.id);
+            if current == Some(&value) || (current.is_none() && value == option.default) {
+                return;
+            }
+            if value == option.default {
+                config.options.remove(&option.id);
+            } else {
+                config.options.insert(option.id.clone(), value);
+            }
+        }
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
+    }
+
+    fn current(&self, option: &TemplateOption) -> String {
+        self.config
+            .borrow()
+            .options
+            .get(&option.id)
+            .and_then(|v| option.normalize(v))
+            .unwrap_or_else(|| option.default.clone())
+    }
+
+    fn rebuild(self: &Rc<Self>) {
+        while let Some(child) = self.pane.first_child() {
+            self.pane.remove(&child);
+        }
+        let options = read_template(&self.config.borrow())
+            .map(|html| extract_template_options(&html))
+            .unwrap_or_default();
+        self.pane.append(&create_section_header("Template Options"));
+        if options.is_empty() {
+            let none = Label::new(Some("This template has no options of its own."));
+            none.set_xalign(0.0);
+            none.add_css_class("dim-label");
+            self.pane.append(&none);
+            return;
+        }
+        for option in &options {
+            let row = GtkBox::new(Orientation::Horizontal, 12);
+            let label = Label::new(Some(&option.label));
+            label.set_xalign(0.0);
+            label.set_hexpand(true);
+            if !option.help.is_empty() {
+                row.set_tooltip_text(Some(&option.help));
+            }
+            row.append(&label);
+            row.append(&self.control(option));
+            self.pane.append(&row);
+        }
+
+        let reset = Button::with_label("Reset to Template Defaults");
+        reset.set_halign(gtk4::Align::End);
+        reset.set_margin_top(6);
+        let weak = Rc::downgrade(self);
+        reset.connect_clicked(move |_| {
+            let Some(pane) = weak.upgrade() else { return };
+            let changed = {
+                let mut config = pane.config.borrow_mut();
+                let before = config.options.len();
+                config
+                    .options
+                    .retain(|id, _| !options.iter().any(|o| o.id == *id));
+                config.options.len() != before
+            };
+            if changed {
+                if let Some(cb) = pane.on_change.borrow().as_ref() {
+                    cb();
+                }
+            }
+            // On idle: this button is one of the widgets a rebuild replaces.
+            let weak = Rc::downgrade(&pane);
+            glib::idle_add_local_once(move || {
+                if let Some(pane) = weak.upgrade() {
+                    pane.rebuild();
+                }
+            });
+        });
+        self.pane.append(&reset);
+    }
+
+    /// The control for one option. Its value is set before its handler is
+    /// connected, so building the pane never reports a change.
+    fn control(self: &Rc<Self>, option: &TemplateOption) -> gtk4::Widget {
+        let current = self.current(option);
+        let weak = Rc::downgrade(self);
+        let for_set = option.clone();
+        match &option.kind {
+            OptionKind::Choice(choices) => {
+                let labels: Vec<&str> = choices
+                    .iter()
+                    .map(|c| {
+                        if c.label.is_empty() {
+                            c.value.as_str()
+                        } else {
+                            c.label.as_str()
+                        }
+                    })
+                    .collect();
+                let dropdown = DropDown::from_strings(&labels);
+                dropdown.set_selected(
+                    choices.iter().position(|c| c.value == current).unwrap_or(0) as u32
+                );
+                let values: Vec<String> = choices.iter().map(|c| c.value.clone()).collect();
+                dropdown.connect_selected_notify(move |dropdown| {
+                    if let (Some(pane), Some(value)) =
+                        (weak.upgrade(), values.get(dropdown.selected() as usize))
+                    {
+                        pane.set(&for_set, value);
+                    }
+                });
+                dropdown.upcast()
+            }
+            OptionKind::Number { min, max, step } => {
+                let spin = SpinButton::with_range(*min, *max, *step);
+                spin.set_digits(if *step >= 1.0 {
+                    0
+                } else if *step >= 0.1 {
+                    1
+                } else {
+                    2
+                });
+                spin.set_value(current.parse().unwrap_or(*min));
+                spin.connect_value_changed(move |spin| {
+                    if let Some(pane) = weak.upgrade() {
+                        pane.set(&for_set, &spin.value().to_string());
+                    }
+                });
+                spin.upcast()
+            }
+            OptionKind::Color => {
+                let button = gtk4::ColorDialogButton::new(Some(
+                    gtk4::ColorDialog::builder().with_alpha(false).build(),
+                ));
+                if let Ok(rgba) = gtk4::gdk::RGBA::parse(&current) {
+                    button.set_rgba(&rgba);
+                }
+                button.connect_rgba_notify(move |button| {
+                    if let Some(pane) = weak.upgrade() {
+                        let c = button.rgba();
+                        let byte = |f: f32| (f.clamp(0.0, 1.0) * 255.0).round() as u8;
+                        let hex = format!(
+                            "#{:02X}{:02X}{:02X}",
+                            byte(c.red()),
+                            byte(c.green()),
+                            byte(c.blue())
+                        );
+                        pane.set(&for_set, &hex);
+                    }
+                });
+                button.upcast()
+            }
+            OptionKind::Toggle => {
+                let switch = gtk4::Switch::new();
+                switch.set_valign(gtk4::Align::Center);
+                switch.set_active(current == "1");
+                switch.connect_active_notify(move |switch| {
+                    if let Some(pane) = weak.upgrade() {
+                        pane.set(&for_set, if switch.is_active() { "1" } else { "0" });
+                    }
+                });
+                switch.upcast()
+            }
+        }
+    }
 }
 
 /// What a template asks for, as last read.
@@ -1476,8 +1683,9 @@ mod preview {
 
         // The Art Deco example set up by Scan Placeholders, then one binding
         // pointed at a sensor that is gone.
-        let html_path =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/art_deco_panel.html");
+        let template = std::env::var("BINDINGS_TEMPLATE")
+            .unwrap_or_else(|_| "examples/art_deco_panel.html".to_string());
+        let html_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(template);
         let html = std::fs::read_to_string(&html_path).unwrap();
         let (placeholders, defaults) = (
             detect_placeholders(&html),
@@ -1526,7 +1734,12 @@ mod preview {
             .first_child()
             .and_downcast::<Notebook>()
             .unwrap();
-        notebook.set_current_page(Some(1));
+        // BINDINGS_TAB=2 shows the Display tab (template options) instead.
+        let tab = std::env::var("BINDINGS_TAB")
+            .ok()
+            .and_then(|t| t.parse().ok())
+            .unwrap_or(1);
+        notebook.set_current_page(Some(tab));
         let window = gtk4::Window::new();
         window.set_default_size(820, 1000);
         window.set_child(Some(widget.widget()));

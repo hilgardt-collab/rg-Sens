@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1070 1440x720">
 <title>Neon Sensor Panel</title>
 <!--
   Neon sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait.
@@ -49,6 +51,12 @@
   Fonts: Unbounded (numbers) and Space Grotesk (labels) are loaded from the
   fonts folder next to this file; copy that folder along with the template.
   Nothing is fetched from the network.
+
+  Options and size: the settings named above are also on the panel's Display
+  tab in rg-Sens (Template Options, declared in the rg-template-options block
+  below), so the stylesheet need not be edited. The design is drawn for
+  480x1920 and is scaled to whatever size the panel has; in a wide panel
+  its sections are arranged in two or three columns (Layout option).
 -->
 <link rel="stylesheet" href="neon_panel.css">
 </head>
@@ -342,6 +350,20 @@
 
   <div class="bg scanlines" aria-hidden="true"></div>
 </div>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "palette", "label": "Palette", "type": "choice", "default": "cyan", "choices": [{"value": "cyan", "label": "Cyan + Magenta", "set": {"--a": "#22E4FF", "--b": "#FF2BD6"}}, {"value": "lime", "label": "Lime + Cyan", "set": {"--a": "#B6FF3B", "--b": "#22E4FF"}}, {"value": "amber", "label": "Amber + Pink", "set": {"--a": "#FFB020", "--b": "#FF3B8D"}}, {"value": "violet", "label": "Violet + Blue", "set": {"--a": "#9B5CFF", "--b": "#3BA4FF"}}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the sections are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column"}, {"value": "2", "label": "Two columns"}, {"value": "3", "label": "Three columns"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "fan_max", "label": "Fan full scale (RPM)", "type": "number", "var": "--fan-max", "min": 500, "max": 10000, "step": 100, "default": 2400, "help": "Used when a fan has no maximum of its own"}
+]
+</script>
 
 <script type="application/json" id="rg-placeholder-config">
 {

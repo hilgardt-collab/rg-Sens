@@ -20,6 +20,7 @@
 //!   size=WxH                window size (default 900x600)
 //!   snapshot=FILE.png       save what the widget drew after 4 s
 //!   animation=on|off        the panel's Animation switch (default on)
+//!   options=ID=VALUE,...    values for the template's own options
 //! ```
 //!
 //! The backend's own cadence is set through the environment:
@@ -161,6 +162,15 @@ fn main() {
         }
         let mut displayer = CssTemplateDisplayer::with_webkit_backend();
         let mut config = HashMap::new();
+        // options=id=value,id=value sets the template's own options
+        let options: serde_json::Map<String, Value> = arg("options", "")
+            .split(',')
+            .filter_map(|pair| pair.split_once('='))
+            .map(|(id, value)| (id.to_string(), json!(value)))
+            .collect();
+        if !options.is_empty() {
+            css_config["options"] = Value::Object(options);
+        }
         config.insert("css_template_config".to_string(), css_config);
         displayer.apply_config(&config).expect("config applies");
         let displayer = Rc::new(RefCell::new(displayer));
