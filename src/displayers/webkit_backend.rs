@@ -7,7 +7,6 @@
 //! to prevent memory accumulation from WebKitGTK internals.
 
 use gtk4::{glib, prelude::*, Box as GtkBox, DrawingArea, Orientation, Overlay, Widget};
-use serde_json::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
@@ -21,7 +20,7 @@ use webkit6::{CacheModel, WebView};
 
 use crate::displayers::css_template_backend::{DisplayData, TemplateBackend};
 use crate::ui::css_template_display::{
-    prepare_html_document, transform_template, write_format_value_to_buffer, PlaceholderMapping,
+    prepare_html_document, transform_template, write_mapped_value,
 };
 
 /// Global shutdown flag - when set, all CSS template timers will stop
@@ -588,62 +587,6 @@ fn build_js_values(data: &DisplayData) -> String {
     entries.join(", ")
 }
 
-/// Write mapped value to output
-fn write_mapped_value(
-    values: &HashMap<String, Value>,
-    mapping: &PlaceholderMapping,
-    output: &mut String,
-) {
-    if mapping.slot_prefix.is_empty() {
-        output.push_str("--");
-        return;
-    }
-
-    let key = format!("{}_{}", mapping.slot_prefix, mapping.field);
-
-    if let Some(value) = values.get(&key) {
-        write_formatted_value(value, mapping.format.as_deref(), output);
-        return;
-    }
-
-    // The mapping editor and the templates call a slot's limits "min"/"max";
-    // sources publish them as `min_limit`/`max_limit`.
-    if matches!(mapping.field.as_str(), "min" | "max") {
-        let key = format!("{}_{}_limit", mapping.slot_prefix, mapping.field);
-        if let Some(value) = values.get(&key) {
-            write_formatted_value(value, mapping.format.as_deref(), output);
-            return;
-        }
-    }
-
-    if let Some(value) = values.get(&mapping.slot_prefix) {
-        write_formatted_value(value, mapping.format.as_deref(), output);
-        return;
-    }
-
-    output.push_str("--");
-}
-
-/// Write formatted JSON value
-fn write_formatted_value(value: &Value, format: Option<&str>, output: &mut String) {
-    match value {
-        Value::Number(n) => {
-            if let Some(f) = n.as_f64() {
-                write_format_value_to_buffer(f, format, output);
-            } else {
-                use std::fmt::Write;
-                let _ = write!(output, "{}", n);
-            }
-        }
-        Value::String(s) => output.push_str(s),
-        Value::Bool(b) => output.push_str(if *b { "true" } else { "false" }),
-        _ => {
-            use std::fmt::Write;
-            let _ = write!(output, "{}", value);
-        }
-    }
-}
-
 /// Load HTML content from config
 fn load_html_content(data: &Arc<Mutex<DisplayData>>) -> Option<(String, Option<String>)> {
     let data_guard = data.try_lock().ok()?;
@@ -707,6 +650,7 @@ mod tests {
     use super::*;
     use crate::ui::css_template_display::PlaceholderMapping;
     use crate::ui::css_template_display::{detect_placeholders, extract_placeholder_defaults};
+    use serde_json::Value;
 
     fn mapped(values: &HashMap<String, Value>, field: &str) -> String {
         let mapping = PlaceholderMapping {

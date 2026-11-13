@@ -19,7 +19,7 @@ mod pages;
 pub mod schema_combo;
 pub mod schema_editor;
 mod state;
-mod util;
+pub(crate) mod util;
 
 use crate::config::AppConfig;
 use crate::core::Panel;
@@ -163,6 +163,7 @@ pub fn show_tree_properties_dialog(
         display_pages: RefCell::new(Vec::new()),
         background_editor: RefCell::new(None),
         inline_theme_widget: RefCell::new(None),
+        inline_source: RefCell::new(None),
         item_editors: RefCell::new(HashMap::new()),
         group_editors: RefCell::new(HashMap::new()),
         geometry: RefCell::new(None),

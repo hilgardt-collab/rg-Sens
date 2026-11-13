@@ -83,9 +83,13 @@ pub fn combo_summaries(cfg: &ComboSourceConfig) -> Vec<(String, String, usize, u
 /// source id and the source's configured `field` (a slot without its own
 /// config measures what the source's default config does).
 pub fn combo_slot_kinds(cfg: &ComboSourceConfig) -> Vec<crate::ui::css_template_display::SlotKind> {
+    // A slot stores its source's fields flat; one stored under the
+    // `{id}_config` key by an older Scan is read too.
     let field_of = |map: &std::collections::HashMap<String, serde_json::Value>| {
-        map.values()
-            .find_map(|v| v.get("field").and_then(|f| f.as_str()).map(str::to_string))
+        map.get("field")
+            .or_else(|| map.values().find_map(|v| v.get("field")))
+            .and_then(|f| f.as_str())
+            .map(str::to_string)
     };
     let mut out = Vec::new();
     for (g, group) in cfg.groups.iter().enumerate() {
@@ -101,14 +105,62 @@ pub fn combo_slot_kinds(cfg: &ComboSourceConfig) -> Vec<crate::ui::css_template_
                 }
                 _ => (String::new(), String::new()),
             };
+            let label = slot_label(cfg.slots.get(&prefix), &source, &metric);
             out.push(crate::ui::css_template_display::SlotKind {
                 prefix,
                 source,
                 metric,
+                label,
             });
         }
     }
     out
+}
+
+/// `MemoryUsed` as `Memory used`.
+fn humanize(variant: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in variant.chars().enumerate() {
+        if c.is_uppercase() && i > 0 {
+            out.push(' ');
+            out.extend(c.to_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// What the CSS Template's sensor picker calls a slot: the source, what it
+/// measures (its metric, or the sensor a fan / temperature slot reads) and
+/// the caption the user gave it. Never the slot's `group3_8` name.
+fn slot_label(slot: Option<&SlotConfig>, source: &str, metric: &str) -> String {
+    let Some(slot) = slot.filter(|_| !source.is_empty()) else {
+        return "(Not configured)".to_string();
+    };
+    let mut label = source_display_name(source);
+    let sensor = slot
+        .source_config
+        .get("sensor_label")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    match sensor {
+        Some(sensor) => label.push_str(&format!(" · {sensor}")),
+        None if !metric.is_empty() => label.push_str(&format!(" · {}", humanize(metric))),
+        None => {}
+    }
+    if !slot.caption_override.is_empty() {
+        label.push_str(&format!(" ({})", slot.caption_override));
+    }
+    label
+}
+
+/// The sources a new sensor can be made of, as `(id, display name)`.
+pub fn template_source_choices() -> Vec<(String, String)> {
+    TEMPLATE_SOURCES
+        .iter()
+        .map(|id| (id.to_string(), source_display_name(id)))
+        .collect()
 }
 
 /// Source ids a template may name by their first word (`fan`, `system`).
@@ -175,10 +227,18 @@ fn slot_for(wanted_source: &str, metric: &str, nth: usize) -> Option<SlotConfig>
             }
         }
     }
+    // A slot stores the source's own fields, without the `{id}_config`
+    // wrapper: the combo source adds that when it configures the child.
+    let source_config = config
+        .into_values()
+        .next()
+        .and_then(|v| v.as_object().cloned())
+        .map(|o| o.into_iter().collect())
+        .unwrap_or_default();
     Some(SlotConfig {
         source_id: source_id.to_string(),
         caption_override: String::new(),
-        source_config: config,
+        source_config,
     })
 }
 
@@ -190,7 +250,6 @@ fn slot_for(wanted_source: &str, metric: &str, nth: usize) -> Option<SlotConfig>
 /// many slots were created.
 pub fn add_wanted_slots(cfg: &mut ComboSourceConfig, wanted: &[(String, String)]) -> usize {
     use crate::ui::css_template_display::{normalized, source_matches};
-    const MAX: usize = 16; // groups per source, items per group
 
     let configured = |s: &SlotConfig| !s.source_id.is_empty() && s.source_id != "none";
     if !cfg.slots.values().any(configured) {
@@ -215,48 +274,9 @@ pub fn add_wanted_slots(cfg: &mut ComboSourceConfig, wanted: &[(String, String)]
             })
             .count();
         for _ in have..need {
-            let same_source: Vec<_> = combo_slot_kinds(cfg)
-                .into_iter()
-                .filter(|k| source_matches(&k.source, source))
-                .collect();
-            let nth = same_source.len();
-            let Some(slot) = slot_for(source, metric, nth) else {
+            if add_slot(cfg, source, metric).is_none() {
                 break;
-            };
-            // The group that already holds this source type, if it has room.
-            let home = same_source
-                .iter()
-                .filter_map(|k| {
-                    let group: usize = k
-                        .prefix
-                        .strip_prefix("group")?
-                        .split('_')
-                        .next()?
-                        .parse()
-                        .ok()?;
-                    Some(group - 1)
-                })
-                .find(|g| {
-                    cfg.groups
-                        .get(*g)
-                        .is_some_and(|grp| (grp.item_count as usize) < MAX)
-                });
-            let group = match home {
-                Some(g) => {
-                    cfg.groups[g].item_count += 1;
-                    g
-                }
-                None if cfg.groups.len() < MAX => {
-                    cfg.groups.push(crate::sources::GroupConfig {
-                        item_count: 1,
-                        size_weight: 1.0,
-                    });
-                    cfg.groups.len() - 1
-                }
-                None => break,
-            };
-            let prefix = format!("group{}_{}", group + 1, cfg.groups[group].item_count);
-            cfg.slots.insert(prefix, slot);
+            }
             created += 1;
         }
     }
@@ -267,6 +287,56 @@ pub fn add_wanted_slots(cfg: &mut ComboSourceConfig, wanted: &[(String, String)]
         });
     }
     created
+}
+
+/// Add one slot for `(source, metric)` as a template names them: in the
+/// group that already holds that source type when it has room, else in a new
+/// group. Returns the new slot's name, or `None` when no such source exists
+/// or the panel is full.
+pub fn add_slot(cfg: &mut ComboSourceConfig, source: &str, metric: &str) -> Option<String> {
+    use crate::ui::css_template_display::source_matches;
+    const MAX: usize = 16; // groups per source, items per group
+
+    let same_source: Vec<_> = combo_slot_kinds(cfg)
+        .into_iter()
+        .filter(|k| source_matches(&k.source, source))
+        .collect();
+    let slot = slot_for(source, metric, same_source.len())?;
+    // The group that already holds this source type, if it has room.
+    let home = same_source
+        .iter()
+        .filter_map(|k| {
+            let group: usize = k
+                .prefix
+                .strip_prefix("group")?
+                .split('_')
+                .next()?
+                .parse()
+                .ok()?;
+            Some(group - 1)
+        })
+        .find(|g| {
+            cfg.groups
+                .get(*g)
+                .is_some_and(|grp| (grp.item_count as usize) < MAX)
+        });
+    let group = match home {
+        Some(g) => {
+            cfg.groups[g].item_count += 1;
+            g
+        }
+        None if cfg.groups.len() < MAX => {
+            cfg.groups.push(crate::sources::GroupConfig {
+                item_count: 1,
+                size_weight: 1.0,
+            });
+            cfg.groups.len() - 1
+        }
+        None => return None,
+    };
+    let prefix = format!("group{}_{}", group + 1, cfg.groups[group].item_count);
+    cfg.slots.insert(prefix.clone(), slot);
+    Some(prefix)
 }
 
 /// Prefixed field metadata for one slot.
@@ -437,11 +507,7 @@ mod css_template_setup_tests {
                 .slots
                 .values()
                 .filter(|slot| slot.source_id == "fan_speed")
-                .map(|slot| {
-                    slot.source_config["fan_speed_config"]["sensor_index"]
-                        .as_u64()
-                        .unwrap()
-                })
+                .map(|slot| slot.source_config["sensor_index"].as_u64().unwrap())
                 .collect();
             fans.sort();
             assert_eq!(fans, [0, 1, 2, 3]);
@@ -481,6 +547,47 @@ mod css_template_setup_tests {
             // scanning again changes nothing
             assert_eq!(add_wanted_slots(&mut cfg, &wanted), 0);
         }
+    }
+
+    /// A slot Scan Placeholders creates is stored the way every other slot
+    /// is (flat), so the combo source and the item's Source page both read
+    /// the metric the template asked for.
+    #[test]
+    fn created_slots_measure_what_the_template_asked_for() {
+        let mut cfg = ComboSourceConfig::default();
+        add_wanted_slots(&mut cfg, &[("gpu".into(), "power_usage".into())]);
+        let slot = cfg.slots.values().next().unwrap();
+        assert_eq!(slot.source_config["field"], "PowerUsage");
+        let typed = source_config_from_flat("gpu", &slot.source_config).unwrap();
+        assert_eq!(flatten_source_config(&typed)["field"], "PowerUsage");
+    }
+
+    /// A slot edited on its Source page (flat) is recognised by its metric,
+    /// and a slot an older Scan stored wrapped is unwrapped on load.
+    #[test]
+    fn flat_and_legacy_wrapped_slots_are_read_alike() {
+        let mut cfg = ComboSourceConfig::default();
+        add_wanted_slots(&mut cfg, &[("gpu".into(), "power_usage".into())]);
+        let flat = cfg.slots.values().next().unwrap().source_config.clone();
+        let wrapped: HashMap<String, serde_json::Value> = [(
+            "gpu_config".to_string(),
+            serde_json::Value::Object(flat.clone().into_iter().collect()),
+        )]
+        .into();
+        for slot in cfg.slots.values_mut() {
+            slot.source_config = wrapped.clone();
+        }
+        cfg.migrate_legacy();
+        assert_eq!(cfg.slots.values().next().unwrap().source_config, flat);
+        assert_eq!(
+            kinds_of(&cfg),
+            [("gpu".to_string(), "PowerUsage".to_string())]
+        );
+        // nothing new is needed: the slot is the one the template wants
+        assert_eq!(
+            add_wanted_slots(&mut cfg, &[("gpu".into(), "power_usage".into())]),
+            0
+        );
     }
 
     /// Slots the user already made are used wherever they sit, and only the

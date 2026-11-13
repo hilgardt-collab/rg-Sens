@@ -40,8 +40,8 @@ use rg_sens_types::source_configs::cpu::CpuSourceConfig;
 use rg_sens_types::source_configs::fan_speed::FanSpeedConfig;
 use rg_sens_types::source_configs::gpu::GpuSourceConfig;
 use rg_sens_types::source_configs::static_text::StaticTextSourceConfig;
-use rg_sens_types::source_configs::uptime::UptimeSourceConfig;
 use rg_sens_types::source_configs::system_temp::SystemTempConfig;
+use rg_sens_types::source_configs::uptime::UptimeSourceConfig;
 use rg_sens_types::source_configs::{DiskSourceConfig, MemorySourceConfig, NetworkSourceConfig};
 use rg_sens_types::text::TextDisplayerConfig;
 use serde_json::Value;
@@ -59,6 +59,19 @@ pub enum ComboReorder {
     Group { a: usize, b: usize },
     /// Swap two items within a group.
     Item { group: usize, i: usize, j: usize },
+}
+
+/// What the dialog does for an editor that binds to the panel's source
+/// slots by name.
+#[derive(Clone)]
+pub struct SlotHost {
+    /// Create a slot for `(source, metric)`; returns its name.
+    pub create: Rc<dyn Fn(&str, &str) -> Option<String>>,
+    /// The settings editor of a slot's source, to show inline. One at a
+    /// time: asking again retires the previous widget.
+    pub settings: Rc<dyn Fn(&str) -> Option<Widget>>,
+    /// The panel source's current values (`group1_1_value`, ...).
+    pub values: Rc<dyn Fn() -> Option<std::sync::Arc<HashMap<String, serde_json::Value>>>>,
 }
 
 /// Change notification handed to an editor.
@@ -108,6 +121,9 @@ pub trait DisplayEditor {
     fn set_on_request_slots(&self, _cb: Rc<dyn Fn(Vec<(String, String)>)>) {}
     /// What each slot measures (css_template maps placeholders by it).
     fn set_slot_kinds(&self, _kinds: Vec<crate::ui::css_template_display::SlotKind>) {}
+    /// The dialog's services for an editor that binds to source slots
+    /// (css_template's Bindings page).
+    fn set_slot_host(&self, _host: SlotHost) {}
     fn cleanup(&self) {}
     /// An editor may split into pages; the tree shows them as child nodes
     /// of Display. A one-element path is a section; a longer path (a list
@@ -312,6 +328,9 @@ impl DisplayEditor for CssTemplateEditor {
     fn set_on_request_slots(&self, cb: Rc<dyn Fn(Vec<(String, String)>)>) {
         self.0.set_on_request_slots(move |wanted| cb(wanted));
     }
+    fn set_slot_host(&self, host: SlotHost) {
+        self.0.set_slot_host(host);
+    }
 }
 
 // ============================================================================
@@ -433,10 +452,7 @@ pub fn register_all_editors() {
     });
     #[cfg(feature = "webkit")]
     register_display_editor("css_template", |_| {
-        let w = crate::ui::CssTemplateConfigWidget::new();
-        w.connect_auto_config_handler();
-        w.connect_scan_handler();
-        Box::new(CssTemplateEditor(w))
+        Box::new(CssTemplateEditor(crate::ui::CssTemplateConfigWidget::new()))
     });
 
     // Schema-driven combo frames: sections and item pages from the schema.

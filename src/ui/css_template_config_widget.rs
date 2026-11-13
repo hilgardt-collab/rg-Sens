@@ -1,13 +1,13 @@
 //! CSS Template configuration widget
 //!
-//! Provides an interface for configuring CSS Template combo panels,
-//! including template file selection and placeholder mappings.
+//! Template file selection, the Bindings page (which sensor each thing the
+//! template shows reads) and the animation settings.
 
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, DropDown, Entry, FileDialog, Label, Notebook, Orientation,
-    ScrolledWindow, SpinButton, StringList,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, FileDialog, Image, Label, Notebook,
+    Orientation, ScrolledWindow, Separator, SpinButton, StringList,
 };
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -15,26 +15,24 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::ui::css_template_display::{
-    auto_map, detect_placeholders, extract_placeholder_defaults, extract_placeholder_hints,
-    wanted_slots, CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping, SlotKind,
+    auto_map, bindings, detect_placeholders, extract_placeholder_defaults,
+    extract_placeholder_hints, mapped_value, source_matches, split_hint, wanted_slots, Binding,
+    CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping, SlotKind,
 };
+use crate::ui::editor_registry::SlotHost;
 use crate::ui::widget_builder::{create_page_container, create_section_header};
 
 /// Debounce delay for the HTML path entry (reads + parses the template file)
 const HTML_PATH_DEBOUNCE_MS: u64 = 300;
 
+type ChangeHook = Rc<RefCell<Option<Box<dyn Fn()>>>>;
 type SlotRequestHook = Rc<RefCell<Option<Box<dyn Fn(Vec<(String, String)>)>>>>;
 
 /// CSS Template configuration widget
 pub struct CssTemplateConfigWidget {
     container: GtkBox,
     config: Rc<RefCell<CssTemplateDisplayConfig>>,
-    on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-    source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-    placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
-    placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
-    /// What each slot of the panel's source measures; auto-mapping matches on it.
-    slot_kinds: Rc<RefCell<Vec<SlotKind>>>,
+    on_change: ChangeHook,
     /// Asks the dialog to create source slots (Scan Placeholders).
     on_request_slots: SlotRequestHook,
     // Template widgets
@@ -42,9 +40,7 @@ pub struct CssTemplateConfigWidget {
     css_path_entry: Entry,
     hot_reload_check: CheckButton,
     scan_btn: Button,
-    // Mappings widgets
-    mappings_container: GtkBox,
-    auto_config_btn: Button,
+    bindings: Rc<BindingsPage>,
     // Display widgets
     animation_check: CheckButton,
     animation_speed_spin: SpinButton,
@@ -59,36 +55,19 @@ impl CssTemplateConfigWidget {
         container.set_margin_bottom(12);
 
         let config = Rc::new(RefCell::new(CssTemplateDisplayConfig::default()));
-        let on_change: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
-        let source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>> =
-            Rc::new(RefCell::new(Vec::new()));
-        let placeholder_hints: Rc<RefCell<HashMap<u32, String>>> =
-            Rc::new(RefCell::new(HashMap::new()));
-        let placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>> =
-            Rc::new(RefCell::new(HashMap::new()));
-        let slot_kinds: Rc<RefCell<Vec<SlotKind>>> = Rc::new(RefCell::new(Vec::new()));
+        let on_change: ChangeHook = Rc::new(RefCell::new(None));
         let on_request_slots: SlotRequestHook = Rc::new(RefCell::new(None));
 
-        // Create notebook for tabs
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
-        // Template Tab
         let (template_page, html_path_entry, css_path_entry, hot_reload_check, scan_btn) =
             Self::create_template_tab(config.clone(), on_change.clone());
         notebook.append_page(&template_page, Some(&Label::new(Some("Template"))));
 
-        // Mappings Tab
-        let (mappings_page, mappings_container, auto_config_btn) = Self::create_mappings_tab(
-            config.clone(),
-            on_change.clone(),
-            source_summaries.clone(),
-            placeholder_hints.clone(),
-            placeholder_defaults.clone(),
-        );
-        notebook.append_page(&mappings_page, Some(&Label::new(Some("Mappings"))));
+        let bindings = BindingsPage::new(config.clone(), on_change.clone());
+        notebook.append_page(&bindings.page, Some(&Label::new(Some("Bindings"))));
 
-        // Display Tab
         let (display_page, animation_check, animation_speed_spin) =
             Self::create_display_tab(config.clone(), on_change.clone());
         notebook.append_page(&display_page, Some(&Label::new(Some("Display"))));
@@ -99,90 +78,74 @@ impl CssTemplateConfigWidget {
             container,
             config,
             on_change,
-            source_summaries,
-            placeholder_hints,
-            placeholder_defaults,
-            slot_kinds,
             on_request_slots,
             html_path_entry,
             css_path_entry,
             hot_reload_check,
             scan_btn,
-            mappings_container,
-            auto_config_btn,
+            bindings,
             animation_check,
             animation_speed_spin,
         };
-
-        // Connect button handlers
-        widget.connect_auto_config_handler();
         widget.connect_scan_handler();
         widget.connect_html_path_handler();
-
-        // Disable buttons by default until a template is loaded
-        widget.auto_config_btn.set_sensitive(false);
         widget.scan_btn.set_sensitive(false);
-
         widget
     }
 
-    /// Connect handler to update button states when HTML path changes
+    /// A new template path: once typing pauses, read it and show its
+    /// bindings (reading and parsing per keystroke is too slow).
     fn connect_html_path_handler(&self) {
         let scan_btn = self.scan_btn.clone();
-        let auto_config_btn = self.auto_config_btn.clone();
-        let placeholder_hints = self.placeholder_hints.clone();
-        let placeholder_defaults = self.placeholder_defaults.clone();
-        // Debounce counter: reading + parsing the template per keystroke is
-        // expensive, so wait for a typing pause (cancel-and-replace pattern)
+        let bindings = Rc::downgrade(&self.bindings);
         let debounce_id: Rc<Cell<u32>> = Rc::new(Cell::new(0));
 
-        self.html_path_entry.connect_changed(move |entry| {
+        self.html_path_entry.connect_changed(move |_| {
             let current_id = debounce_id.get().wrapping_add(1);
             debounce_id.set(current_id);
-
-            let entry = entry.clone();
             let scan_btn = scan_btn.clone();
-            let auto_config_btn = auto_config_btn.clone();
-            let placeholder_hints = placeholder_hints.clone();
-            let placeholder_defaults = placeholder_defaults.clone();
+            let bindings = bindings.clone();
             let debounce_check = debounce_id.clone();
-
             glib::timeout_add_local_once(
                 std::time::Duration::from_millis(HTML_PATH_DEBOUNCE_MS),
                 move || {
-                    // Only run if this is still the latest change
                     if debounce_check.get() != current_id {
                         return;
                     }
-
-                    let path = PathBuf::from(entry.text().as_str());
-
-                    if !path.as_os_str().is_empty() && path.exists() {
-                        if let Ok(html) = std::fs::read_to_string(&path) {
-                            // Extract hints and defaults
-                            let hints =
-                                crate::ui::css_template_display::extract_placeholder_hints(&html);
-                            *placeholder_hints.borrow_mut() = hints;
-
-                            let defaults =
-                                crate::ui::css_template_display::extract_placeholder_defaults(
-                                    &html,
-                                );
-                            let has_defaults = defaults.values().any(|d| !d.source.is_empty());
-                            *placeholder_defaults.borrow_mut() = defaults;
-
-                            // Enable buttons
-                            scan_btn.set_sensitive(true);
-                            auto_config_btn.set_sensitive(has_defaults);
-                            return;
-                        }
+                    if let Some(bindings) = bindings.upgrade() {
+                        bindings.rebuild();
+                        scan_btn.set_sensitive(bindings.template.borrow().readable);
                     }
-
-                    // Disable buttons if path is invalid
-                    scan_btn.set_sensitive(false);
-                    auto_config_btn.set_sensitive(false);
                 },
             );
+        });
+    }
+
+    /// Scan Placeholders sets the panel up: first the source slots the
+    /// template asks for, then every binding from scratch.
+    fn connect_scan_handler(&self) {
+        let config = self.config.clone();
+        let on_request_slots = self.on_request_slots.clone();
+        let bindings = Rc::downgrade(&self.bindings);
+        self.scan_btn.connect_clicked(move |_| {
+            // No borrow is held across the hook: the dialog answers by
+            // pushing the new slot list back into this widget.
+            let wanted = read_template(&config.borrow())
+                .map(|html| {
+                    wanted_slots(
+                        &detect_placeholders(&html),
+                        &extract_placeholder_defaults(&html),
+                    )
+                })
+                .unwrap_or_default();
+            if !wanted.is_empty() {
+                if let Some(hook) = on_request_slots.borrow().as_ref() {
+                    hook(wanted);
+                }
+            }
+            if let Some(bindings) = bindings.upgrade() {
+                bindings.auto_map(true);
+            }
         });
     }
 
@@ -379,8 +342,8 @@ impl CssTemplateConfigWidget {
         let scan_btn = Button::with_label("Scan Placeholders");
         scan_btn.set_tooltip_text(Some(
             "Set the panel up for this template: add the source slots it asks for\n\
-             (under Content; existing ones are kept) and map every placeholder to\n\
-             its slot. This replaces any existing mappings.",
+             (under Content; existing ones are kept) and bind every placeholder to\n\
+             its sensor. This replaces the existing bindings.",
         ));
         scan_btn.set_sensitive(false); // Enabled when HTML path is valid
         scan_row.append(&scan_btn);
@@ -394,7 +357,7 @@ impl CssTemplateConfigWidget {
         let help_label = Label::new(Some(
             "Use {{0}}, {{1}}, {{2}}, etc. as placeholders in your HTML template.\n\
              \"Scan Placeholders\" adds the sources a template asks for under Content\n\
-             and maps each placeholder to its slot; adjust them on the Mappings tab.",
+             and maps each placeholder to its sensor; adjust them on the Bindings tab.",
         ));
         help_label.set_wrap(true);
         help_label.set_xalign(0.0);
@@ -403,566 +366,6 @@ impl CssTemplateConfigWidget {
         page.append(&help_label);
 
         (page, html_entry, css_entry, hot_reload_check, scan_btn)
-    }
-
-    fn create_mappings_tab(
-        config: Rc<RefCell<CssTemplateDisplayConfig>>,
-        on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
-        _placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
-    ) -> (GtkBox, GtkBox, Button) {
-        let page = create_page_container();
-
-        // Header
-        let header = create_section_header("Placeholder Mappings");
-        page.append(&header);
-
-        let help = Label::new(Some(
-            "Map each placeholder ({{0}}, {{1}}, etc.) to a data source.\n\
-             Hints from the template are shown in italics.\n\
-             Use \"Auto-configure\" to apply template defaults.",
-        ));
-        help.set_xalign(0.0);
-        help.add_css_class("dim-label");
-        page.append(&help);
-
-        // Scrolled container for mappings
-        let scroll = ScrolledWindow::new();
-        scroll.set_vexpand(true);
-        scroll.set_min_content_height(200);
-
-        let mappings_container = GtkBox::new(Orientation::Vertical, 6);
-        mappings_container.set_margin_start(6);
-        mappings_container.set_margin_end(6);
-        mappings_container.set_margin_top(6);
-        mappings_container.set_margin_bottom(6);
-
-        scroll.set_child(Some(&mappings_container));
-        page.append(&scroll);
-
-        // Button row
-        let btn_row = GtkBox::new(Orientation::Horizontal, 6);
-
-        // Auto-configure button
-        let auto_config_btn = Button::with_label("Auto-configure");
-        auto_config_btn.set_tooltip_text(Some(
-            "Map the placeholders that have no source yet to matching source slots,\n\
-             keeping the ones already set (use it after adding sources)",
-        ));
-        // Note: The actual click handler is connected later via connect_auto_config
-        btn_row.append(&auto_config_btn);
-
-        // Add source group button (4 fields: caption, value, unit, max)
-        let add_group_btn = Button::with_label("Add Source Group");
-        add_group_btn.set_tooltip_text(Some(
-            "Add a group of 4 mappings (caption, value, unit, max) for one source",
-        ));
-        let mappings_container_for_group = mappings_container.clone();
-        let config_for_group = config.clone();
-        let on_change_for_group = on_change.clone();
-        let source_summaries_for_group = source_summaries.clone();
-        let placeholder_hints_for_group = placeholder_hints.clone();
-        add_group_btn.connect_clicked(move |_| {
-            let cfg = config_for_group.borrow();
-            let next_idx = cfg.mappings.len() as u32;
-            drop(cfg);
-
-            // Create 4 mappings for the group
-            let fields = ["caption", "value", "unit", "max"];
-            let mut new_mappings = Vec::new();
-            for (i, field) in fields.iter().enumerate() {
-                new_mappings.push(PlaceholderMapping {
-                    index: next_idx + i as u32,
-                    slot_prefix: String::new(),
-                    field: field.to_string(),
-                    format: if *field == "value" {
-                        Some("{:.1}".to_string())
-                    } else {
-                        None
-                    },
-                });
-            }
-
-            // Add to config
-            {
-                let mut cfg = config_for_group.borrow_mut();
-                for mapping in &new_mappings {
-                    cfg.mappings.push(mapping.clone());
-                }
-            }
-
-            // Add the grouped UI
-            Self::add_source_group_row(
-                &mappings_container_for_group,
-                next_idx as usize,
-                &new_mappings,
-                config_for_group.clone(),
-                on_change_for_group.clone(),
-                source_summaries_for_group.clone(),
-                placeholder_hints_for_group.clone(),
-            );
-
-            if let Some(ref cb) = *on_change_for_group.borrow() {
-                cb();
-            }
-        });
-        btn_row.append(&add_group_btn);
-
-        // Add single mapping button
-        let add_btn = Button::with_label("Add Single");
-        add_btn.set_tooltip_text(Some("Add a single placeholder mapping"));
-        let mappings_container_clone = mappings_container.clone();
-        let config_clone = config.clone();
-        let on_change_clone = on_change.clone();
-        let source_summaries_clone = source_summaries.clone();
-        let placeholder_hints_clone = placeholder_hints.clone();
-        add_btn.connect_clicked(move |_| {
-            let cfg = config_clone.borrow();
-            let next_idx = cfg.mappings.len() as u32;
-            drop(cfg);
-
-            let new_mapping = PlaceholderMapping {
-                index: next_idx,
-                slot_prefix: String::new(),
-                field: "value".to_string(),
-                format: None,
-            };
-
-            config_clone.borrow_mut().mappings.push(new_mapping.clone());
-
-            Self::add_mapping_row(
-                &mappings_container_clone,
-                next_idx as usize,
-                &new_mapping,
-                config_clone.clone(),
-                on_change_clone.clone(),
-                source_summaries_clone.clone(),
-                placeholder_hints_clone.clone(),
-            );
-
-            if let Some(ref cb) = *on_change_clone.borrow() {
-                cb();
-            }
-        });
-        btn_row.append(&add_btn);
-
-        page.append(&btn_row);
-
-        (page, mappings_container, auto_config_btn)
-    }
-
-    fn add_mapping_row(
-        container: &GtkBox,
-        row_idx: usize,
-        mapping: &PlaceholderMapping,
-        config: Rc<RefCell<CssTemplateDisplayConfig>>,
-        on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
-    ) {
-        // Create outer vertical box to hold the main row and hint
-        let outer_box = GtkBox::new(Orientation::Vertical, 2);
-        outer_box.set_margin_bottom(6);
-
-        let row = GtkBox::new(Orientation::Horizontal, 6);
-
-        // Index label
-        let idx_label = Label::new(Some(&format!("{{{{{}}}}}", mapping.index)));
-        idx_label.set_width_chars(6);
-        row.append(&idx_label);
-
-        // Add hint label if available
-        let hints = placeholder_hints.borrow();
-        if let Some(hint) = hints.get(&mapping.index) {
-            let hint_label = Label::new(Some(hint));
-            hint_label.set_xalign(0.0);
-            hint_label.add_css_class("dim-label");
-            hint_label.set_markup(&format!("<i>{}</i>", glib::markup_escape_text(hint)));
-            hint_label.set_hexpand(true);
-            hint_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-            hint_label.set_tooltip_text(Some(hint));
-            outer_box.append(&hint_label);
-        }
-        drop(hints);
-
-        // Source dropdown
-        let summaries = source_summaries.borrow();
-        let source_list = StringList::new(&[] as &[&str]);
-        source_list.append("(none)");
-        for (prefix, label, _, _) in summaries.iter() {
-            source_list.append(&format!("{}: {}", prefix, label));
-        }
-        drop(summaries);
-
-        let source_dropdown = DropDown::new(Some(source_list), None::<gtk4::Expression>);
-        source_dropdown.set_hexpand(true);
-
-        // Find current selection
-        if !mapping.slot_prefix.is_empty() {
-            let summaries = source_summaries.borrow();
-            for (i, (prefix, _, _, _)) in summaries.iter().enumerate() {
-                if prefix == &mapping.slot_prefix {
-                    source_dropdown.set_selected((i + 1) as u32);
-                    break;
-                }
-            }
-        }
-
-        let config_for_source = config.clone();
-        let on_change_for_source = on_change.clone();
-        let source_summaries_for_cb = source_summaries.clone();
-        source_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            let mut cfg = config_for_source.borrow_mut();
-            if let Some(mapping) = cfg.mappings.get_mut(row_idx) {
-                if selected == 0 {
-                    mapping.slot_prefix = String::new();
-                } else {
-                    let summaries = source_summaries_for_cb.borrow();
-                    if let Some((prefix, _, _, _)) = summaries.get((selected - 1) as usize) {
-                        mapping.slot_prefix = prefix.clone();
-                    }
-                }
-            }
-            drop(cfg);
-
-            if let Some(ref cb) = *on_change_for_source.borrow() {
-                cb();
-            }
-        });
-
-        row.append(&source_dropdown);
-
-        // Field dropdown
-        // The usual fields, plus this mapping's own when a template asked
-        // for another one a source publishes (the clock's `time`, `day_name`…):
-        // showing such a row as "value" would misreport what it reads.
-        let mut field_names: Vec<String> = ["value", "caption", "unit", "percent", "min", "max"]
-            .iter()
-            .map(|f| f.to_string())
-            .collect();
-        if !mapping.field.is_empty() && !field_names.contains(&mapping.field) {
-            field_names.push(mapping.field.clone());
-        }
-        let field_refs: Vec<&str> = field_names.iter().map(String::as_str).collect();
-        let field_list = StringList::new(&field_refs);
-        let field_dropdown = DropDown::new(Some(field_list), None::<gtk4::Expression>);
-
-        // Find current field selection
-        let field_idx = field_names
-            .iter()
-            .position(|f| f == &mapping.field)
-            .unwrap_or(0);
-        field_dropdown.set_selected(field_idx as u32);
-
-        let config_for_field = config.clone();
-        let on_change_for_field = on_change.clone();
-        field_dropdown.connect_selected_notify(move |dropdown| {
-            let Some(field) = field_names.get(dropdown.selected() as usize) else {
-                return;
-            };
-
-            let mut cfg = config_for_field.borrow_mut();
-            if let Some(mapping) = cfg.mappings.get_mut(row_idx) {
-                mapping.field = field.to_string();
-            }
-            drop(cfg);
-
-            if let Some(ref cb) = *on_change_for_field.borrow() {
-                cb();
-            }
-        });
-
-        row.append(&field_dropdown);
-
-        // Format entry
-        let format_entry = Entry::new();
-        format_entry.set_placeholder_text(Some("Format (e.g., {:.1}%)"));
-        format_entry.set_width_chars(12);
-        if let Some(ref fmt) = mapping.format {
-            format_entry.set_text(fmt);
-        }
-
-        let config_for_format = config.clone();
-        let on_change_for_format = on_change.clone();
-        format_entry.connect_changed(move |entry| {
-            let text = entry.text();
-            let mut cfg = config_for_format.borrow_mut();
-            if let Some(mapping) = cfg.mappings.get_mut(row_idx) {
-                if text.is_empty() {
-                    mapping.format = None;
-                } else {
-                    mapping.format = Some(text.to_string());
-                }
-            }
-            drop(cfg);
-
-            if let Some(ref cb) = *on_change_for_format.borrow() {
-                cb();
-            }
-        });
-
-        row.append(&format_entry);
-
-        // Remove button
-        let remove_btn = Button::with_label("X");
-        let container_for_remove = container.clone();
-        let config_for_remove = config.clone();
-        let on_change_for_remove = on_change.clone();
-        let source_summaries_for_remove = source_summaries.clone();
-        let placeholder_hints_for_remove = placeholder_hints.clone();
-        remove_btn.connect_clicked(move |_| {
-            let mut cfg = config_for_remove.borrow_mut();
-            if row_idx < cfg.mappings.len() {
-                cfg.mappings.remove(row_idx);
-                // Re-index remaining mappings
-                for (i, m) in cfg.mappings.iter_mut().enumerate() {
-                    m.index = i as u32;
-                }
-            }
-            drop(cfg);
-
-            if let Some(ref cb) = *on_change_for_remove.borrow() {
-                cb();
-            }
-
-            // Rebuild all rows so the survivors' captured indices match the
-            // shifted mappings Vec. Deferred: we're inside a click handler of
-            // a button the rebuild is about to destroy.
-            let container = container_for_remove.clone();
-            let config = config_for_remove.clone();
-            let on_change = on_change_for_remove.clone();
-            let source_summaries = source_summaries_for_remove.clone();
-            let placeholder_hints = placeholder_hints_for_remove.clone();
-            glib::idle_add_local_once(move || {
-                Self::rebuild_mapping_rows(
-                    &container,
-                    &config,
-                    &on_change,
-                    &source_summaries,
-                    &placeholder_hints,
-                );
-            });
-        });
-
-        row.append(&remove_btn);
-
-        // Add row to outer box and outer box to container
-        outer_box.append(&row);
-        container.append(&outer_box);
-    }
-
-    /// Add a grouped source mapping row (4 fields: caption, value, unit, max)
-    ///
-    /// This creates a visual group with a single source dropdown that controls
-    /// all 4 field mappings, making it easier to configure common source patterns.
-    fn add_source_group_row(
-        container: &GtkBox,
-        start_idx: usize,
-        mappings: &[PlaceholderMapping],
-        config: Rc<RefCell<CssTemplateDisplayConfig>>,
-        on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
-    ) {
-        // Create a frame to visually group the 4 fields
-        let frame = gtk4::Frame::new(None);
-        frame.set_margin_bottom(8);
-        frame.add_css_class("card");
-
-        let group_box = GtkBox::new(Orientation::Vertical, 4);
-        group_box.set_margin_start(8);
-        group_box.set_margin_end(8);
-        group_box.set_margin_top(8);
-        group_box.set_margin_bottom(8);
-
-        // Header row with source dropdown and remove button
-        let header_row = GtkBox::new(Orientation::Horizontal, 6);
-
-        // Placeholder indices label
-        let indices: Vec<String> = mappings
-            .iter()
-            .map(|m| format!("{{{{{}}}}}", m.index))
-            .collect();
-        let indices_label = Label::new(Some(&indices.join(" ")));
-        indices_label.add_css_class("dim-label");
-        indices_label.set_width_chars(20);
-        header_row.append(&indices_label);
-
-        // Source dropdown (shared for all 4 fields)
-        let summaries = source_summaries.borrow();
-        let source_list = StringList::new(&[] as &[&str]);
-        source_list.append("(none)");
-        for (prefix, label, _, _) in summaries.iter() {
-            source_list.append(&format!("{}: {}", prefix, label));
-        }
-        drop(summaries);
-
-        let source_dropdown = DropDown::new(Some(source_list), None::<gtk4::Expression>);
-        source_dropdown.set_hexpand(true);
-
-        // Find current selection (from first mapping)
-        if !mappings.is_empty() && !mappings[0].slot_prefix.is_empty() {
-            let summaries = source_summaries.borrow();
-            for (i, (prefix, _, _, _)) in summaries.iter().enumerate() {
-                if prefix == &mappings[0].slot_prefix {
-                    source_dropdown.set_selected((i + 1) as u32);
-                    break;
-                }
-            }
-        }
-
-        // Connect source dropdown to update all 4 mappings
-        let config_for_source = config.clone();
-        let on_change_for_source = on_change.clone();
-        let source_summaries_for_cb = source_summaries.clone();
-        let mapping_indices: Vec<usize> = (start_idx..start_idx + mappings.len()).collect();
-        source_dropdown.connect_selected_notify(move |dropdown| {
-            let selected = dropdown.selected();
-            let mut cfg = config_for_source.borrow_mut();
-
-            let new_prefix = if selected == 0 {
-                String::new()
-            } else {
-                let summaries = source_summaries_for_cb.borrow();
-                summaries
-                    .get((selected - 1) as usize)
-                    .map(|(prefix, _, _, _)| prefix.clone())
-                    .unwrap_or_default()
-            };
-
-            // Update all mappings in this group
-            for &idx in &mapping_indices {
-                if let Some(mapping) = cfg.mappings.get_mut(idx) {
-                    mapping.slot_prefix = new_prefix.clone();
-                }
-            }
-            drop(cfg);
-
-            if let Some(ref cb) = *on_change_for_source.borrow() {
-                cb();
-            }
-        });
-
-        header_row.append(&source_dropdown);
-
-        // Remove group button
-        let remove_btn = Button::with_label("Remove");
-        let container_for_remove = container.clone();
-        let config_for_remove = config.clone();
-        let on_change_for_remove = on_change.clone();
-        let source_summaries_for_remove = source_summaries.clone();
-        let placeholder_hints_for_remove = placeholder_hints.clone();
-        let num_mappings = mappings.len();
-        remove_btn.connect_clicked(move |_| {
-            let mut cfg = config_for_remove.borrow_mut();
-
-            // Remove all mappings in this group (in reverse order to maintain indices)
-            for i in (0..num_mappings).rev() {
-                let idx = start_idx + i;
-                if idx < cfg.mappings.len() {
-                    cfg.mappings.remove(idx);
-                }
-            }
-
-            // Re-index remaining mappings
-            for (i, m) in cfg.mappings.iter_mut().enumerate() {
-                m.index = i as u32;
-            }
-            drop(cfg);
-
-            if let Some(ref cb) = *on_change_for_remove.borrow() {
-                cb();
-            }
-
-            // Rebuild all rows so the survivors' captured indices match the
-            // shifted mappings Vec. Deferred: we're inside a click handler of
-            // a button the rebuild is about to destroy.
-            let container = container_for_remove.clone();
-            let config = config_for_remove.clone();
-            let on_change = on_change_for_remove.clone();
-            let source_summaries = source_summaries_for_remove.clone();
-            let placeholder_hints = placeholder_hints_for_remove.clone();
-            glib::idle_add_local_once(move || {
-                Self::rebuild_mapping_rows(
-                    &container,
-                    &config,
-                    &on_change,
-                    &source_summaries,
-                    &placeholder_hints,
-                );
-            });
-        });
-        header_row.append(&remove_btn);
-
-        group_box.append(&header_row);
-
-        // Add a row for each field in the group
-        let hints = placeholder_hints.borrow();
-        for (i, mapping) in mappings.iter().enumerate() {
-            let field_row = GtkBox::new(Orientation::Horizontal, 6);
-
-            // Field label
-            let field_label = Label::new(Some(&format!(
-                "{{{{{}}}}} {}",
-                mapping.index, mapping.field
-            )));
-            field_label.set_width_chars(16);
-            field_label.set_xalign(0.0);
-            field_row.append(&field_label);
-
-            // Hint (if available)
-            if let Some(hint) = hints.get(&mapping.index) {
-                let hint_label = Label::new(None);
-                hint_label.set_markup(&format!("<i>{}</i>", glib::markup_escape_text(hint)));
-                hint_label.set_xalign(0.0);
-                hint_label.set_hexpand(true);
-                hint_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-                hint_label.add_css_class("dim-label");
-                hint_label.set_tooltip_text(Some(hint));
-                field_row.append(&hint_label);
-            } else {
-                let spacer = GtkBox::new(Orientation::Horizontal, 0);
-                spacer.set_hexpand(true);
-                field_row.append(&spacer);
-            }
-
-            // Format entry (mainly useful for value field)
-            let format_entry = Entry::new();
-            format_entry.set_placeholder_text(Some("Format"));
-            format_entry.set_width_chars(10);
-            if let Some(ref fmt) = mapping.format {
-                format_entry.set_text(fmt);
-            }
-
-            let config_for_format = config.clone();
-            let on_change_for_format = on_change.clone();
-            let mapping_idx = start_idx + i;
-            format_entry.connect_changed(move |entry| {
-                let text = entry.text();
-                let mut cfg = config_for_format.borrow_mut();
-                if let Some(mapping) = cfg.mappings.get_mut(mapping_idx) {
-                    if text.is_empty() {
-                        mapping.format = None;
-                    } else {
-                        mapping.format = Some(text.to_string());
-                    }
-                }
-                drop(cfg);
-
-                if let Some(ref cb) = *on_change_for_format.borrow() {
-                    cb();
-                }
-            });
-            field_row.append(&format_entry);
-
-            group_box.append(&field_row);
-        }
-        drop(hints);
-
-        frame.set_child(Some(&group_box));
-        container.append(&frame);
     }
 
     fn create_display_tab(
@@ -1028,7 +431,6 @@ impl CssTemplateConfigWidget {
     pub fn set_config(&self, config: &CssTemplateDisplayConfig) {
         *self.config.borrow_mut() = config.clone();
 
-        // Update widgets
         self.html_path_entry
             .set_text(&config.html_path.to_string_lossy());
         self.css_path_entry.set_text(
@@ -1043,180 +445,9 @@ impl CssTemplateConfigWidget {
         self.animation_check.set_active(config.animation_enabled);
         self.animation_speed_spin.set_value(config.animation_speed);
 
-        // Rebuild mappings (also updates hints from HTML)
-        self.rebuild_mappings();
-    }
-
-    /// Update placeholder hints and defaults from HTML file
-    fn update_hints_from_html(&self, html_path: &std::path::Path) {
-        if !html_path.as_os_str().is_empty() && html_path.exists() {
-            if let Ok(html) = std::fs::read_to_string(html_path) {
-                // Extract hints (which also tries config format first)
-                let hints = extract_placeholder_hints(&html);
-                *self.placeholder_hints.borrow_mut() = hints;
-
-                // Extract defaults for auto-configure
-                let defaults = extract_placeholder_defaults(&html);
-                let has_defaults = defaults.values().any(|d| !d.source.is_empty());
-                *self.placeholder_defaults.borrow_mut() = defaults;
-
-                // Enable scan button when HTML file is valid
-                self.scan_btn.set_sensitive(true);
-
-                // Enable/disable auto-configure button based on whether template has defaults
-                self.auto_config_btn.set_sensitive(has_defaults);
-            } else {
-                *self.placeholder_hints.borrow_mut() = HashMap::new();
-                *self.placeholder_defaults.borrow_mut() = HashMap::new();
-                self.scan_btn.set_sensitive(false);
-                self.auto_config_btn.set_sensitive(false);
-            }
-        } else {
-            *self.placeholder_hints.borrow_mut() = HashMap::new();
-            *self.placeholder_defaults.borrow_mut() = HashMap::new();
-            self.scan_btn.set_sensitive(false);
-            self.auto_config_btn.set_sensitive(false);
-        }
-    }
-
-    /// Map the template's placeholders to the panel's slots and rebuild the
-    /// rows. `replace` starts from scratch (Scan Placeholders); otherwise
-    /// mappings that already have a slot are kept (Auto-configure).
-    ///
-    /// Associated fn (same pattern as `rebuild_mapping_rows`) so both click
-    /// handlers share one implementation.
-    #[allow(clippy::too_many_arguments)]
-    fn map_placeholders(
-        config: &Rc<RefCell<CssTemplateDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        slot_kinds: &Rc<RefCell<Vec<SlotKind>>>,
-        placeholder_hints: &Rc<RefCell<HashMap<u32, String>>>,
-        placeholder_defaults: &Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
-        mappings_container: &GtkBox,
-        replace: bool,
-    ) {
-        // Read the template as it is now: it may have changed on disk since
-        // the path was entered.
-        let html = {
-            let cfg = config.borrow();
-            std::fs::read_to_string(&cfg.html_path)
-                .ok()
-                .or_else(|| cfg.embedded_html.clone())
-        };
-        let placeholders = match &html {
-            Some(html) => {
-                *placeholder_hints.borrow_mut() = extract_placeholder_hints(html);
-                *placeholder_defaults.borrow_mut() = extract_placeholder_defaults(html);
-                detect_placeholders(html)
-            }
-            None => {
-                log::error!("CSS template: cannot read the template to map its placeholders");
-                Vec::new()
-            }
-        };
-        let defaults = placeholder_defaults.borrow();
-        if placeholders.is_empty() && defaults.is_empty() {
-            log::warn!("CSS template: no placeholders found in the template");
-            return;
-        }
-
-        let keep: HashMap<u32, PlaceholderMapping> = if replace {
-            HashMap::new()
-        } else {
-            config
-                .borrow()
-                .mappings
-                .iter()
-                .map(|m| (m.index, m.clone()))
-                .collect()
-        };
-        let new_mappings = auto_map(&placeholders, &defaults, &keep, &slot_kinds.borrow());
-        let mapped = new_mappings
-            .iter()
-            .filter(|m| !m.slot_prefix.is_empty())
-            .count();
-        log::info!(
-            "CSS template: {} placeholders, {} mapped to a source slot",
-            new_mappings.len(),
-            mapped
-        );
-        drop(defaults);
-
-        // Apply new mappings
-        config.borrow_mut().mappings = new_mappings;
-
-        // Rebuild UI
-        Self::rebuild_mapping_rows(
-            mappings_container,
-            config,
-            on_change,
-            source_summaries,
-            placeholder_hints,
-        );
-
-        // Trigger change callback
-        if let Some(ref cb) = *on_change.borrow() {
-            cb();
-        }
-    }
-
-    /// Connect the auto-configure button handler
-    /// This must be called after the widget is fully constructed
-    pub fn connect_auto_config_handler(&self) {
-        self.connect_mapping_button(&self.auto_config_btn, false);
-    }
-
-    /// Connect the scan placeholders button handler.
-    ///
-    /// Reads the template's `{{N}}` placeholders and its
-    /// `rg-placeholder-config` block, replaces the mappings and maps every
-    /// placeholder it can to a slot of the panel's source.
-    pub fn connect_scan_handler(&self) {
-        self.connect_mapping_button(&self.scan_btn, true);
-    }
-
-    fn connect_mapping_button(&self, button: &Button, replace: bool) {
-        let config = self.config.clone();
-        let on_change = self.on_change.clone();
-        let source_summaries = self.source_summaries.clone();
-        let slot_kinds = self.slot_kinds.clone();
-        let placeholder_defaults = self.placeholder_defaults.clone();
-        let placeholder_hints = self.placeholder_hints.clone();
-        let mappings_container = self.mappings_container.clone();
-        let on_request_slots = self.on_request_slots.clone();
-
-        button.connect_clicked(move |_| {
-            if replace {
-                // Scanning sets the panel up: first the source slots the
-                // template asks for, then the mapping onto them. No borrow is
-                // held here, since the dialog answers by pushing the new slot
-                // list back into this widget.
-                let wanted = std::fs::read_to_string(&config.borrow().html_path)
-                    .map(|html| {
-                        wanted_slots(
-                            &detect_placeholders(&html),
-                            &extract_placeholder_defaults(&html),
-                        )
-                    })
-                    .unwrap_or_default();
-                if !wanted.is_empty() {
-                    if let Some(hook) = on_request_slots.borrow().as_ref() {
-                        hook(wanted);
-                    }
-                }
-            }
-            Self::map_placeholders(
-                &config,
-                &on_change,
-                &source_summaries,
-                &slot_kinds,
-                &placeholder_hints,
-                &placeholder_defaults,
-                &mappings_container,
-                replace,
-            );
-        });
+        self.bindings.rebuild();
+        self.scan_btn
+            .set_sensitive(self.bindings.template.borrow().readable);
     }
 
     /// The dialog's handler for "create these source slots".
@@ -1224,121 +455,1098 @@ impl CssTemplateConfigWidget {
         *self.on_request_slots.borrow_mut() = Some(Box::new(f));
     }
 
-    /// What each slot of the panel's source measures (from the tree dialog).
+    /// The dialog's services for the Bindings page: create a sensor, show a
+    /// sensor's settings, read the live values.
+    pub fn set_slot_host(&self, host: SlotHost) {
+        *self.bindings.host.borrow_mut() = Some(host);
+        self.bindings.rebuild();
+    }
+
+    /// The panel's sensors (from the tree dialog): what the picker offers.
     pub fn set_slot_kinds(&self, kinds: Vec<SlotKind>) {
-        *self.slot_kinds.borrow_mut() = kinds;
+        self.bindings.set_kinds(kinds);
     }
 
-    /// Set source summaries directly (from combo widget)
-    pub fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
-        *self.source_summaries.borrow_mut() = summaries;
-        // Rebuild mappings UI to update dropdowns
-        self.rebuild_mappings();
-    }
-
-    /// Set placeholder hints from template
-    pub fn set_placeholder_hints(&self, hints: HashMap<u32, String>) {
-        *self.placeholder_hints.borrow_mut() = hints;
-        // Rebuild mappings UI to show hints
-        self.rebuild_mappings();
-    }
-
-    /// Rebuild the mappings UI
-    ///
-    /// This detects groups of 4 consecutive mappings with the same slot_prefix
-    /// (caption, value, unit, max) and displays them as grouped source rows.
-    fn rebuild_mappings(&self) {
-        // Update hints from the current HTML path
-        {
-            let config = self.config.borrow();
-            self.update_hints_from_html(&config.html_path);
-        }
-
-        Self::rebuild_mapping_rows(
-            &self.mappings_container,
-            &self.config,
-            &self.on_change,
-            &self.source_summaries,
-            &self.placeholder_hints,
-        );
-    }
-
-    /// Clear the mappings container and rebuild every row from the config.
-    ///
-    /// Row handlers capture their construction-time index into `mappings`, so
-    /// after ANY removal the remaining rows must be rebuilt — otherwise their
-    /// stale indices write into (or silently miss) the wrong mappings.
-    fn rebuild_mapping_rows(
-        container: &GtkBox,
-        config: &Rc<RefCell<CssTemplateDisplayConfig>>,
-        on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
-        source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
-        placeholder_hints: &Rc<RefCell<HashMap<u32, String>>>,
-    ) {
-        // Clear existing rows
-        while let Some(child) = container.first_child() {
-            container.remove(&child);
-        }
-
-        // Add rows for each mapping, detecting groups
-        let cfg = config.borrow();
-        let mappings = &cfg.mappings;
-        let mut idx = 0;
-
-        while idx < mappings.len() {
-            // Check if this could be the start of a group (4 consecutive with same prefix)
-            let is_group = if idx + 3 < mappings.len() {
-                let prefix = &mappings[idx].slot_prefix;
-                let fields: Vec<&str> = mappings[idx..idx + 4]
-                    .iter()
-                    .map(|m| m.field.as_str())
-                    .collect();
-
-                // Check if all 4 have the same prefix (including empty) and are caption/value/unit/max
-                let same_prefix = mappings[idx..idx + 4]
-                    .iter()
-                    .all(|m| &m.slot_prefix == prefix);
-
-                let standard_fields = fields == ["caption", "value", "unit", "max"];
-
-                same_prefix && standard_fields
-            } else {
-                false
-            };
-
-            if is_group {
-                // Display as a group
-                let group_mappings: Vec<PlaceholderMapping> = mappings[idx..idx + 4].to_vec();
-
-                Self::add_source_group_row(
-                    container,
-                    idx,
-                    &group_mappings,
-                    config.clone(),
-                    on_change.clone(),
-                    source_summaries.clone(),
-                    placeholder_hints.clone(),
-                );
-                idx += 4;
-            } else {
-                // Display as individual mapping
-                Self::add_mapping_row(
-                    container,
-                    idx,
-                    &mappings[idx],
-                    config.clone(),
-                    on_change.clone(),
-                    source_summaries.clone(),
-                    placeholder_hints.clone(),
-                );
-                idx += 1;
-            }
-        }
-    }
+    /// Kept for the editor interface; the picker is built from
+    /// [`Self::set_slot_kinds`].
+    pub fn set_source_summaries(&self, _summaries: Vec<(String, String, usize, u32)>) {}
 }
 
 impl Default for CssTemplateConfigWidget {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// The template as it is on disk now, else the HTML embedded in the config.
+fn read_template(config: &CssTemplateDisplayConfig) -> Option<String> {
+    if !config.html_path.as_os_str().is_empty() {
+        if let Ok(html) = std::fs::read_to_string(&config.html_path) {
+            return Some(html);
+        }
+    }
+    config.embedded_html.clone()
+}
+
+/// What a template asks for, as last read.
+#[derive(Default)]
+struct Template {
+    readable: bool,
+    placeholders: Vec<u32>,
+    defaults: HashMap<u32, PlaceholderDefault>,
+    hints: HashMap<u32, String>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum RowState {
+    Bound,
+    Unbound,
+    /// Bound to a sensor the panel no longer has.
+    Missing,
+}
+
+/// One binding's widgets, kept for the filter, the live values and label
+/// updates.
+struct Row {
+    outer: GtkBox,
+    state: RowState,
+    /// The open row stays listed whatever the filter says: binding it must
+    /// not make it vanish from under the user.
+    expanded: bool,
+    picker: DropDown,
+    model: StringList,
+    /// The row's value label and the placeholders it shows (value, unit).
+    summary: (Label, Option<u32>, Option<u32>),
+    /// Value labels of the expanded row's placeholders.
+    details: Vec<(u32, Label)>,
+}
+
+const FILTER_ALL: u32 = 0;
+const BASE_FIELDS: [&str; 5] = ["caption", "value", "unit", "min", "max"];
+
+/// The Bindings page: one row per thing the template shows (a gauge, the
+/// clock), each bound to one of the panel's sensors.
+///
+/// The rows come from the template, never from the user: a binding is found
+/// by its placeholder index, so nothing here can renumber or misplace one.
+/// Every closure holds the page weakly; the widgets it builds own those
+/// closures, so a strong reference would be a cycle.
+struct BindingsPage {
+    page: GtkBox,
+    config: Rc<RefCell<CssTemplateDisplayConfig>>,
+    on_change: ChangeHook,
+    kinds: RefCell<Vec<SlotKind>>,
+    host: RefCell<Option<SlotHost>>,
+    template: RefCell<Template>,
+    summary: Label,
+    filter: DropDown,
+    match_btn: Button,
+    scroll: ScrolledWindow,
+    list: GtkBox,
+    rows: RefCell<Vec<Row>>,
+    /// Section headers with the rows under them.
+    sections: RefCell<Vec<(Label, Vec<usize>)>>,
+    /// The expanded binding, by its first placeholder (one at a time: the
+    /// dialog lends one sensor settings editor).
+    expanded: Cell<Option<u32>>,
+    /// Set while this code changes a picker; its handler then stays quiet.
+    updating: Cell<bool>,
+    rebuild_pending: Cell<bool>,
+}
+
+impl BindingsPage {
+    fn new(config: Rc<RefCell<CssTemplateDisplayConfig>>, on_change: ChangeHook) -> Rc<Self> {
+        let page = create_page_container();
+
+        let top = GtkBox::new(Orientation::Horizontal, 6);
+        let summary = Label::new(None);
+        summary.set_xalign(0.0);
+        summary.set_hexpand(true);
+        top.append(&summary);
+        let filter = DropDown::from_strings(&["Show all", "Unbound only"]);
+        top.append(&filter);
+        let match_btn = Button::with_label("Match automatically");
+        match_btn.set_tooltip_text(Some(
+            "Bind what is still unbound to a matching sensor.\n\
+             Bindings you already made are kept.",
+        ));
+        top.append(&match_btn);
+        page.append(&top);
+
+        let scroll = ScrolledWindow::new();
+        scroll.set_vexpand(true);
+        scroll.set_min_content_height(260);
+        scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+        let list = GtkBox::new(Orientation::Vertical, 2);
+        list.set_margin_end(8);
+        scroll.set_child(Some(&list));
+        page.append(&scroll);
+
+        let this = Rc::new(Self {
+            page,
+            config,
+            on_change,
+            kinds: RefCell::new(Vec::new()),
+            host: RefCell::new(None),
+            template: RefCell::new(Template::default()),
+            summary,
+            filter,
+            match_btn,
+            scroll,
+            list,
+            rows: RefCell::new(Vec::new()),
+            sections: RefCell::new(Vec::new()),
+            expanded: Cell::new(None),
+            updating: Cell::new(false),
+            rebuild_pending: Cell::new(false),
+        });
+
+        let weak = Rc::downgrade(&this);
+        this.filter.connect_selected_notify(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.apply_filter();
+            }
+        });
+        let weak = Rc::downgrade(&this);
+        this.match_btn.connect_clicked(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.auto_map(false);
+            }
+        });
+        // Live values, once a second while the page is on screen. The timer
+        // ends with the page.
+        let weak = Rc::downgrade(&this);
+        glib::timeout_add_seconds_local(1, move || match weak.upgrade() {
+            Some(page) => {
+                if page.page.is_mapped() {
+                    page.refresh_values();
+                }
+                glib::ControlFlow::Continue
+            }
+            None => glib::ControlFlow::Break,
+        });
+        this
+    }
+
+    fn emit_change(&self) {
+        if let Some(cb) = self.on_change.borrow().as_ref() {
+            cb();
+        }
+    }
+
+    // ---- model ---------------------------------------------------------
+
+    /// The mapping a placeholder has, or the one the template suggests
+    /// (unbound) when the config has none yet.
+    fn mapping_for(&self, index: u32) -> PlaceholderMapping {
+        if let Some(m) = self
+            .config
+            .borrow()
+            .mappings
+            .iter()
+            .find(|m| m.index == index)
+        {
+            return m.clone();
+        }
+        let template = self.template.borrow();
+        let default = template.defaults.get(&index);
+        PlaceholderMapping {
+            index,
+            slot_prefix: String::new(),
+            field: default
+                .map(|d| d.field.clone())
+                .filter(|f| !f.is_empty())
+                .unwrap_or_else(|| "value".to_string()),
+            format: default.and_then(|d| d.format.clone()),
+        }
+    }
+
+    /// Change one placeholder's mapping, creating it on first edit. Found by
+    /// placeholder index, never by position.
+    fn edit_mapping(&self, index: u32, edit: impl FnOnce(&mut PlaceholderMapping)) {
+        let mut mapping = self.mapping_for(index);
+        edit(&mut mapping);
+        let mut config = self.config.borrow_mut();
+        match config.mappings.iter_mut().find(|m| m.index == index) {
+            Some(existing) => *existing = mapping,
+            None => {
+                config.mappings.push(mapping);
+                config.mappings.sort_by_key(|m| m.index);
+            }
+        }
+    }
+
+    /// The sensor a binding reads: its first placeholder that has one.
+    fn binding_slot(&self, binding: &Binding) -> String {
+        let config = self.config.borrow();
+        binding
+            .indices
+            .iter()
+            .filter_map(|i| config.mappings.iter().find(|m| m.index == *i))
+            .map(|m| m.slot_prefix.clone())
+            .find(|p| !p.is_empty())
+            .unwrap_or_default()
+    }
+
+    fn set_binding_slot(&self, binding: &Binding, slot: &str) {
+        for index in &binding.indices {
+            self.edit_mapping(*index, |m| m.slot_prefix = slot.to_string());
+        }
+    }
+
+    /// Bind the template's placeholders to the panel's sensors. `replace`
+    /// starts from scratch (Scan Placeholders); otherwise what is already
+    /// bound is kept (Match automatically).
+    fn auto_map(self: &Rc<Self>, replace: bool) {
+        self.read();
+        let mappings = {
+            let template = self.template.borrow();
+            if template.placeholders.is_empty() && template.defaults.is_empty() {
+                log::warn!("CSS template: no placeholders found in the template");
+                return;
+            }
+            let keep: HashMap<u32, PlaceholderMapping> = if replace {
+                HashMap::new()
+            } else {
+                self.config
+                    .borrow()
+                    .mappings
+                    .iter()
+                    .map(|m| (m.index, m.clone()))
+                    .collect()
+            };
+            auto_map(
+                &template.placeholders,
+                &template.defaults,
+                &keep,
+                &self.kinds.borrow(),
+            )
+        };
+        self.config.borrow_mut().mappings = mappings;
+        self.rebuild();
+        self.emit_change();
+    }
+
+    /// Read the template as it is now (it may have changed on disk).
+    fn read(&self) {
+        let html = read_template(&self.config.borrow());
+        *self.template.borrow_mut() = match html {
+            Some(html) => Template {
+                readable: true,
+                placeholders: detect_placeholders(&html),
+                defaults: extract_placeholder_defaults(&html),
+                hints: extract_placeholder_hints(&html),
+            },
+            None => Template::default(),
+        };
+    }
+
+    // ---- sensors -------------------------------------------------------
+
+    /// The panel's sensors changed. Same sensors under new names (a metric
+    /// edited inline) only relabels the pickers, so the row being edited
+    /// survives; anything else rebuilds.
+    fn set_kinds(self: &Rc<Self>, kinds: Vec<SlotKind>) {
+        let same_sensors = {
+            let old = self.kinds.borrow();
+            old.len() == kinds.len()
+                && old
+                    .iter()
+                    .zip(&kinds)
+                    .all(|(a, b)| a.prefix == b.prefix && a.source == b.source)
+        };
+        *self.kinds.borrow_mut() = kinds;
+        if !same_sensors || self.rows.borrow().is_empty() {
+            self.rebuild();
+            return;
+        }
+        let labels = self.picker_labels();
+        self.updating.set(true);
+        for row in self.rows.borrow().iter() {
+            let selected = row.picker.selected();
+            for (i, label) in labels.iter().enumerate() {
+                let at = i as u32 + 1;
+                if row.model.string(at).as_deref() != Some(label.as_str()) {
+                    row.model.splice(at, 1, &[label.as_str()]);
+                }
+            }
+            row.picker.set_selected(selected);
+        }
+        self.updating.set(false);
+    }
+
+    /// One picker entry per sensor; sensors that read alike are numbered.
+    fn picker_labels(&self) -> Vec<String> {
+        let kinds = self.kinds.borrow();
+        let mut seen: HashMap<&str, u32> = HashMap::new();
+        kinds
+            .iter()
+            .map(|kind| {
+                let n = seen.entry(kind.label.as_str()).or_insert(0);
+                *n += 1;
+                let twin = kinds.iter().filter(|k| k.label == kind.label).count() > 1;
+                if twin && !kind.source.is_empty() {
+                    format!("{} #{}", kind.label, n)
+                } else {
+                    kind.label.clone()
+                }
+            })
+            .collect()
+    }
+
+    // ---- rows ----------------------------------------------------------
+
+    /// Rebuild on idle, from inside a handler of a widget the rebuild will
+    /// destroy. Keeps the scroll position.
+    fn schedule_rebuild(self: &Rc<Self>) {
+        if self.rebuild_pending.replace(true) {
+            return;
+        }
+        let weak = Rc::downgrade(self);
+        glib::idle_add_local_once(move || {
+            if let Some(page) = weak.upgrade() {
+                page.rebuild_pending.set(false);
+                page.rebuild();
+            }
+        });
+    }
+
+    fn rebuild(self: &Rc<Self>) {
+        let position = self.scroll.vadjustment().value();
+        self.read();
+        while let Some(child) = self.list.first_child() {
+            self.list.remove(&child);
+        }
+        self.rows.borrow_mut().clear();
+        self.sections.borrow_mut().clear();
+
+        let all = {
+            let template = self.template.borrow();
+            bindings(&template.placeholders, &template.defaults, &template.hints)
+        };
+        self.match_btn.set_sensitive(!all.is_empty());
+        if all.is_empty() {
+            let saved = self.config.borrow().mappings.len();
+            let text = if self.template.borrow().readable {
+                "This template has no {{0}}, {{1}}, … placeholders to bind.".to_string()
+            } else if saved > 0 {
+                format!(
+                    "The template cannot be read. Its {saved} saved bindings are kept; \
+                     choose the template on the Template tab to edit them."
+                )
+            } else {
+                "Choose a template on the Template tab. What it shows appears here, \
+                 ready to bind to your sensors."
+                    .to_string()
+            };
+            let empty = Label::new(Some(&text));
+            empty.set_wrap(true);
+            empty.set_xalign(0.0);
+            empty.add_css_class("dim-label");
+            empty.set_margin_top(12);
+            self.list.append(&empty);
+            self.summary.set_text("");
+            return;
+        }
+
+        let mut section = None::<String>;
+        for binding in &all {
+            let title = source_title(&binding.source);
+            if section.as_deref() != Some(title.as_str()) {
+                let header = create_section_header(&title);
+                self.list.append(&header);
+                self.sections.borrow_mut().push((header, Vec::new()));
+                section = Some(title);
+            }
+            let row = self.build_row(binding);
+            self.list.append(&row.outer);
+            let at = self.rows.borrow().len();
+            if let Some((_, rows)) = self.sections.borrow_mut().last_mut() {
+                rows.push(at);
+            }
+            self.rows.borrow_mut().push(row);
+        }
+
+        self.update_summary();
+        self.apply_filter();
+        self.refresh_values();
+        // The list was emptied and refilled; put the view back once it has
+        // its new height.
+        let scroll = self.scroll.clone();
+        glib::idle_add_local_once(move || scroll.vadjustment().set_value(position));
+    }
+
+    fn build_row(self: &Rc<Self>, binding: &Binding) -> Row {
+        let slot = self.binding_slot(binding);
+        let kinds = self.kinds.borrow().clone();
+        let bound_at = kinds.iter().position(|k| k.prefix == slot);
+        let state = match (slot.is_empty(), bound_at) {
+            (true, _) => RowState::Unbound,
+            (false, Some(_)) => RowState::Bound,
+            (false, None) => RowState::Missing,
+        };
+        let first = binding.indices[0];
+        let expanded = self.expanded.get() == Some(first);
+
+        let outer = GtkBox::new(Orientation::Vertical, 4);
+        let head = GtkBox::new(Orientation::Horizontal, 8);
+        head.set_margin_top(2);
+        head.set_margin_bottom(2);
+
+        let toggle = Button::from_icon_name(if expanded {
+            "pan-down-symbolic"
+        } else {
+            "pan-end-symbolic"
+        });
+        toggle.add_css_class("flat");
+        toggle.set_tooltip_text(Some("Placeholders and sensor settings"));
+        let weak = Rc::downgrade(self);
+        toggle.connect_clicked(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.expanded
+                    .set((page.expanded.get() != Some(first)).then_some(first));
+                page.schedule_rebuild();
+            }
+        });
+        head.append(&toggle);
+
+        let (icon, note) = match state {
+            RowState::Bound => ("object-select-symbolic", None),
+            RowState::Unbound => ("dialog-warning-symbolic", Some("not bound")),
+            RowState::Missing => ("dialog-warning-symbolic", Some("its sensor was removed")),
+        };
+        let status = Image::from_icon_name(icon);
+        if state != RowState::Bound {
+            status.add_css_class("warning");
+        }
+        head.append(&status);
+
+        let names = GtkBox::new(Orientation::Vertical, 0);
+        names.set_hexpand(true);
+        let title = Label::new(Some(&binding.title));
+        title.set_xalign(0.0);
+        title.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        names.append(&title);
+        let parts: Vec<String> = binding
+            .indices
+            .iter()
+            .map(|i| self.part_name(*i).to_lowercase())
+            .collect();
+        let subtitle = match note {
+            Some(note) => format!("{} — {}", parts.join(", "), note),
+            None => parts.join(", "),
+        };
+        let subtitle = Label::new(Some(&subtitle));
+        subtitle.set_xalign(0.0);
+        subtitle.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        subtitle.add_css_class("dim-label");
+        subtitle.add_css_class("caption");
+        names.append(&subtitle);
+        head.append(&names);
+
+        // Picker: nothing, the panel's sensors, the missing one, new ones.
+        let model = StringList::new(&["Choose a sensor…"]);
+        for label in self.picker_labels() {
+            model.append(&label);
+        }
+        if state == RowState::Missing {
+            model.append("Removed sensor");
+        }
+        let new_sources = self.new_sources(binding);
+        for (_, name) in &new_sources {
+            model.append(&format!("New {name} sensor"));
+        }
+        let picker = DropDown::new(Some(model.clone()), None::<gtk4::Expression>);
+        picker.set_size_request(240, -1);
+        picker.set_valign(gtk4::Align::Center);
+        picker.set_selected(match (state, bound_at) {
+            (RowState::Bound, Some(at)) => at as u32 + 1,
+            (RowState::Missing, _) => kinds.len() as u32 + 1,
+            _ => 0,
+        });
+        let weak = Rc::downgrade(self);
+        let for_pick = binding.clone();
+        let missing = state == RowState::Missing;
+        picker.connect_selected_notify(move |picker| {
+            let Some(page) = weak.upgrade() else { return };
+            if page.updating.get() {
+                return;
+            }
+            let selected = picker.selected() as usize;
+            let sensors = page.kinds.borrow().len();
+            let slot = if selected == 0 {
+                String::new()
+            } else if selected <= sensors {
+                page.kinds.borrow()[selected - 1].prefix.clone()
+            } else if missing && selected == sensors + 1 {
+                return;
+            } else {
+                let Some((source, _)) = new_sources.get(selected - sensors - 1 - missing as usize)
+                else {
+                    return;
+                };
+                // The template's metric only fits the source it names.
+                let metric = if source_matches(source, &for_pick.source) {
+                    for_pick.metric.as_str()
+                } else {
+                    ""
+                };
+                let host = page.host.borrow().clone();
+                match host.and_then(|h| (h.create)(source, metric)) {
+                    Some(slot) => slot,
+                    None => {
+                        page.schedule_rebuild();
+                        return;
+                    }
+                }
+            };
+            page.set_binding_slot(&for_pick, &slot);
+            // A picked sensor shows its settings at once.
+            page.expanded
+                .set((!slot.is_empty()).then_some(for_pick.indices[0]));
+            page.emit_change();
+            page.schedule_rebuild();
+        });
+        head.append(&picker);
+
+        let value = Label::new(Some("--"));
+        value.set_width_chars(10);
+        value.set_xalign(1.0);
+        value.add_css_class("monospace");
+        head.append(&value);
+        outer.append(&head);
+
+        let field_of = |index: &u32| self.mapping_for(*index).field;
+        let value_index = binding
+            .indices
+            .iter()
+            .copied()
+            .find(|i| field_of(i) == "value")
+            .or(Some(first));
+        let unit_index = binding
+            .indices
+            .iter()
+            .copied()
+            .find(|i| field_of(i) == "unit");
+
+        let mut details = Vec::new();
+        if expanded {
+            let source = bound_at.map(|at| kinds[at].source.clone());
+            outer.append(&self.build_details(binding, state, &slot, source, &mut details));
+        }
+        outer.append(&Separator::new(Orientation::Horizontal));
+
+        Row {
+            outer,
+            state,
+            expanded,
+            picker,
+            model,
+            summary: (value, value_index, unit_index),
+            details,
+        }
+    }
+
+    /// The expanded part of a row: each placeholder's field and format, then
+    /// the bound sensor's own settings.
+    fn build_details(
+        self: &Rc<Self>,
+        binding: &Binding,
+        state: RowState,
+        slot: &str,
+        source: Option<String>,
+        values: &mut Vec<(u32, Label)>,
+    ) -> GtkBox {
+        let details = GtkBox::new(Orientation::Vertical, 4);
+        details.set_margin_start(36);
+        details.set_margin_bottom(8);
+
+        let mut fields: Vec<String> = BASE_FIELDS.iter().map(|f| f.to_string()).collect();
+        if let Some(source) = source.as_deref().filter(|s| !s.is_empty()) {
+            for field in crate::core::global_registry().get_source_fields_cached(source) {
+                if !fields.contains(&field.id) {
+                    fields.push(field.id);
+                }
+            }
+        }
+
+        let grid = gtk4::Grid::new();
+        grid.set_column_spacing(8);
+        grid.set_row_spacing(4);
+        for (line, index) in binding.indices.iter().copied().enumerate() {
+            let mapping = self.mapping_for(index);
+            let line = line as i32;
+
+            let number = Label::new(Some(&format!("{{{{{index}}}}}")));
+            number.set_xalign(0.0);
+            number.add_css_class("monospace");
+            number.add_css_class("dim-label");
+            grid.attach(&number, 0, line, 1, 1);
+
+            let part = Label::new(Some(&self.part_name(index)));
+            part.set_xalign(0.0);
+            part.set_hexpand(true);
+            part.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+            grid.attach(&part, 1, line, 1, 1);
+
+            // The sensor's fields, plus this placeholder's own when it reads
+            // one the list lacks: a row must never misreport what it reads.
+            let mut options = fields.clone();
+            if !options.contains(&mapping.field) {
+                options.push(mapping.field.clone());
+            }
+            let refs: Vec<&str> = options.iter().map(String::as_str).collect();
+            let field = DropDown::from_strings(&refs);
+            field.set_selected(
+                options
+                    .iter()
+                    .position(|f| *f == mapping.field)
+                    .unwrap_or(0) as u32,
+            );
+            field.set_tooltip_text(Some("Which of the sensor's values this placeholder shows"));
+            let weak = Rc::downgrade(self);
+            field.connect_selected_notify(move |field| {
+                let (Some(page), Some(name)) =
+                    (weak.upgrade(), options.get(field.selected() as usize))
+                else {
+                    return;
+                };
+                page.edit_mapping(index, |m| m.field = name.clone());
+                page.emit_change();
+                page.refresh_values();
+            });
+            grid.attach(&field, 2, line, 1, 1);
+
+            let format = Entry::new();
+            format.set_placeholder_text(Some("{:.1}"));
+            format.set_tooltip_text(Some(
+                "Number format: {:.0} for no decimals, {:.1}% for one and a % sign",
+            ));
+            format.set_width_chars(8);
+            format.set_text(mapping.format.as_deref().unwrap_or(""));
+            let weak = Rc::downgrade(self);
+            format.connect_changed(move |format| {
+                let Some(page) = weak.upgrade() else { return };
+                let text = format.text();
+                page.edit_mapping(index, |m| {
+                    m.format = (!text.is_empty()).then(|| text.to_string());
+                });
+                page.emit_change();
+                page.refresh_values();
+            });
+            grid.attach(&format, 3, line, 1, 1);
+
+            let value = Label::new(Some("--"));
+            value.set_width_chars(10);
+            value.set_xalign(1.0);
+            value.add_css_class("monospace");
+            grid.attach(&value, 4, line, 1, 1);
+            values.push((index, value));
+        }
+        details.append(&grid);
+
+        let settings = match state {
+            RowState::Bound => {
+                let host = self.host.borrow().clone();
+                host.and_then(|h| (h.settings)(slot))
+            }
+            _ => None,
+        };
+        match settings {
+            Some(widget) => {
+                let header = Label::new(Some("Sensor settings"));
+                header.set_xalign(0.0);
+                header.add_css_class("dim-label");
+                header.set_margin_top(8);
+                details.append(&header);
+                details.append(&widget);
+            }
+            None => {
+                let text = match state {
+                    RowState::Bound => "This sensor has no settings.",
+                    RowState::Unbound => "Pick a sensor to see its settings here.",
+                    RowState::Missing => {
+                        "The sensor this was bound to is gone from Content. Pick another; \
+                         the binding is kept in case the sensor comes back."
+                    }
+                };
+                let hint = Label::new(Some(text));
+                hint.set_xalign(0.0);
+                hint.set_wrap(true);
+                hint.add_css_class("dim-label");
+                hint.set_margin_top(6);
+                details.append(&hint);
+            }
+        }
+        details
+    }
+
+    /// What a placeholder is within its binding: the part its hint names
+    /// (`Value`), else the field it reads.
+    fn part_name(&self, index: u32) -> String {
+        let template = self.template.borrow();
+        let part = template
+            .hints
+            .get(&index)
+            .map(|hint| split_hint(hint).1.to_string())
+            .unwrap_or_default();
+        if part.is_empty() {
+            drop(template);
+            self.mapping_for(index).field
+        } else {
+            part
+        }
+    }
+
+    /// The sources "New … sensor" offers: the one the template names, or
+    /// every source when it names none.
+    fn new_sources(&self, binding: &Binding) -> Vec<(String, String)> {
+        if self.host.borrow().is_none() {
+            return Vec::new();
+        }
+        let all = crate::ui::config_tree::util::template_source_choices();
+        if binding.source.is_empty() {
+            return all;
+        }
+        let wanted: Vec<_> = all
+            .iter()
+            .filter(|(id, _)| source_matches(id, &binding.source))
+            .cloned()
+            .collect();
+        if wanted.is_empty() {
+            all
+        } else {
+            wanted
+        }
+    }
+
+    // ---- status, filter, live values -----------------------------------
+
+    fn update_summary(&self) {
+        let rows = self.rows.borrow();
+        let count = |state: RowState| rows.iter().filter(|r| r.state == state).count();
+        let mut text = format!("{} bound", count(RowState::Bound));
+        if count(RowState::Unbound) > 0 {
+            text.push_str(&format!(" · {} not bound", count(RowState::Unbound)));
+        }
+        if count(RowState::Missing) > 0 {
+            text.push_str(&format!(" · {} sensor removed", count(RowState::Missing)));
+        }
+        self.summary.set_text(&text);
+    }
+
+    fn apply_filter(&self) {
+        let all = self.filter.selected() == FILTER_ALL;
+        let rows = self.rows.borrow();
+        for row in rows.iter() {
+            row.outer
+                .set_visible(all || row.expanded || row.state != RowState::Bound);
+        }
+        for (header, members) in self.sections.borrow().iter() {
+            header.set_visible(members.iter().any(|at| rows[*at].outer.is_visible()));
+        }
+    }
+
+    fn refresh_values(&self) {
+        let host = self.host.borrow().clone();
+        let Some(values) = host.and_then(|h| (h.values)()) else {
+            return;
+        };
+        let show = |index: u32| mapped_value(&values, &self.mapping_for(index));
+        for row in self.rows.borrow().iter() {
+            let (label, value, unit) = &row.summary;
+            label.set_text(&summary_text(value.map(show), unit.map(show)));
+            for (index, label) in &row.details {
+                label.set_text(&show(*index));
+            }
+        }
+    }
+}
+
+/// What a row shows as its live value: the binding's value with its unit.
+/// `--` when there is no value yet (unbound, or the sensor has not reported).
+fn summary_text(value: Option<String>, unit: Option<String>) -> String {
+    match (value, unit) {
+        (Some(value), Some(unit)) if value != "--" && unit != "--" => format!("{value} {unit}"),
+        (Some(value), _) => value,
+        (None, _) => "--".to_string(),
+    }
+}
+
+/// The section a binding is listed under: the source its template names.
+fn source_title(source: &str) -> String {
+    if source.is_empty() {
+        return "Other".to_string();
+    }
+    crate::ui::config_tree::util::template_source_choices()
+        .into_iter()
+        .find(|(id, _)| source_matches(id, source))
+        .map(|(_, name)| name)
+        .unwrap_or_else(|| source.to_string())
+}
+
+/// Renders the Bindings page to a PNG, for looking at it without the app:
+///
+/// ```bash
+/// gtk4-broadwayd :7 &
+/// GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 GSK_RENDERER=cairo BINDINGS_PNG=/tmp/bindings.png \
+///     cargo test --lib bindings_page_preview -- --ignored
+/// ```
+///
+/// `bindings_page_interactions` runs the same way, on its own: GTK belongs
+/// to the thread that initialised it, so the two cannot share a test run.
+///
+/// ```bash
+/// GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 GSK_RENDERER=cairo \
+///     cargo test --lib bindings_page_interactions -- --ignored
+/// ```
+#[cfg(test)]
+mod preview {
+    use super::*;
+    use crate::ui::config_tree::util::{add_wanted_slots, combo_slot_kinds};
+    use crate::ui::editor_registry;
+    use std::sync::Arc;
+
+    fn pump(ms: u64) {
+        let context = glib::MainContext::default();
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+        while std::time::Instant::now() < until {
+            context.iteration(false);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+
+    /// Drives the pickers the way a user does, against a stand-in for the
+    /// dialog: bind, unbind, create a sensor, relabel a sensor in place.
+    #[test]
+    #[ignore = "needs a display"]
+    fn bindings_page_interactions() {
+        gtk4::init().expect("a display");
+        crate::sources::register_all();
+        editor_registry::register_all_editors();
+
+        let html_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/art_deco_panel.html");
+        let html = std::fs::read_to_string(&html_path).unwrap();
+        let (placeholders, defaults) = (
+            detect_placeholders(&html),
+            extract_placeholder_defaults(&html),
+        );
+        let source = Rc::new(RefCell::new(crate::sources::ComboSourceConfig::default()));
+        add_wanted_slots(
+            &mut source.borrow_mut(),
+            &wanted_slots(&placeholders, &defaults),
+        );
+        let kinds = combo_slot_kinds(&source.borrow());
+        let mappings = auto_map(&placeholders, &defaults, &HashMap::new(), &kinds);
+
+        let widget = Rc::new(CssTemplateConfigWidget::new());
+        let changes = Rc::new(Cell::new(0));
+        let counter = changes.clone();
+        widget.set_on_change(move || counter.set(counter.get() + 1));
+        widget.set_slot_kinds(kinds.clone());
+        let (for_create, weak) = (source.clone(), Rc::downgrade(&widget));
+        widget.set_slot_host(SlotHost {
+            // Like the dialog: the slot exists at once, the new sensor list
+            // reaches the page on idle.
+            create: Rc::new(move |src, metric| {
+                let slot = crate::ui::config_tree::util::add_slot(
+                    &mut for_create.borrow_mut(),
+                    src,
+                    metric,
+                )?;
+                let (source, weak) = (for_create.clone(), weak.clone());
+                glib::idle_add_local_once(move || {
+                    if let Some(w) = weak.upgrade() {
+                        w.set_slot_kinds(combo_slot_kinds(&source.borrow()));
+                    }
+                });
+                Some(slot)
+            }),
+            settings: Rc::new(|_| Some(Label::new(Some("settings")).upcast())),
+            values: Rc::new(|| None),
+        });
+        widget.set_config(&CssTemplateDisplayConfig {
+            html_path,
+            mappings,
+            ..Default::default()
+        });
+        let window = gtk4::Window::new();
+        window.set_child(Some(widget.widget()));
+        window.present();
+        pump(300);
+        changes.set(0);
+
+        let page = &widget.bindings;
+        let slot_of = |index: u32| {
+            widget
+                .get_config()
+                .mappings
+                .iter()
+                .find(|m| m.index == index)
+                .map(|m| m.slot_prefix.clone())
+                .unwrap_or_default()
+        };
+        let pick = |row: usize, item: u32| {
+            let picker = page.rows.borrow()[row].picker.clone();
+            picker.set_selected(item);
+            pump(200);
+        };
+        // rows: 0 clock, 1 CPU temperature (4..=7), 2 CPU usage (8..=11),
+        // 4 CPU power (16..=19, names no source)
+        let usage = slot_of(8);
+        assert_ne!(slot_of(4), usage);
+
+        // bind the gauge to the usage sensor: all four placeholders follow
+        let usage_item = kinds.iter().position(|k| k.prefix == usage).unwrap() as u32 + 1;
+        pick(1, usage_item);
+        assert!((4..=7).all(|i| slot_of(i) == usage));
+        assert_eq!(
+            page.expanded.get(),
+            Some(4),
+            "a picked sensor opens its row"
+        );
+        assert!(changes.get() > 0);
+        assert_eq!(slot_of(8), usage, "other bindings are untouched");
+
+        // unbind it; field and format survive
+        pick(1, 0);
+        assert!((4..=7).all(|i| slot_of(i).is_empty()));
+        let value = widget.get_config().mappings[5].clone();
+        assert_eq!(
+            (value.field.as_str(), value.format.as_deref()),
+            ("value", Some("{:.0}"))
+        );
+        assert!(page.rows.borrow()[1].state == RowState::Unbound);
+
+        // CPU power names no source: a new GPU sensor is made and bound
+        let before = combo_slot_kinds(&source.borrow()).len();
+        let model = page.rows.borrow()[4].model.clone();
+        let new_gpu = (0..model.n_items())
+            .find(|i| model.string(*i).as_deref() == Some("New Gpu sensor"))
+            .expect("unsourced bindings offer every source");
+        pick(4, new_gpu);
+        let kinds_now = combo_slot_kinds(&source.borrow());
+        assert_eq!(kinds_now.len(), before + 1);
+        let made = slot_of(16);
+        assert!(kinds_now
+            .iter()
+            .any(|k| k.prefix == made && k.source == "gpu"));
+        assert!(page.rows.borrow()[4].state == RowState::Bound);
+
+        // a sensor renamed in place (metric edited inline) keeps the rows
+        let mut renamed = kinds_now.clone();
+        let at = renamed.iter().position(|k| k.prefix == made).unwrap();
+        renamed[at].label = "Gpu · Fan speed".to_string();
+        let changes_before = changes.get();
+        widget.set_slot_kinds(renamed);
+        pump(100);
+        {
+            let rows = page.rows.borrow();
+            let row = &rows[4];
+            assert_eq!(
+                row.model.string(row.picker.selected()).as_deref(),
+                Some("Gpu · Fan speed")
+            );
+        }
+        assert_eq!(slot_of(16), made, "relabelling binds nothing");
+        assert_eq!(changes.get(), changes_before);
+
+        // a binding whose sensor is gone is kept and flagged
+        let without: Vec<_> = kinds_now
+            .iter()
+            .filter(|k| k.prefix != made)
+            .cloned()
+            .collect();
+        widget.set_slot_kinds(without);
+        pump(100);
+        assert!(page.rows.borrow()[4].state == RowState::Missing);
+        assert_eq!(slot_of(16), made);
+    }
+
+    #[test]
+    #[ignore = "needs a display; writes $BINDINGS_PNG"]
+    fn bindings_page_preview() {
+        let Ok(path) = std::env::var("BINDINGS_PNG") else {
+            return;
+        };
+        gtk4::init().expect("a display");
+        crate::sources::register_all();
+        editor_registry::register_all_editors();
+
+        // The Art Deco example set up by Scan Placeholders, then one binding
+        // pointed at a sensor that is gone.
+        let html_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/art_deco_panel.html");
+        let html = std::fs::read_to_string(&html_path).unwrap();
+        let (placeholders, defaults) = (
+            detect_placeholders(&html),
+            extract_placeholder_defaults(&html),
+        );
+        let mut source = crate::sources::ComboSourceConfig::default();
+        add_wanted_slots(&mut source, &wanted_slots(&placeholders, &defaults));
+        let kinds = combo_slot_kinds(&source);
+        let mut mappings = auto_map(&placeholders, &defaults, &HashMap::new(), &kinds);
+        for m in mappings.iter_mut().filter(|m| (8..12).contains(&m.index)) {
+            m.slot_prefix = "group9_9".to_string();
+        }
+        let gauge = mappings[5].slot_prefix.clone();
+
+        let widget = CssTemplateConfigWidget::new();
+        widget.set_slot_kinds(kinds);
+        let mut values: HashMap<String, serde_json::Value> = HashMap::new();
+        for (key, value) in [("caption", "CPU Temp"), ("unit", "°C")] {
+            values.insert(format!("{gauge}_{key}"), value.into());
+        }
+        values.insert(format!("{gauge}_value"), 54.3.into());
+        values.insert(format!("{gauge}_max_limit"), 95.0.into());
+        values.insert("group1_1_time".to_string(), "14:32".into());
+        let values = Arc::new(values);
+        let editors: Rc<RefCell<Vec<Box<dyn editor_registry::SourceEditor>>>> = Rc::default();
+        widget.set_slot_host(SlotHost {
+            create: Rc::new(|_, _| None),
+            settings: Rc::new(move |_| {
+                let editor = editor_registry::create_source_editor("cpu")?;
+                let w = editor.widget();
+                editors.borrow_mut().push(editor);
+                Some(w)
+            }),
+            values: Rc::new(move || Some(values.clone())),
+        });
+        widget.set_config(&CssTemplateDisplayConfig {
+            html_path,
+            mappings,
+            ..Default::default()
+        });
+        widget.bindings.expanded.set(Some(4));
+        widget.bindings.rebuild();
+
+        let notebook = widget
+            .widget()
+            .first_child()
+            .and_downcast::<Notebook>()
+            .unwrap();
+        notebook.set_current_page(Some(1));
+        let window = gtk4::Window::new();
+        window.set_default_size(820, 1000);
+        window.set_child(Some(widget.widget()));
+        window.present();
+
+        let context = glib::MainContext::default();
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(1500);
+        while std::time::Instant::now() < until {
+            context.iteration(false);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let (w, h) = (window.width() as f64, window.height() as f64);
+        let paintable = gtk4::WidgetPaintable::new(Some(&window));
+        let snapshot = gtk4::Snapshot::new();
+        gtk4::gdk::prelude::PaintableExt::snapshot(&paintable, &snapshot, w, h);
+        let node = snapshot.to_node().expect("something drawn");
+        let renderer = gtk4::prelude::NativeExt::renderer(&window).expect("a renderer");
+        renderer
+            .render_texture(&node, None)
+            .save_to_png(&path)
+            .unwrap();
     }
 }

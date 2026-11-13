@@ -179,6 +179,165 @@ pub struct SlotKind {
     pub source: String,
     /// The source's configured field (`Temperature`, `MemoryUsed`), if it has one.
     pub metric: String,
+    /// What the sensor picker calls the slot (`GPU · Memory used`).
+    pub label: String,
+}
+
+/// One thing a template shows, bound to one sensor: the placeholders that
+/// read the same slot (a gauge's caption / value / unit / max, a clock's
+/// time and date parts). The Bindings page has one row per binding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Binding {
+    /// From the template's hints (`CPU temperature (gauge)`).
+    pub title: String,
+    /// The source the template asks for; empty when it names none.
+    pub source: String,
+    /// The metric it asks for, as [`PlaceholderDefault::metric`].
+    pub metric: String,
+    /// The placeholders, ascending.
+    pub indices: Vec<u32>,
+}
+
+/// A hint is `"{what} - {part}"` (`CPU usage - Value`); a hint without the
+/// separator is all `what`.
+pub fn split_hint(hint: &str) -> (&str, &str) {
+    match hint.rsplit_once(" - ") {
+        Some((what, part)) => (what.trim(), part.trim()),
+        None => (hint.trim(), ""),
+    }
+}
+
+/// Group a template's placeholders into [`Binding`]s, in template order.
+///
+/// Placeholders share a binding when auto-mapping would give them one slot:
+/// the caption / value / unit / max run of one source, and every placeholder
+/// that names the same source, metric and (non-zero) instance. Anything else
+/// is a binding of its own, so a template without a config block gets one
+/// row per placeholder.
+pub fn bindings(
+    placeholders: &[u32],
+    defaults: &std::collections::HashMap<u32, PlaceholderDefault>,
+    hints: &std::collections::HashMap<u32, String>,
+) -> Vec<Binding> {
+    let indices = all_indices(placeholders, defaults);
+    let mut out: Vec<Binding> = Vec::new();
+    // (source, metric, instance) of a named slot -> its binding
+    let mut named: std::collections::HashMap<(String, String, u32), usize> =
+        std::collections::HashMap::new();
+    for request in requests(&indices, defaults) {
+        let default = defaults.get(&request[0]);
+        let key = default
+            .filter(|d| !d.source.is_empty() && d.instance > 0)
+            .map(|d| (d.source.clone(), d.metric.clone(), d.instance));
+        if let Some(at) = key.as_ref().and_then(|k| named.get(k)) {
+            out[*at].indices.extend_from_slice(request);
+            continue;
+        }
+        let hint = hints.get(&request[0]).map(String::as_str).unwrap_or("");
+        let (what, part) = split_hint(hint);
+        // Placeholders that name no source cannot be grouped by slot; the
+        // ones whose hints name the same thing (`CPU power - Value`) follow
+        // each other into one binding.
+        let unsourced = default.is_none_or(|d| d.source.is_empty());
+        if unsourced && !what.is_empty() && !part.is_empty() {
+            if let Some(last) = out
+                .last_mut()
+                .filter(|b| b.source.is_empty() && b.title == what)
+            {
+                last.indices.extend_from_slice(request);
+                continue;
+            }
+        }
+        // A lone placeholder keeps its whole hint unless more may join it.
+        let title = if what.is_empty() {
+            format!("Placeholder {{{{{}}}}}", request[0])
+        } else if request.len() > 1 || key.is_some() || unsourced || part.is_empty() {
+            what.to_string()
+        } else {
+            hint.trim().to_string()
+        };
+        if let Some(key) = key {
+            named.insert(key, out.len());
+        }
+        out.push(Binding {
+            title,
+            source: default.map(|d| d.source.clone()).unwrap_or_default(),
+            metric: default.map(|d| d.metric.clone()).unwrap_or_default(),
+            indices: request.to_vec(),
+        });
+    }
+    for binding in &mut out {
+        binding.indices.sort_unstable();
+    }
+    out
+}
+
+/// The text a placeholder shows for `mapping`, as the panel renders it:
+/// `--` when unmapped or when the slot has no such value.
+pub fn mapped_value(
+    values: &std::collections::HashMap<String, serde_json::Value>,
+    mapping: &PlaceholderMapping,
+) -> String {
+    let mut out = String::new();
+    write_mapped_value(values, mapping, &mut out);
+    out
+}
+
+/// Write mapped value to output
+pub fn write_mapped_value(
+    values: &std::collections::HashMap<String, serde_json::Value>,
+    mapping: &PlaceholderMapping,
+    output: &mut String,
+) {
+    if mapping.slot_prefix.is_empty() {
+        output.push_str("--");
+        return;
+    }
+
+    let key = format!("{}_{}", mapping.slot_prefix, mapping.field);
+
+    if let Some(value) = values.get(&key) {
+        write_formatted_value(value, mapping.format.as_deref(), output);
+        return;
+    }
+
+    // The mapping editor and the templates call a slot's limits "min"/"max";
+    // sources publish them as `min_limit`/`max_limit`.
+    if matches!(mapping.field.as_str(), "min" | "max") {
+        let key = format!("{}_{}_limit", mapping.slot_prefix, mapping.field);
+        if let Some(value) = values.get(&key) {
+            write_formatted_value(value, mapping.format.as_deref(), output);
+            return;
+        }
+    }
+
+    if let Some(value) = values.get(&mapping.slot_prefix) {
+        write_formatted_value(value, mapping.format.as_deref(), output);
+        return;
+    }
+
+    output.push_str("--");
+}
+
+/// Write formatted JSON value
+pub fn write_formatted_value(value: &serde_json::Value, format: Option<&str>, output: &mut String) {
+    use serde_json::Value;
+    match value {
+        Value::Number(n) => {
+            if let Some(f) = n.as_f64() {
+                write_format_value_to_buffer(f, format, output);
+            } else {
+                use std::fmt::Write;
+                let _ = write!(output, "{}", n);
+            }
+        }
+        Value::String(s) => output.push_str(s),
+        Value::Bool(b) => output.push_str(if *b { "true" } else { "false" }),
+        _ => {
+            use std::fmt::Write;
+            let _ = write!(output, "{}", value);
+        }
+    }
 }
 
 pub(crate) fn normalized(s: &str) -> String {
@@ -659,6 +818,42 @@ mod tests {
         let transformed = transform_template(html);
         assert!(transformed.contains(r#"data-placeholder="0""#));
         assert!(transformed.contains("rg-placeholder"));
+    }
+
+    /// The Art Deco example: the gauge's four placeholders are one binding,
+    /// the clock's five (four up front, the hour hand at the end) another,
+    /// and CPU power, which names no source, still gets its row.
+    #[test]
+    fn bindings_group_what_shares_a_sensor() {
+        let html = include_str!("../../examples/art_deco_panel.html");
+        let (placeholders, defaults, hints) = (
+            detect_placeholders(html),
+            extract_placeholder_defaults(html),
+            extract_placeholder_hints(html),
+        );
+        let all = bindings(&placeholders, &defaults, &hints);
+        let total: usize = all.iter().map(|b| b.indices.len()).sum();
+        assert_eq!(total, 74, "every placeholder is in exactly one binding");
+        assert_eq!(all[0].title, "Clock");
+        assert_eq!(all[0].indices, [0, 1, 2, 3, 72]);
+        assert_eq!(all[1].title, "CPU temperature (gauge)");
+        assert_eq!(all[1].indices, [4, 5, 6, 7]);
+        assert_eq!(
+            (all[1].source.as_str(), all[1].metric.as_str()),
+            ("cpu", "temperature")
+        );
+        let power = all.iter().find(|b| b.indices == [16, 17, 18, 19]).unwrap();
+        assert!(power.source.is_empty());
+    }
+
+    /// No config block: one row per placeholder, named by its number.
+    #[test]
+    fn bindings_without_a_config_block() {
+        let none = std::collections::HashMap::new();
+        let all = bindings(&[0, 3], &none, &std::collections::HashMap::new());
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[1].title, "Placeholder {{3}}");
+        assert_eq!(all[1].indices, [3]);
     }
 
     #[test]

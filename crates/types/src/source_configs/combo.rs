@@ -27,6 +27,24 @@ impl SlotConfig {
             .and_then(Value::as_u64)
             .filter(|&ms| ms > 0)
     }
+
+    /// `source_config` is the source's own fields, flat. An earlier Scan
+    /// Placeholders stored it under the `{source_id}_config` key instead; the
+    /// combo source wraps a slot's config under that key itself, so such a
+    /// slot ran on its source's defaults. Unwrap it; returns whether it was.
+    pub fn unwrap_legacy_config(&mut self) -> bool {
+        let key = format!("{}_config", self.source_id);
+        if self.source_config.len() != 1 {
+            return false;
+        }
+        match self.source_config.get(&key).and_then(Value::as_object) {
+            Some(inner) => {
+                self.source_config = inner.clone().into_iter().collect();
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 /// Configuration for a group of content items
@@ -107,6 +125,9 @@ impl Default for ComboSourceConfig {
 impl ComboSourceConfig {
     /// Migrate legacy primary/secondary config to groups format
     pub fn migrate_legacy(&mut self) {
+        for slot in self.slots.values_mut() {
+            slot.unwrap_legacy_config();
+        }
         if self.groups.is_empty() && (self.primary_count > 0 || self.secondary_count > 0) {
             if self.primary_count > 0 {
                 self.groups.push(GroupConfig {

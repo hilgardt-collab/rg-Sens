@@ -153,6 +153,9 @@ pub struct State {
     pub(super) display_pages: RefCell<Vec<EditorPage>>,
     pub(super) background_editor: RefCell<Option<Rc<BackgroundConfigWidget>>>,
     pub(super) inline_theme_widget: RefCell<Option<Rc<GlobalThemeWidget>>>,
+    /// The one source settings editor a display editor shows inline (the
+    /// CSS Template's Bindings page), with its slot.
+    pub(super) inline_source: RefCell<Option<(String, Rc<Box<dyn SourceEditor>>)>>,
     /// Item editors by slot, built on first use by any page of the item.
     pub(super) item_editors: RefCell<HashMap<String, Rc<ItemEditor>>>,
     /// Title-bar editors by group, built with the group's page (over the
@@ -430,6 +433,7 @@ impl State {
     }
 
     pub(super) fn cleanup_editors(&self) {
+        self.drop_inline_source();
         for (_, item) in self.item_editors.borrow_mut().drain() {
             item.cleanup();
         }
@@ -494,6 +498,7 @@ impl State {
                 s.create_wanted_slots(&wanted);
             }
         }));
+        editor.set_slot_host(self.slot_host());
         let weak = Rc::downgrade(self);
         let has_signal = editor.set_on_change(Rc::new(move || {
             if let Some(s) = weak.upgrade() {
@@ -656,9 +661,11 @@ impl State {
                 editor.load(&cfg);
             }
             let weak = Rc::downgrade(self);
+            let slot_name = slot.to_string();
             let has_signal = editor.set_on_change(Rc::new(move || {
                 if let Some(s) = weak.upgrade() {
                     s.changed();
+                    s.sync_inline_source(&slot_name);
                 }
             }));
             needs_poll.set(!has_signal);
@@ -1000,6 +1007,10 @@ impl State {
             } else {
                 e.set_slot_kinds(kinds);
                 e.set_source_summaries(summaries);
+                // The editor may keep its rows (same sensors in the same
+                // places) and with them the inline settings editor, whose
+                // slot may now hold another config (two items swapped).
+                self.reload_inline_source();
             }
             self.loading.set(false);
         }
@@ -1045,6 +1056,177 @@ impl State {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Slot host (the CSS Template's Bindings page)
+    // ------------------------------------------------------------------
+
+    fn slot_host(self: &Rc<Self>) -> editor_registry::SlotHost {
+        let (create, settings) = (Rc::downgrade(self), Rc::downgrade(self));
+        let panel = self.panel.clone();
+        editor_registry::SlotHost {
+            create: Rc::new(move |source, metric| {
+                create.upgrade().and_then(|s| s.create_slot(source, metric))
+            }),
+            settings: Rc::new(move |slot| {
+                settings
+                    .upgrade()
+                    .and_then(|s| s.inline_source_widget(slot))
+            }),
+            // A once-a-second read for a preview: skipping one is invisible.
+            values: Rc::new(move || {
+                let key = panel.try_read().ok()?.source_key.clone()?;
+                crate::core::global_shared_source_manager()?.get_values(&key)
+            }),
+        }
+    }
+
+    /// A new slot for `(source, metric)`. The editor binds to it as soon as
+    /// this returns; the tree and the editor's slot list follow on idle (the
+    /// call comes from inside one of the editor's own signal handlers).
+    fn create_slot(self: &Rc<Self>, source: &str, metric: &str) -> Option<String> {
+        let slot = self
+            .with_combo(|cs| add_slot(cs, source, metric))
+            .flatten()?;
+        self.defer(|state| state.structure_changed(NodeKind::Display));
+        Some(slot)
+    }
+
+    /// The slot's source config as the dialog holds it now: its item editor
+    /// when one is built (it is what `build_data` stores), else the model.
+    fn current_slot_source(
+        &self,
+        slot: &str,
+    ) -> Option<(String, HashMap<String, serde_json::Value>)> {
+        let (source_id, flat) = self
+            .combo_source
+            .borrow()
+            .as_ref()
+            .and_then(|cs| cs.slots.get(slot))
+            .map(|s| (s.source_id.clone(), s.source_config.clone()))?;
+        let from_item = self.item_editors.borrow().get(slot).and_then(|item| {
+            let cfg = item.source_editor.borrow().as_ref()?.store()?;
+            (cfg.source_type() == source_id).then(|| flatten_source_config(&cfg))
+        });
+        Some((source_id, from_item.unwrap_or(flat)))
+    }
+
+    /// A settings editor for one slot's source, shown inline by the display
+    /// editor. It edits the same config as the item's Source page; the two
+    /// are kept in step (`inline_source_changed`, `sync_inline_source`).
+    fn inline_source_widget(self: &Rc<Self>, slot: &str) -> Option<Widget> {
+        self.drop_inline_source();
+        let (source_id, flat) = self.current_slot_source(slot)?;
+        if !slot_has_source_editor(&source_id) {
+            return None;
+        }
+        let editor = editor_registry::create_source_editor(&source_id)?;
+        if let Some(cfg) = source_config_from_flat(&source_id, &flat) {
+            editor.load(&cfg);
+        }
+        let weak = Rc::downgrade(self);
+        editor.set_on_change(Rc::new(move || {
+            if let Some(s) = weak.upgrade() {
+                s.inline_source_changed();
+            }
+        }));
+        let widget = editor.widget();
+        *self.inline_source.borrow_mut() = Some((slot.to_string(), Rc::new(editor)));
+        Some(widget)
+    }
+
+    /// Make the lent settings editor show its slot's config as it is now;
+    /// retire it when the slot holds another source type. The editor on
+    /// screen is always the one held here: a page that rebuilt its row has
+    /// already asked for a new one.
+    fn reload_inline_source(&self) {
+        let Some((slot, editor)) = self.inline_source.borrow().clone() else {
+            return;
+        };
+        let current = self.current_slot_source(&slot);
+        let same_type = editor.store().map(|c| c.source_type().to_string())
+            == current.as_ref().map(|(id, _)| id.clone());
+        match current {
+            Some((source_id, flat)) if same_type => {
+                if let Some(cfg) = source_config_from_flat(&source_id, &flat) {
+                    let was_loading = self.loading.replace(true);
+                    editor.load(&cfg);
+                    self.loading.set(was_loading);
+                }
+            }
+            _ => self.drop_inline_source(),
+        }
+    }
+
+    pub(super) fn drop_inline_source(&self) {
+        if let Some((_, editor)) = self.inline_source.borrow_mut().take() {
+            editor.cleanup();
+        }
+    }
+
+    /// The inline settings editor changed: store its config in the slot,
+    /// bring the item's Source page along, refresh what the slot is called.
+    fn inline_source_changed(self: &Rc<Self>) {
+        if self.loading.get() {
+            return;
+        }
+        let Some((slot, editor)) = self.inline_source.borrow().clone() else {
+            return;
+        };
+        let Some(cfg) = editor.store() else {
+            return;
+        };
+        let flat = flatten_source_config(&cfg);
+        match self.current_slot_source(&slot) {
+            Some((source_id, current)) if source_id == cfg.source_type() => {
+                if current == flat {
+                    return;
+                }
+            }
+            _ => return,
+        }
+        self.with_combo(|cs| {
+            if let Some(s) = cs.slots.get_mut(&slot) {
+                s.source_config = flat;
+            }
+        });
+        self.loading.set(true);
+        if let Some(item) = self.item_editors.borrow().get(&slot) {
+            if let Some(e) = item.source_editor.borrow().as_ref() {
+                e.load(&cfg);
+            }
+        }
+        let kinds = self.combo_source.borrow().as_ref().map(combo_slot_kinds);
+        if let (Some(kinds), Some(e)) = (kinds, self.display_editor.borrow().as_ref()) {
+            e.set_slot_kinds(kinds);
+        }
+        self.loading.set(false);
+        self.changed();
+    }
+
+    /// The item's Source page changed: the inline editor of that slot follows.
+    fn sync_inline_source(&self, slot: &str) {
+        if self.loading.get() {
+            return;
+        }
+        let Some((inline_slot, editor)) = self.inline_source.borrow().clone() else {
+            return;
+        };
+        if inline_slot != slot {
+            return;
+        }
+        let Some((source_id, flat)) = self.current_slot_source(slot) else {
+            return;
+        };
+        if editor.store().map(|c| flatten_source_config(&c)) == Some(flat.clone()) {
+            return;
+        }
+        if let Some(cfg) = source_config_from_flat(&source_id, &flat) {
+            self.loading.set(true);
+            editor.load(&cfg);
+            self.loading.set(false);
+        }
+    }
+
     /// The CSS Template editor's Scan Placeholders: give the combination
     /// source the slots the template asks for. The editor maps its
     /// placeholders right after this returns, so it gets the new slot list at
@@ -1061,7 +1243,8 @@ impl State {
             .borrow()
             .as_ref()
             .map(|cs| (combo_slot_kinds(cs), combo_summaries(cs)));
-        if let (Some((kinds, summaries)), Some(e)) = (lists, self.display_editor.borrow().as_ref()) {
+        if let (Some((kinds, summaries)), Some(e)) = (lists, self.display_editor.borrow().as_ref())
+        {
             self.loading.set(true);
             e.set_slot_kinds(kinds);
             e.set_source_summaries(summaries);
@@ -1250,6 +1433,27 @@ impl State {
         if let Some(e) = self.display_editor.borrow().as_ref() {
             if let Some(c) = e.combo() {
                 c.reorder(op);
+            } else if let Some(DisplayerConfig::CssTemplate(mut cfg)) = e.store() {
+                // Placeholder mappings name their slot; they follow the
+                // source that moved (1-based in the slot name).
+                use rg_sens_types::combo::reorder::{remap_group_swap, remap_item_swap};
+                for m in cfg
+                    .mappings
+                    .iter_mut()
+                    .filter(|m| !m.slot_prefix.is_empty())
+                {
+                    m.slot_prefix = match op {
+                        ComboReorder::Group { a, b } => {
+                            remap_group_swap(&m.slot_prefix, a + 1, b + 1)
+                        }
+                        ComboReorder::Item { group, i, j } => {
+                            remap_item_swap(&m.slot_prefix, group + 1, i + 1, j + 1)
+                        }
+                    };
+                }
+                self.loading.set(true);
+                e.load(&DisplayerConfig::CssTemplate(cfg));
+                self.loading.set(false);
             }
         }
         self.defer(move |state| state.structure_changed(reselect));
