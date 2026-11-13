@@ -212,6 +212,12 @@ impl CssTemplateConfigWidget {
                             .modal(true)
                             .filters(&filters)
                             .build();
+                        // the template in use, else the bundled examples
+                        let current = config.borrow().html_path.clone();
+                        if let Some(folder) = picker_folder(&[Some(current.as_path())]) {
+                            file_dialog
+                                .set_initial_folder(Some(&gtk4::gio::File::for_path(folder)));
+                        }
 
                         if let Ok(file) = file_dialog.open_future(Some(&window_clone)).await {
                             if let Some(path) = file.path() {
@@ -285,6 +291,17 @@ impl CssTemplateConfigWidget {
                             .modal(true)
                             .filters(&filters)
                             .build();
+                        // the stylesheet in use, else next to the template,
+                        // else the bundled examples
+                        let (css, html) = {
+                            let config = config.borrow();
+                            (config.css_path.clone(), config.html_path.clone())
+                        };
+                        if let Some(folder) = picker_folder(&[css.as_deref(), Some(html.as_path())])
+                        {
+                            file_dialog
+                                .set_initial_folder(Some(&gtk4::gio::File::for_path(folder)));
+                        }
 
                         if let Ok(file) = file_dialog.open_future(Some(&window_clone)).await {
                             if let Some(path) = file.path() {
@@ -1507,6 +1524,53 @@ fn source_title(source: &str) -> String {
 /// GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 GSK_RENDERER=cairo \
 ///     cargo test --lib bindings_page_interactions -- --ignored
 /// ```
+/// Where the example templates are installed, most specific first: the
+/// user's and the system's data directories (`rg-sens/examples`, where the
+/// package puts them), next to the executable (a relocated install), and the
+/// source checkout this binary was built from.
+fn example_dir_candidates() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(home) = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()) {
+        dirs.push(PathBuf::from(home));
+    } else if let Some(home) = std::env::var_os("HOME") {
+        dirs.push(PathBuf::from(home).join(".local/share"));
+    }
+    let system = std::env::var("XDG_DATA_DIRS")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "/usr/local/share:/usr/share".to_string());
+    dirs.extend(system.split(':').filter(|d| !d.is_empty()).map(PathBuf::from));
+    let mut candidates: Vec<PathBuf> = dirs
+        .into_iter()
+        .map(|d| d.join("rg-sens").join("examples"))
+        .collect();
+    if let Some(prefix) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().and_then(|bin| bin.parent()).map(PathBuf::from))
+    {
+        candidates.push(prefix.join("share/rg-sens/examples"));
+    }
+    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples"));
+    candidates
+}
+
+/// The folder a file picker starts in: the folder of the first of `files`
+/// that exists, else the first of `fallbacks` that is a directory.
+fn first_folder(files: &[Option<&std::path::Path>], fallbacks: &[PathBuf]) -> Option<PathBuf> {
+    files
+        .iter()
+        .flatten()
+        .filter(|file| file.is_file())
+        .find_map(|file| file.parent().map(PathBuf::from))
+        .or_else(|| fallbacks.iter().find(|dir| dir.is_dir()).cloned())
+}
+
+/// The folder the template pickers open in: where the file already chosen
+/// is, else the installed example templates.
+fn picker_folder(files: &[Option<&std::path::Path>]) -> Option<PathBuf> {
+    first_folder(files, &example_dir_candidates())
+}
+
 #[cfg(test)]
 mod preview {
     use super::*;
@@ -1761,5 +1825,57 @@ mod preview {
             .render_texture(&node, None)
             .save_to_png(&path)
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod picker_folder_tests {
+    use super::*;
+
+    #[test]
+    fn the_picker_starts_at_the_chosen_file_else_the_examples() {
+        let base = std::env::temp_dir().join(format!("rg-sens-picker-{}", std::process::id()));
+        let own = base.join("own");
+        let examples = base.join("examples");
+        std::fs::create_dir_all(&own).unwrap();
+        std::fs::create_dir_all(&examples).unwrap();
+        let template = own.join("mine.html");
+        std::fs::write(&template, "<html></html>").unwrap();
+        let fallbacks = [base.join("not-installed"), examples.clone()];
+
+        // a template that exists: its own folder
+        assert_eq!(
+            first_folder(&[Some(template.as_path())], &fallbacks),
+            Some(own.clone())
+        );
+        // nothing chosen, or a path that is gone: the first examples folder that exists
+        let gone = own.join("gone.html");
+        assert_eq!(
+            first_folder(&[Some(std::path::Path::new(""))], &fallbacks),
+            Some(examples.clone())
+        );
+        assert_eq!(
+            first_folder(&[Some(gone.as_path())], &fallbacks),
+            Some(examples.clone())
+        );
+        // the stylesheet picker: no stylesheet yet, so next to the template
+        assert_eq!(
+            first_folder(&[None, Some(template.as_path())], &fallbacks),
+            Some(own)
+        );
+        // nothing anywhere: the dialog keeps its own default
+        assert_eq!(first_folder(&[None], &[base.join("not-installed")]), None);
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn the_examples_are_looked_for_where_the_package_installs_them() {
+        let candidates = example_dir_candidates();
+        assert!(candidates
+            .iter()
+            .all(|dir| dir.ends_with("rg-sens/examples") || dir.ends_with("examples")));
+        // a build from source finds its own checkout
+        assert!(candidates.last().unwrap().join("art_deco_panel.html").is_file());
+        assert!(picker_folder(&[None]).is_some());
     }
 }
