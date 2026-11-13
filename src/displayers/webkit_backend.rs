@@ -674,7 +674,7 @@ mod tests {
         assert_eq!(mapped(&values, "min"), "--");
     }
 
-    /// The shipped Art Deco, Art Nouveau and Steampunk examples: every placeholder they
+    /// The shipped Art Deco, Art Nouveau, Steampunk and Neon examples: every placeholder they
     /// use has an auto-configure entry, the numbering has no holes, the two
     /// share one mapping, and none loads anything from the network.
     #[test]
@@ -694,8 +694,14 @@ mod tests {
             }
             assert!(!html.contains("fonts.googleapis.com"));
         }
+        // Neon writes every value from its script (no `{{N}}` in its markup);
+        // its config block alone names the same 74 placeholders.
+        let neon = include_str!("../../examples/neon_panel.html");
+        assert!(detect_placeholders(neon).is_empty());
+        assert!(!neon.contains("fonts.googleapis.com"));
         let deco = extract_placeholder_defaults(deco);
-        for other in [nouveau, steampunk] {
+        assert_eq!(extract_placeholder_defaults(neon).len(), deco.len());
+        for other in [nouveau, steampunk, neon] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {
                 assert_eq!(

@@ -450,10 +450,11 @@ mod css_template_setup_tests {
         auto_map, detect_placeholders, extract_placeholder_defaults, wanted_slots,
     };
 
-    const PANELS: [&str; 3] = [
+    const PANELS: [&str; 4] = [
         include_str!("../../../examples/art_deco_panel.html"),
         include_str!("../../../examples/art_nouveau_panel.html"),
         include_str!("../../../examples/steampunk_panel.html"),
+        include_str!("../../../examples/neon_panel.html"),
     ];
 
     fn kinds_of(cfg: &ComboSourceConfig) -> Vec<(String, String)> {

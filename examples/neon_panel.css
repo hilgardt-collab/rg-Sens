@@ -1,0 +1,233 @@
+/* Neon Sensor Panel: stylesheet for neon_panel.html (rg-Sens CSS Template displayer).
+   Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: Unbounded and Space Grotesk, both SIL Open Font License
+   (OFL.txt in each folder). Keep the fonts folder next to this file; without
+   it the page falls back to the system sans-serif. */
+@font-face { font-family: "Unbounded"; font-weight: 200 900; font-style: normal;
+  src: local("Unbounded"), url("fonts/unbounded/Unbounded%5Bwght%5D.ttf") format("truetype"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 300 700; font-style: normal;
+  src: local("Space Grotesk"), url("fonts/space-grotesk/SpaceGrotesk%5Bwght%5D.ttf") format("truetype"); }
+
+:root {
+  /* Palette: a pair of neon colours. Every tint is derived from them.
+       Cyan + Magenta  #22E4FF  #FF2BD6   (default)
+       Lime + Cyan     #B6FF3B  #22E4FF
+       Amber + Pink    #FFB020  #FF3B8D
+       Violet + Blue   #9B5CFF  #3BA4FF */
+  --a: #22E4FF;
+  --b: #FF2BD6;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a slot has no maximum of its own. Clocks are in GHz
+     (a slot that reports MHz is scaled to match). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  --fan-max: 2400;
+
+  --bg: #05060B;
+  --text: #F4F8FF;
+  --title: #E8F1FF;
+  --date: #C5D3EA;
+  --muted: #8FA3C2;
+  --card-title: #9FB3D1;
+  --track: rgba(255,255,255,0.07);
+  --a-10: color-mix(in srgb, var(--a) 10%, transparent);
+  --a-40: color-mix(in srgb, var(--a) 40%, transparent);
+  --a-60: color-mix(in srgb, var(--a) 60%, transparent);
+  --b-10: color-mix(in srgb, var(--b) 10%, transparent);
+  --b-40: color-mix(in srgb, var(--b) 40%, transparent);
+  --b-60: color-mix(in srgb, var(--b) 60%, transparent);
+}
+html, body { margin: 0; background: var(--bg); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+@keyframes nn-spin { to { transform: rotate(360deg); } }
+@keyframes nn-spin-rev { to { transform: rotate(-360deg); } }
+@keyframes nn-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+@keyframes nn-float { 0%,100% { transform: translate(0,0); } 33% { transform: translate(40px,-30px); } 66% { transform: translate(-30px,25px); } }
+@keyframes nn-scroll { from { background-position: 0 0; } to { background-position: 0 48px; } }
+@keyframes nn-flow { from { stroke-dashoffset: 440; } to { stroke-dashoffset: 0; } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+  background: var(--bg); font-family: "Space Grotesk", sans-serif; color: var(--title);
+  padding: 34px 24px 30px; display: flex; flex-direction: column; justify-content: space-between; }
+.panel > header, .panel > section, .panel > footer { position: relative; z-index: 1; }
+.uni { font-family: "Unbounded", sans-serif; }
+.defs { position: absolute; top: 0; left: 0; }
+.stop-a { stop-color: var(--a); }
+.stop-b { stop-color: var(--b); }
+
+/* ---- background ---- */
+.bg { position: absolute; z-index: 0; pointer-events: none; }
+.bg-grid { inset: 0;
+  background-image: linear-gradient(color-mix(in srgb, var(--a) 7%, transparent) 1px, transparent 1px),
+                    linear-gradient(90deg, color-mix(in srgb, var(--a) 7%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 35%, #000 20%, transparent 80%);
+          mask-image: radial-gradient(ellipse 80% 60% at 50% 35%, #000 20%, transparent 80%); }
+/* The design blurs a disc by 70px; a radial gradient gives the same soft
+   glow without a filter, so a drifting glow costs almost nothing to repaint. */
+.glow { border-radius: 50%; background: radial-gradient(closest-side, var(--c) 0%, color-mix(in srgb, var(--c) 55%, transparent) 45%, transparent 100%); }
+.glow.g1 { --c: color-mix(in srgb, var(--a) 26%, transparent); left: -190px; top: -150px; width: 520px; height: 520px; animation: nn-float 22s ease-in-out 0s infinite; }
+.glow.g2 { --c: color-mix(in srgb, var(--b) 22%, transparent); right: -210px; top: 570px; width: 560px; height: 560px; animation: nn-float 28s ease-in-out -7s infinite; }
+.glow.g3 { --c: color-mix(in srgb, var(--a) 17%, transparent); left: -230px; top: 1190px; width: 540px; height: 540px; animation: nn-float 34s ease-in-out -14s infinite; }
+.floor { left: 0; right: 0; bottom: 0; height: 420px; overflow: hidden; perspective: 320px;
+  -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 90%);
+          mask-image: linear-gradient(to top, #000 10%, transparent 90%); }
+.floor > div { position: absolute; left: -360px; width: 1200px; bottom: -40px; height: 900px;
+  transform-origin: 50% 100%; transform: rotateX(74deg);
+  background-image: linear-gradient(var(--b-40) 2px, transparent 2px), linear-gradient(90deg, var(--b-40) 2px, transparent 2px);
+  background-size: 48px 48px; animation: nn-scroll 2.4s linear infinite; }
+.horizon { left: 0; right: 0; bottom: 404px; height: 2px; opacity: .55;
+  background: linear-gradient(90deg, transparent, var(--b) 30%, var(--a) 70%, transparent);
+  box-shadow: 0 0 18px var(--b), 0 0 40px var(--a); }
+.scanlines { inset: 0; z-index: 3;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 3px); }
+
+/* ---- shared bits ---- */
+.label { font-size: 10px; font-weight: 600; letter-spacing: .24em; color: var(--muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--a); box-shadow: 0 0 8px var(--a); animation: nn-pulse 2s ease-in-out infinite; }
+.alt .dot { background: var(--b); box-shadow: 0 0 8px var(--b); }
+.spin { transform-box: view-box; }
+.glow-a { filter: drop-shadow(0 0 4px var(--a)); }
+.glow-b { filter: drop-shadow(0 0 4px var(--b)); }
+
+/* ---- header ---- */
+header { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; align-self: stretch; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; letter-spacing: .32em; }
+.live { display: flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--a-40); background: var(--a-10); font-size: 10px; font-weight: 600; letter-spacing: .24em; color: var(--a); }
+.hud { position: relative; width: 280px; height: 280px; }
+.hud svg { position: absolute; top: 0; left: 0; overflow: visible; }
+.hud .spin { transform-origin: 140px 140px; }
+.hud-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.hud-text .label { font-size: 10px; letter-spacing: .34em; padding-left: .34em; }
+.clock { font-weight: 300; font-size: 58px; line-height: 1; letter-spacing: -.01em;
+  background: linear-gradient(100deg, var(--a) 0%, #FFFFFF 50%, var(--b) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  filter: drop-shadow(0 0 14px var(--a-40)); }
+.date { font-size: 12px; font-weight: 500; letter-spacing: .26em; color: var(--date); padding-left: .26em; text-transform: uppercase; }
+.tick { stroke: rgba(255,255,255,0.18); stroke-width: 1; stroke-linecap: round; }
+.tick.major { stroke: color-mix(in srgb, var(--a) 80%, transparent); stroke-width: 2; }
+.tick.now { stroke: var(--b); stroke-width: 3; }
+
+/* ---- cards ---- */
+.card { border-radius: 22px; padding: 1px;
+  background: linear-gradient(135deg, var(--a) 0%, rgba(255,255,255,0.08) 32%, rgba(255,255,255,0.04) 68%, var(--b) 100%);
+  box-shadow: 0 0 34px color-mix(in srgb, var(--a) 12%, transparent); }
+.card.alt { background: linear-gradient(225deg, var(--b) 0%, rgba(255,255,255,0.08) 32%, rgba(255,255,255,0.04) 68%, var(--a) 100%);
+  box-shadow: 0 0 34px color-mix(in srgb, var(--b) 12%, transparent); }
+/* The design frosts what is behind a card (backdrop-filter: blur). The fill is
+   82-90% opaque, so that is left out: it would re-blur the whole card every
+   time the background moves. */
+.card-in { border-radius: 21px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
+  background: linear-gradient(160deg, rgba(22,26,44,0.86) 0%, rgba(8,9,16,0.93) 100%); }
+.card.alt .card-in { background: linear-gradient(200deg, rgba(22,26,44,0.86) 0%, rgba(8,9,16,0.93) 100%); }
+.card-in.roomy { gap: 12px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; }
+.card-head > div { display: flex; align-items: center; gap: 9px; }
+.card-head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .3em; color: var(--card-title); }
+.note { font-size: 10px; font-weight: 600; letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
+.badge { font-size: 10px; font-weight: 600; letter-spacing: .2em; padding: 4px 10px; border-radius: 999px;
+  --c: var(--a); color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 10%, transparent); }
+.badge.warn { --c: #FFB020; }
+.badge.hot { --c: #FF3B6B; }
+
+/* ---- ring gauge: its colours turn amber from 72 and red from 85 ---- */
+.core { display: flex; align-items: center; gap: 16px; }
+.gauge { position: relative; width: 190px; height: 190px; flex: none; --ga: var(--a); --gb: var(--b); --gs: var(--a); }
+.gauge.warn { --ga: #FFB020; --gb: #FF5E3A; --gs: #FFB020; }
+.gauge.hot { --ga: #FF3B6B; --gb: #FF2BD6; --gs: #FF3B6B; }
+.gauge svg { position: absolute; top: 0; left: 0; }
+.gauge .spin { transform-origin: 100px 100px; }
+.gauge .g0 { stop-color: var(--ga); }
+.gauge .g1 { stop-color: var(--gb); }
+.gauge .track { fill: none; stroke: var(--track); stroke-width: 10; stroke-linecap: round; }
+.gauge .arc { fill: none; stroke-width: 10; stroke-linecap: round; filter: drop-shadow(0 0 6px var(--ga)); }
+.gauge .gtick { stroke: rgba(255,255,255,0.12); stroke-width: 2; stroke-linecap: round; }
+.gauge .knob { fill: #FFFFFF; filter: drop-shadow(0 0 6px var(--gb)); }
+.gauge .scale { font-family: "Space Grotesk", sans-serif; font-size: 11px; fill: var(--muted); text-anchor: middle; }
+.gauge-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.gauge-text > div { display: flex; align-items: flex-start; }
+.temp { font-weight: 500; font-size: 48px; line-height: 1; color: var(--text); text-shadow: 0 0 18px var(--gs); }
+.deg { font-size: 15px; color: var(--gs); margin: 4px 0 0 3px; }
+.gauge-text .label { letter-spacing: .28em; margin-top: 6px; max-width: 120px; }
+
+/* ---- stat rows ---- */
+.stats { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.stat { display: flex; flex-direction: column; gap: 6px; }
+.stat > div:first-child { display: flex; align-items: baseline; justify-content: space-between; }
+.val { font-size: 20px; font-weight: 500; line-height: 1; color: var(--text); white-space: nowrap; }
+.unit { font-family: "Space Grotesk", sans-serif; font-size: 12px; font-weight: 400; color: var(--a); }
+.alt .unit { color: var(--b); }
+.bar { position: relative; height: 4px; border-radius: 2px; background: var(--track); }
+.bar > i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: 2px;
+  background: linear-gradient(90deg, var(--a), var(--b)); box-shadow: 0 0 8px var(--a-60); }
+.alt .bar > i { background: linear-gradient(90deg, var(--b), var(--a)); box-shadow: 0 0 8px var(--b-60); }
+
+/* ---- graphs ---- */
+.graph { display: flex; flex-direction: column; gap: 4px; }
+.graph-head { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; letter-spacing: .22em; color: var(--muted); }
+.graph-head b { font-weight: 600; color: var(--a); }
+.alt .graph-head b { color: var(--b); }
+.mid { stroke: rgba(255,255,255,0.06); stroke-dasharray: 2 4; }
+.line { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.line.sa { stroke: var(--a); filter: drop-shadow(0 0 4px var(--a)); }
+.line.sb { stroke: var(--b); filter: drop-shadow(0 0 4px var(--b)); }
+.newest { fill: #FFFFFF; }
+.flow { fill: none; stroke: #FFFFFF; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 6 434; animation: nn-flow 3.2s linear infinite; }
+.flow.late { animation-delay: -1.6s; }
+.still .flow { display: none; }
+
+/* ---- cooling ---- */
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fan { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px;
+  background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.05); }
+.fan svg { flex: none; }
+.fan > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fan .label { letter-spacing: .22em; }
+.fan .rpm { font-size: 19px; font-weight: 500; line-height: 1; color: var(--text); }
+.fan .pct { font-size: 11px; color: var(--a); white-space: nowrap; }
+.fan .ring { fill: none; stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 4px var(--a)); }
+.rotor { transform-box: view-box; transform-origin: 38px 38px; }
+.blade-a { fill: var(--a); opacity: .9; }
+.blade-b { fill: var(--b); opacity: .9; }
+
+/* ---- memory ---- */
+.pool { display: flex; flex-direction: column; gap: 7px; }
+.pool > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.pool .used { font-size: 15px; font-weight: 500; color: var(--text); white-space: nowrap; }
+.pool .of { font-family: "Space Grotesk", sans-serif; font-size: 12px; font-weight: 400; color: var(--muted); }
+.pool .pc { font-family: "Space Grotesk", sans-serif; font-size: 12px; font-weight: 400; color: var(--b); margin-left: 6px; }
+.capsule { position: relative; height: 10px; border-radius: 5px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.capsule > i { position: absolute; top: 0; bottom: 0; left: 0; width: 0;
+  background: linear-gradient(90deg, var(--a), var(--b)); box-shadow: 0 0 10px var(--b-60); }
+.capsule::after { content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0px, transparent 10px, rgba(8,9,16,0.9) 10px, rgba(8,9,16,0.9) 12px); }
+
+/* ---- network ---- */
+.net { display: flex; align-items: center; gap: 10px; }
+.net > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.net.up .unit { color: var(--b); }
+.net-box-a { fill: var(--a-10); stroke: var(--a-40); }
+.net-box-b { fill: var(--b-10); stroke: var(--b-40); }
+.net-arrow { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- footer ---- */
+footer { display: flex; align-items: center; gap: 14px; }
+footer .rule { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--a)); }
+footer .rule.r { background: linear-gradient(90deg, var(--b), transparent); }
+footer > div:nth-child(2) { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+footer .label { letter-spacing: .32em; padding-left: .32em; }
+.uptime { font-weight: 300; font-size: 22px; line-height: 1;
+  background: linear-gradient(90deg, var(--a), #FFFFFF 50%, var(--b));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
