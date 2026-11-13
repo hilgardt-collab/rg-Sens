@@ -9,17 +9,18 @@
   portrait. A sibling of art_deco_panel.html: same placeholders, same setup.
 
   Setup: give the panel a Combination source, choose this file as the template
-  and press Auto-configure. Auto-configure takes the slots of each source type
-  in order, so add them in this order (the groups they sit in do not matter,
-  except that the clock must be in group 1):
+  under Display, and press Scan Placeholders. That adds the source slots below
+  under Content (slots you already have are kept and reused) and maps every
+  placeholder to the slot with the matching source and metric:
 
     Clock      time (HH:MM fits the halo), with day and month names
-    CPU        temperature, usage, frequency
-    GPU        temperature, utilisation, core clock, power, memory used
+    CPU        three slots: temperature, usage, frequency
+    GPU        five slots: temperature, utilization, core clock, power usage,
+               memory used
     Fan Speed  up to four fans (the slot caption is the row label)
     Memory     used
     Disk       used
-    Network    download speed, upload speed
+    Network    two slots: download speed, upload speed
     Uptime     one slot
 
   Slot captions label the gauges, the fan rows and the memory rows; set them
@@ -33,61 +34,11 @@
   loaded from the fonts folder next to this file; copy that folder along with
   the template. Nothing is fetched from the network.
 
-  Colours: change the two below. Every tint is derived from them.
+  Colours: change the two at the top of art_nouveau_panel.css. Every tint is derived from them.
     metal    gold #C9A24A, copper #B87A4B, rose gold #C98B7A, pewter #BFC3BA
     foliage  sage #8FAE8B, teal #5E9C93, olive #9AA05A, plum #9A7A9E
 -->
-<style>
-/* Bundled fonts (SIL Open Font License, see fonts/<family>/OFL.txt). Keep the
-   fonts folder next to this file; without it the page falls back to serif. */
-@font-face { font-family: "Federo"; font-weight: 400; font-style: normal;
-  src: local("Federo"), url("fonts/federo/Federo-Regular.ttf") format("truetype"); }
-@font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: normal;
-  src: local("Cormorant Garamond"), url("fonts/cormorant-garamond/CormorantGaramond%5Bwght%5D.ttf") format("truetype"); }
-@font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: italic;
-  src: local("Cormorant Garamond Italic"), url("fonts/cormorant-garamond/CormorantGaramond-Italic%5Bwght%5D.ttf") format("truetype"); }
-:root {
-  --metal: #C9A24A;
-  --foliage: #8FAE8B;
-  --m-hi: color-mix(in srgb, var(--metal), white 62%);
-  --m-lt: color-mix(in srgb, var(--metal), white 30%);
-  --m-mid: var(--metal);
-  --m-dk: color-mix(in srgb, var(--metal), black 42%);
-  --dots: color-mix(in srgb, var(--metal) 7%, transparent);
-  --l-lt: color-mix(in srgb, var(--foliage), white 35%);
-  --l-mid: var(--foliage);
-  --l-dk: color-mix(in srgb, var(--foliage), black 45%);
-  --bg: #101915;
-  --panel: #18241F;
-  --halo: #14201B;
-  --cream: #EFE6CF;
-  --label: #B7AC8C;
-  --rose: #C46B7C;
-  --track: #22302A;
-  --unlit: #3E5048;
-  --leading: #0B1310;
-  --warn: #E0893A;
-  --hot: #D9536B;
-}
-html, body { margin: 0; background: var(--bg); }
-[hidden] { display: none !important; }
-/* values change once per update; no transitions, so nothing repaints in between */
-.rg-placeholder { transition: none; }
-
-/* fan meter: 18 leaves on a stem, lit ones alternate metal and foliage, the last lit one is cream */
-.leaves path { fill: none; stroke: var(--unlit); stroke-width: 1; }
-.leaves path.on { stroke: none; }
-.leaves path.on.g { fill: url(#nv-gold) var(--m-mid); }
-.leaves path.on.s { fill: url(#nv-sage) var(--l-mid); }
-.leaves path.tip { fill: var(--cream); stroke: none; }
-
-/* gauge arc: metal below 72, amber from 72, red-rose from 85 */
-.arc.warn { stroke: var(--warn) !important; }
-.arc.hot { stroke: var(--hot) !important; }
-
-.net { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 12px; }
-.net:not([hidden]) ~ .net:not([hidden]) { padding-left: 16px; border-left: 1px solid var(--l-dk); }
-</style>
+<link rel="stylesheet" href="art_nouveau_panel.css">
 </head>
 <body>
 <div style="width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden; background-color: var(--bg); background-image: radial-gradient(var(--dots) 1px, transparent 1.6px); background-size: 14px 14px; font-family: 'Cormorant Garamond', serif; color: var(--cream); padding: 116px 46px 132px; display: flex; flex-direction: column; justify-content: space-between">
@@ -796,38 +747,38 @@ html, body { margin: 0; background: var(--bg); }
     "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
     "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
     "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
-    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "instance": 0, "field": "caption"},
-    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "instance": 0, "field": "value", "format": "{:.0}"},
-    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "instance": 0, "field": "unit"},
-    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "instance": 0, "field": "max", "format": "{:.0}"},
-    "8": {"hint": "CPU usage - Caption", "source": "cpu", "instance": 0, "field": "caption"},
-    "9": {"hint": "CPU usage - Value", "source": "cpu", "instance": 0, "field": "value", "format": "{:.0}"},
-    "10": {"hint": "CPU usage - Unit", "source": "cpu", "instance": 0, "field": "unit"},
-    "11": {"hint": "CPU usage - Max", "source": "cpu", "instance": 0, "field": "max", "format": "{:.0}"},
-    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "instance": 0, "field": "caption"},
-    "13": {"hint": "CPU frequency - Value", "source": "cpu", "instance": 0, "field": "value", "format": "{:.2}"},
-    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "instance": 0, "field": "unit"},
-    "15": {"hint": "CPU frequency - Max", "source": "cpu", "instance": 0, "field": "max", "format": "{:.2}"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
     "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
     "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
     "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
     "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
-    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "instance": 0, "field": "caption"},
-    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "instance": 0, "field": "value", "format": "{:.0}"},
-    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "instance": 0, "field": "unit"},
-    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "instance": 0, "field": "max", "format": "{:.0}"},
-    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "instance": 0, "field": "caption"},
-    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "instance": 0, "field": "value", "format": "{:.0}"},
-    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "instance": 0, "field": "unit"},
-    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "instance": 0, "field": "max", "format": "{:.0}"},
-    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "instance": 0, "field": "caption"},
-    "29": {"hint": "GPU core clock - Value", "source": "gpu", "instance": 0, "field": "value", "format": "{:.0}"},
-    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "instance": 0, "field": "unit"},
-    "31": {"hint": "GPU core clock - Max", "source": "gpu", "instance": 0, "field": "max", "format": "{:.0}"},
-    "32": {"hint": "GPU power - Caption", "source": "gpu", "instance": 0, "field": "caption"},
-    "33": {"hint": "GPU power - Value", "source": "gpu", "instance": 0, "field": "value", "format": "{:.0}"},
-    "34": {"hint": "GPU power - Unit", "source": "gpu", "instance": 0, "field": "unit"},
-    "35": {"hint": "GPU power - Max", "source": "gpu", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
     "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
     "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
     "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
@@ -844,28 +795,28 @@ html, body { margin: 0; background: var(--bg); }
     "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
     "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
     "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
-    "52": {"hint": "Memory used - Caption", "source": "memory", "instance": 0, "field": "caption"},
-    "53": {"hint": "Memory used - Value", "source": "memory", "instance": 0, "field": "value", "format": "{:.1}"},
-    "54": {"hint": "Memory used - Unit", "source": "memory", "instance": 0, "field": "unit"},
-    "55": {"hint": "Memory used - Max", "source": "memory", "instance": 0, "field": "max", "format": "{:.1}"},
-    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "instance": 0, "field": "caption"},
-    "57": {"hint": "GPU memory used - Value", "source": "gpu", "instance": 0, "field": "value", "format": "{:.1}"},
-    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "instance": 0, "field": "unit"},
-    "59": {"hint": "GPU memory used - Max", "source": "gpu", "instance": 0, "field": "max", "format": "{:.1}"},
-    "60": {"hint": "Disk used - Caption", "source": "disk", "instance": 0, "field": "caption"},
-    "61": {"hint": "Disk used - Value", "source": "disk", "instance": 0, "field": "value", "format": "{:.0}"},
-    "62": {"hint": "Disk used - Unit", "source": "disk", "instance": 0, "field": "unit"},
-    "63": {"hint": "Disk used - Max", "source": "disk", "instance": 0, "field": "max", "format": "{:.0}"},
-    "64": {"hint": "Network download - Caption", "source": "network", "instance": 0, "field": "caption"},
-    "65": {"hint": "Network download - Value", "source": "network", "instance": 0, "field": "value", "format": "{:.1}"},
-    "66": {"hint": "Network download - Unit", "source": "network", "instance": 0, "field": "unit"},
-    "67": {"hint": "Network download - Max", "source": "network", "instance": 0, "field": "max", "format": "{:.1}"},
-    "68": {"hint": "Network upload - Caption", "source": "network", "instance": 0, "field": "caption"},
-    "69": {"hint": "Network upload - Value", "source": "network", "instance": 0, "field": "value", "format": "{:.1}"},
-    "70": {"hint": "Network upload - Unit", "source": "network", "instance": 0, "field": "unit"},
-    "71": {"hint": "Network upload - Max", "source": "network", "instance": 0, "field": "max", "format": "{:.1}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
     "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
-    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 0, "field": "seconds", "format": "{:.0}"}
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
 }
 </script>
 

@@ -19,6 +19,7 @@
 //!                           "value"); replaces the changing feed
 //!   size=WxH                window size (default 900x600)
 //!   snapshot=FILE.png       save what the widget drew after 4 s
+//!   animation=on|off        the panel's Animation switch (default on)
 //! ```
 //!
 //! The backend's own cadence is set through the environment:
@@ -115,6 +116,7 @@ fn main() {
             serde_json::from_str(&text).expect("values file is a JSON object of strings")
         });
     let snapshot = arg("snapshot", "");
+    let animation = arg("animation", "on") == "on";
     let (win_w, win_h) = arg("size", "900x600")
         .split_once('x')
         .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
@@ -148,7 +150,11 @@ fn main() {
             .enumerate()
             .map(|(i, slot)| json!({"index": i, "slot_prefix": slot, "field": "value"}))
             .collect();
-        let mut css_config = json!({"mappings": mappings, "hot_reload": false});
+        let mut css_config = json!({
+            "mappings": mappings,
+            "hot_reload": false,
+            "animation_enabled": animation,
+        });
         if template != "default" {
             let path = std::fs::canonicalize(&template).expect("template path");
             css_config["html_path"] = json!(path);

@@ -15,9 +15,9 @@ CSS Template panels use a WebView to render HTML/CSS content, with placeholder v
 ## Quick Start
 
 1. **Create a new panel** - In rg-Sens, add a new panel and select "CSS Template" as the displayer type
-2. **Set up the combo source** - Add sources (CPU, GPU, Memory, etc.) in the panel's source configuration
-3. **Select your template** - Point to your HTML file in the Template tab
-4. **Configure mappings** - Map placeholders to data sources in the Mappings tab
+2. **Select your template** - Point to your HTML file in the Template tab (its stylesheet is linked from the HTML, or set it as the CSS file)
+3. **Scan Placeholders** - Adds the sources the template asks for under Content and maps each placeholder to its slot
+4. **Adjust** - Pick sensors, captions and units on the slots under Content; change individual mappings on the Mappings tab
 
 ## Creating a Template
 
@@ -70,7 +70,7 @@ So a typical mapping pattern is:
 
 ## Auto-Configuration
 
-Templates can include metadata that enables the "Auto-configure" button to automatically set up mappings.
+Templates can include metadata that lets **Scan Placeholders** set the whole panel up: it adds the source slots the template asks for to the panel's Combination source (under Content; slots you already have are kept and reused), then maps every placeholder to the slot with the matching source and metric. **Auto-configure** on the Mappings tab only maps: it fills in placeholders that have no source yet and leaves the rest alone.
 
 ### Adding Auto-Config Metadata
 
@@ -114,7 +114,8 @@ Add a JSON script block to your HTML:
 |----------|----------|-------------|
 | `hint` | No | Human-readable description shown in UI |
 | `source` | Yes* | Source type, the first word of the source's name in lower case: `cpu`, `gpu`, `memory`, `disk`, `clock`, `network`, `fan`, `system`, `uptime` |
-| `instance` | No | `0` takes the next unused slot of that source type, in slot order; `N` takes the first slot of that type in group N (use it when several placeholders read different fields of one slot) |
+| `metric` | No | What the slot must measure, as the source's own field name in snake_case: `temperature`, `usage`, `frequency` (cpu); `temperature`, `utilization`, `clock_core`, `power_usage`, `memory_used` (gpu); `used` (memory, disk); `download_speed`, `upload_speed` (network). Without it any slot of the source matches |
+| `instance` | No | `0` takes the next matching slot no other placeholder has taken; `N` takes the Nth matching slot, so several placeholders can read one slot (the clock's `time`, `day_name` and `month_name` all use `1`) |
 | `field` | Yes* | Field to use: `value`, `caption`, `unit`, `max`, `min`, `percent`, `time`, or any other field the source publishes (`max`/`min` are the slot's limits) |
 | `format` | No | Format string, e.g., `"{:.1}"` for 1 decimal place |
 
@@ -156,6 +157,11 @@ rg-Sens injects these functions:
 ```javascript
 // Set animation speed multiplier
 window.setAnimationSpeed(1.5);
+
+// The panel's Animation switch and speed, sent with every value update.
+// It sets --rg-animation-speed, puts data-rg-motion="on|off" on <html> and
+// fires an `rg-motion` event (detail: {enabled, speed}) for templates that animate.
+window.rgSetMotion(true, 1.0);
 
 // Set theme colors (from panel configuration)
 window.setThemeColors({
@@ -375,6 +381,23 @@ the page only when a value changed; fed synthetic values once a second (about
 half of its rows bound) it used about 1% of a core in rg-Sens and under 1% in
 the web process.
 
+**Animating on a budget:** every animated frame is repainted in the web process
+and presented by rg-Sens, so cost follows the frame rate, not the number of
+moving things. The Steampunk example as designed (gears, steam, needles at the
+display's 60 fps) used about 0.8 of a core in rg-Sens and 1.0 in the web
+process. It ships with its CSS animations paused and stepped from one script
+timer (`document.getAnimations()`, `animation.currentTime = ...`) at
+`--motion-fps`: about 11% of a core in total at 4 fps, 13% at the default 6,
+21% at 8. The panel's Animation switch (`rg-motion` event) and the system's
+reduced-motion setting turn it off, which brings it to the same idle cost as
+the static panels. Splitting a large SVG into stacked layers
+(`will-change: transform`) so that moving parts do not repaint static ones cut
+the web process's share by a quarter. Its motion alone holds memory level
+(about 165 MB in the web process over 18 minutes); rewriting its glowing
+(`text-shadow`) values every second is what grows, by roughly 15 MB a minute
+even under the memory limit, until the periodic WebView reset brings it back.
+The 4 and 8 fps figures were measured before the layer split.
+
 CSS Template panels are enabled by default; start rg-Sens with
 `--webkit-disable` to turn them off.
 
@@ -404,10 +427,12 @@ CSS Template panels are enabled by default; start rg-Sens with
 
 ## See Also
 
-- [Art Deco Panel Example](../examples/art_deco_panel.html) and
-  [Art Nouveau Panel Example](../examples/art_nouveau_panel.html) - full 480x1920
+- [Art Deco](../examples/art_deco_panel.html),
+  [Art Nouveau](../examples/art_nouveau_panel.html) and
+  [Steampunk](../examples/steampunk_panel.html) panel examples - full 480x1920
   panels sharing one placeholder mapping: gauges, fan meters, bars, sections
   that hide when unmapped; setup steps are in the comment at the top of each.
-  They load their fonts from `examples/fonts/` (SIL Open Font License), so copy
-  that folder along with a template
+  They load their fonts from `examples/fonts/` (SIL Open Font License; Special
+  Elite is Apache 2.0), so copy that folder along with a template. The
+  Steampunk panel is the animated one: see "Animating on a budget" above
 - [CSS Template Example](../examples/css_template_example.html) - Basic template structure

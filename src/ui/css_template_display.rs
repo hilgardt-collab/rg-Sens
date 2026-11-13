@@ -170,6 +170,192 @@ pub fn extract_placeholder_defaults(
     defaults
 }
 
+/// One slot of the panel's combination source, as auto-mapping sees it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SlotKind {
+    /// `group1_2`
+    pub prefix: String,
+    /// The slot's source id (`cpu`, `fan_speed`); empty when not configured.
+    pub source: String,
+    /// The source's configured field (`Temperature`, `MemoryUsed`), if it has one.
+    pub metric: String,
+}
+
+pub(crate) fn normalized(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// A template names a source by id or by its first word (`fan` for
+/// `fan_speed`, `system` for `system_temp`).
+pub(crate) fn source_matches(slot_source: &str, wanted: &str) -> bool {
+    let (slot, wanted) = (normalized(slot_source), normalized(wanted));
+    !wanted.is_empty() && !slot.is_empty() && (slot == wanted || slot.starts_with(&wanted))
+}
+
+/// Every placeholder index a template uses or configures, ascending.
+fn all_indices(
+    placeholders: &[u32],
+    defaults: &std::collections::HashMap<u32, PlaceholderDefault>,
+) -> Vec<u32> {
+    placeholders
+        .iter()
+        .chain(defaults.keys())
+        .copied()
+        .collect::<std::collections::BTreeSet<u32>>()
+        .into_iter()
+        .collect()
+}
+
+/// Split the placeholders into requests for one slot each: four consecutive
+/// indices asking for caption / value / unit / max of one source form one
+/// request, every other placeholder is its own.
+fn requests<'a>(
+    indices: &'a [u32],
+    defaults: &std::collections::HashMap<u32, PlaceholderDefault>,
+) -> Vec<&'a [u32]> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < indices.len() {
+        let index = indices[i];
+        let group = defaults.get(&index).is_some_and(|first| {
+            !first.source.is_empty()
+                && i + 3 < indices.len()
+                && ["caption", "value", "unit", "max"]
+                    .iter()
+                    .enumerate()
+                    .all(|(j, field)| {
+                        indices[i + j] == index + j as u32
+                            && defaults.get(&indices[i + j]).is_some_and(|d| {
+                                d.field == *field
+                                    && d.source == first.source
+                                    && d.metric == first.metric
+                                    && d.instance == first.instance
+                            })
+                    })
+        });
+        let members = if group { 4 } else { 1 };
+        out.push(&indices[i..i + members]);
+        i += members;
+    }
+    out
+}
+
+/// The slots a template needs, as `(source, metric)` in the order the
+/// template first asks for them; a pair appears once per slot it needs.
+/// Scan Placeholders creates the ones the panel's source does not have yet.
+pub fn wanted_slots(
+    placeholders: &[u32],
+    defaults: &std::collections::HashMap<u32, PlaceholderDefault>,
+) -> Vec<(String, String)> {
+    let indices = all_indices(placeholders, defaults);
+    // per (source, metric): [slots taken in turn, highest slot named outright]
+    let mut order: Vec<(String, String)> = Vec::new();
+    let mut counts: std::collections::HashMap<(String, String), [u32; 2]> =
+        std::collections::HashMap::new();
+    for request in requests(&indices, defaults) {
+        let Some(default) = defaults.get(&request[0]).filter(|d| !d.source.is_empty()) else {
+            continue;
+        };
+        let key = (default.source.clone(), default.metric.clone());
+        if !counts.contains_key(&key) {
+            order.push(key.clone());
+        }
+        let count = counts.entry(key).or_insert([0, 0]);
+        if default.instance == 0 {
+            count[0] += 1;
+        } else {
+            count[1] = count[1].max(default.instance);
+        }
+    }
+    order
+        .into_iter()
+        .flat_map(|key| {
+            let n = counts[&key].iter().copied().max().unwrap_or(0) as usize;
+            std::iter::repeat_n(key, n)
+        })
+        .collect()
+}
+
+/// Map every placeholder of a template to a slot of the panel's source.
+///
+/// `placeholders` are the `{{N}}` indices found in the template, `defaults`
+/// its `rg-placeholder-config` block. Four consecutive placeholders that ask
+/// for caption / value / unit / max of one source share a slot. A slot is
+/// chosen by source type and, when the template names one, by metric, so the
+/// order the slots were added in does not matter; `instance` picks among
+/// several matching slots. A mapping in `keep` that already has a slot is
+/// left alone. What nothing matches stays unmapped, which a template shows as
+/// "--" or hides.
+pub fn auto_map(
+    placeholders: &[u32],
+    defaults: &std::collections::HashMap<u32, PlaceholderDefault>,
+    keep: &std::collections::HashMap<u32, PlaceholderMapping>,
+    slots: &[SlotKind],
+) -> Vec<PlaceholderMapping> {
+    use std::collections::HashSet;
+
+    let indices = all_indices(placeholders, defaults);
+    let mut taken: HashSet<&str> = HashSet::new();
+    let mut pick = |default: &PlaceholderDefault| -> String {
+        let candidates: Vec<&SlotKind> = slots
+            .iter()
+            .filter(|slot| source_matches(&slot.source, &default.source))
+            .filter(|slot| {
+                default.metric.is_empty() || normalized(&slot.metric) == normalized(&default.metric)
+            })
+            .collect();
+        let chosen = if default.instance > 0 {
+            candidates.get(default.instance as usize - 1).copied()
+        } else {
+            candidates
+                .iter()
+                .find(|slot| !taken.contains(slot.prefix.as_str()))
+                .copied()
+        };
+        match chosen {
+            Some(slot) => {
+                taken.insert(slot.prefix.as_str());
+                slot.prefix.clone()
+            }
+            None => String::new(),
+        }
+    };
+
+    let mut out = Vec::with_capacity(indices.len());
+    for request in requests(&indices, defaults) {
+        let default = defaults.get(&request[0]);
+        let kept = request
+            .iter()
+            .filter_map(|idx| keep.get(idx))
+            .find(|m| !m.slot_prefix.is_empty())
+            .map(|m| m.slot_prefix.clone());
+        let prefix = match (kept, default) {
+            (Some(prefix), _) => prefix,
+            (None, Some(default)) => pick(default),
+            (None, None) => String::new(),
+        };
+        for idx in request {
+            let default = defaults.get(idx);
+            let existing = keep.get(idx).filter(|m| !m.slot_prefix.is_empty());
+            out.push(PlaceholderMapping {
+                index: *idx,
+                slot_prefix: prefix.clone(),
+                field: existing
+                    .map(|m| m.field.clone())
+                    .or_else(|| default.map(|d| d.field.clone()))
+                    .unwrap_or_else(|| "value".to_string()),
+                format: existing
+                    .and_then(|m| m.format.clone())
+                    .or_else(|| default.and_then(|d| d.format.clone())),
+            });
+        }
+    }
+    out
+}
+
 /// Transform placeholders in HTML for JavaScript injection
 ///
 /// Converts `{{0}}` to `<span data-placeholder="0" class="rg-placeholder">--</span>`
@@ -221,6 +407,19 @@ pub fn generate_update_script() -> &'static str {
     // Animation speed control
     window.setAnimationSpeed = function(speed) {
         document.documentElement.style.setProperty('--rg-animation-speed', speed);
+    };
+
+    // The panel's Animation switch and speed. Called with every value update;
+    // a template that animates listens for the `rg-motion` event (detail:
+    // {enabled, speed}) or reads `data-rg-motion="on|off"` on <html>.
+    var motionState = '';
+    window.rgSetMotion = function(enabled, speed) {
+        var state = (enabled ? 'on' : 'off') + ':' + speed;
+        if (state === motionState) return;
+        motionState = state;
+        if (speed > 0) window.setAnimationSpeed(speed);
+        document.documentElement.setAttribute('data-rg-motion', enabled ? 'on' : 'off');
+        window.dispatchEvent(new CustomEvent('rg-motion', { detail: { enabled: !!enabled, speed: speed } }));
     };
 
     // Theme color injection (for templates that want to use panel theme)

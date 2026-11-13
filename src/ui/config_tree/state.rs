@@ -484,9 +484,16 @@ impl State {
         if editor.combo().is_none() {
             if let Some(cs) = self.combo_source.borrow().as_ref() {
                 // css_template: slot summaries for its placeholder mapping
+                editor.set_slot_kinds(combo_slot_kinds(cs));
                 editor.set_source_summaries(combo_summaries(cs));
             }
         }
+        let weak = Rc::downgrade(self);
+        editor.set_on_request_slots(Rc::new(move |wanted| {
+            if let Some(s) = weak.upgrade() {
+                s.create_wanted_slots(&wanted);
+            }
+        }));
         let weak = Rc::downgrade(self);
         let has_signal = editor.set_on_change(Rc::new(move || {
             if let Some(s) = weak.upgrade() {
@@ -973,8 +980,8 @@ impl State {
     /// Push the working combo structure into the display editor and rebuild
     /// the Content subtree.
     fn structure_changed(self: &Rc<Self>, reselect: NodeKind) {
-        let (summaries, fields) = match self.combo_source.borrow().as_ref() {
-            Some(cs) => (combo_summaries(cs), combo_fields(cs)),
+        let (summaries, kinds, fields) = match self.combo_source.borrow().as_ref() {
+            Some(cs) => (combo_summaries(cs), combo_slot_kinds(cs), combo_fields(cs)),
             None => return,
         };
         // Item pages are keyed by slot; structure changes invalidate them.
@@ -991,6 +998,7 @@ impl State {
                     e.load(&cfg);
                 }
             } else {
+                e.set_slot_kinds(kinds);
                 e.set_source_summaries(summaries);
             }
             self.loading.set(false);
@@ -1035,6 +1043,31 @@ impl State {
             self.pages.borrow_mut().remove(id);
             self.poll_last.borrow_mut().remove(id);
         }
+    }
+
+    /// The CSS Template editor's Scan Placeholders: give the combination
+    /// source the slots the template asks for. The editor maps its
+    /// placeholders right after this returns, so it gets the new slot list at
+    /// once; the tree follows on idle.
+    fn create_wanted_slots(self: &Rc<Self>, wanted: &[(String, String)]) {
+        let created = self
+            .with_combo(|cs| add_wanted_slots(cs, wanted))
+            .unwrap_or(0);
+        if created == 0 {
+            return;
+        }
+        let lists = self
+            .combo_source
+            .borrow()
+            .as_ref()
+            .map(|cs| (combo_slot_kinds(cs), combo_summaries(cs)));
+        if let (Some((kinds, summaries)), Some(e)) = (lists, self.display_editor.borrow().as_ref()) {
+            self.loading.set(true);
+            e.set_slot_kinds(kinds);
+            e.set_source_summaries(summaries);
+            self.loading.set(false);
+        }
+        self.defer(|state| state.structure_changed(NodeKind::Display));
     }
 
     pub(super) fn set_group_count(self: &Rc<Self>, n: usize) {

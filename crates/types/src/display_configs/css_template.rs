@@ -40,7 +40,13 @@ pub struct PlaceholderDefault {
     /// Source type ID (e.g., "cpu", "gpu", "memory", "clock", "disk")
     #[serde(default)]
     pub source: String,
-    /// Instance index for sources with multiple instances (e.g., CPU core 0, 1, 2)
+    /// What the slot must measure, as the source's own field name
+    /// (`"temperature"`, `"memory_used"`, `"download_speed"`); compared
+    /// ignoring case and underscores. Empty accepts any slot of the source.
+    #[serde(default)]
+    pub metric: String,
+    /// Which matching slot: 0 takes the next one no other placeholder has
+    /// taken, N the Nth (so several placeholders can read one slot).
     #[serde(default)]
     pub instance: u32,
     /// Field to use from the source (e.g., "value", "caption", "unit", "time")

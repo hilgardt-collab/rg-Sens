@@ -15,13 +15,15 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::ui::css_template_display::{
-    detect_placeholders, extract_placeholder_defaults, extract_placeholder_hints,
-    CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping,
+    auto_map, detect_placeholders, extract_placeholder_defaults, extract_placeholder_hints,
+    wanted_slots, CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping, SlotKind,
 };
 use crate::ui::widget_builder::{create_page_container, create_section_header};
 
 /// Debounce delay for the HTML path entry (reads + parses the template file)
 const HTML_PATH_DEBOUNCE_MS: u64 = 300;
+
+type SlotRequestHook = Rc<RefCell<Option<Box<dyn Fn(Vec<(String, String)>)>>>>;
 
 /// CSS Template configuration widget
 pub struct CssTemplateConfigWidget {
@@ -31,6 +33,10 @@ pub struct CssTemplateConfigWidget {
     source_summaries: Rc<RefCell<Vec<(String, String, usize, u32)>>>,
     placeholder_hints: Rc<RefCell<HashMap<u32, String>>>,
     placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
+    /// What each slot of the panel's source measures; auto-mapping matches on it.
+    slot_kinds: Rc<RefCell<Vec<SlotKind>>>,
+    /// Asks the dialog to create source slots (Scan Placeholders).
+    on_request_slots: SlotRequestHook,
     // Template widgets
     html_path_entry: Entry,
     css_path_entry: Entry,
@@ -60,6 +66,8 @@ impl CssTemplateConfigWidget {
             Rc::new(RefCell::new(HashMap::new()));
         let placeholder_defaults: Rc<RefCell<HashMap<u32, PlaceholderDefault>>> =
             Rc::new(RefCell::new(HashMap::new()));
+        let slot_kinds: Rc<RefCell<Vec<SlotKind>>> = Rc::new(RefCell::new(Vec::new()));
+        let on_request_slots: SlotRequestHook = Rc::new(RefCell::new(None));
 
         // Create notebook for tabs
         let notebook = Notebook::new();
@@ -94,6 +102,8 @@ impl CssTemplateConfigWidget {
             source_summaries,
             placeholder_hints,
             placeholder_defaults,
+            slot_kinds,
+            on_request_slots,
             html_path_entry,
             css_path_entry,
             hot_reload_check,
@@ -368,13 +378,14 @@ impl CssTemplateConfigWidget {
         let scan_row = GtkBox::new(Orientation::Horizontal, 6);
         let scan_btn = Button::with_label("Scan Placeholders");
         scan_btn.set_tooltip_text(Some(
-            "Scan the HTML template for placeholders and create mappings.\n\
-             This will replace any existing mappings.",
+            "Set the panel up for this template: add the source slots it asks for\n\
+             (under Content; existing ones are kept) and map every placeholder to\n\
+             its slot. This replaces any existing mappings.",
         ));
         scan_btn.set_sensitive(false); // Enabled when HTML path is valid
         scan_row.append(&scan_btn);
 
-        let scan_help = Label::new(Some("Reads template and creates mapping entries"));
+        let scan_help = Label::new(Some("Adds the sources the template needs and maps them"));
         scan_help.add_css_class("dim-label");
         scan_row.append(&scan_help);
         page.append(&scan_row);
@@ -382,8 +393,8 @@ impl CssTemplateConfigWidget {
         // Help text
         let help_label = Label::new(Some(
             "Use {{0}}, {{1}}, {{2}}, etc. as placeholders in your HTML template.\n\
-             Click \"Scan Placeholders\" to detect them, then use the Mappings tab\n\
-             to assign data sources. \"Auto-configure\" will try to match sources.",
+             \"Scan Placeholders\" adds the sources a template asks for under Content\n\
+             and maps each placeholder to its slot; adjust them on the Mappings tab.",
         ));
         help_label.set_wrap(true);
         help_label.set_xalign(0.0);
@@ -436,7 +447,8 @@ impl CssTemplateConfigWidget {
         // Auto-configure button
         let auto_config_btn = Button::with_label("Auto-configure");
         auto_config_btn.set_tooltip_text(Some(
-            "Automatically configure mappings based on template defaults",
+            "Map the placeholders that have no source yet to matching source slots,\n\
+             keeping the ones already set (use it after adding sources)",
         ));
         // Note: The actual click handler is connected later via connect_auto_config
         btn_row.append(&auto_config_btn);
@@ -1067,211 +1079,69 @@ impl CssTemplateConfigWidget {
         }
     }
 
-    /// Apply auto-configuration based on template defaults and available sources
+    /// Map the template's placeholders to the panel's slots and rebuild the
+    /// rows. `replace` starts from scratch (Scan Placeholders); otherwise
+    /// mappings that already have a slot are kept (Auto-configure).
     ///
-    /// This matches placeholder defaults to available source slots and creates/updates mappings.
-    /// Existing mappings with a configured source (non-empty slot_prefix) are preserved.
-    /// Groups (4 consecutive placeholders with same source/instance) are processed together,
-    /// and if any member has an existing configured source, it's used for all members.
-    ///
-    /// Associated fn (same pattern as `rebuild_mapping_rows`) so the click
-    /// handler and any future callers share one implementation.
-    fn apply_auto_config_internal(
+    /// Associated fn (same pattern as `rebuild_mapping_rows`) so both click
+    /// handlers share one implementation.
+    #[allow(clippy::too_many_arguments)]
+    fn map_placeholders(
         config: &Rc<RefCell<CssTemplateDisplayConfig>>,
         on_change: &Rc<RefCell<Option<Box<dyn Fn()>>>>,
         source_summaries: &Rc<RefCell<Vec<(String, String, usize, u32)>>>,
+        slot_kinds: &Rc<RefCell<Vec<SlotKind>>>,
         placeholder_hints: &Rc<RefCell<HashMap<u32, String>>>,
         placeholder_defaults: &Rc<RefCell<HashMap<u32, PlaceholderDefault>>>,
         mappings_container: &GtkBox,
+        replace: bool,
     ) {
+        // Read the template as it is now: it may have changed on disk since
+        // the path was entered.
+        let html = {
+            let cfg = config.borrow();
+            std::fs::read_to_string(&cfg.html_path)
+                .ok()
+                .or_else(|| cfg.embedded_html.clone())
+        };
+        let placeholders = match &html {
+            Some(html) => {
+                *placeholder_hints.borrow_mut() = extract_placeholder_hints(html);
+                *placeholder_defaults.borrow_mut() = extract_placeholder_defaults(html);
+                detect_placeholders(html)
+            }
+            None => {
+                log::error!("CSS template: cannot read the template to map its placeholders");
+                Vec::new()
+            }
+        };
         let defaults = placeholder_defaults.borrow();
-        let summaries = source_summaries.borrow();
-
-        if defaults.is_empty() || summaries.is_empty() {
-            log::warn!("Cannot auto-configure: no defaults or no sources available");
+        if placeholders.is_empty() && defaults.is_empty() {
+            log::warn!("CSS template: no placeholders found in the template");
             return;
         }
 
-        // Build a map of existing mappings by index for quick lookup
-        let existing_mappings: HashMap<u32, PlaceholderMapping> = config
-            .borrow()
-            .mappings
+        let keep: HashMap<u32, PlaceholderMapping> = if replace {
+            HashMap::new()
+        } else {
+            config
+                .borrow()
+                .mappings
+                .iter()
+                .map(|m| (m.index, m.clone()))
+                .collect()
+        };
+        let new_mappings = auto_map(&placeholders, &defaults, &keep, &slot_kinds.borrow());
+        let mapped = new_mappings
             .iter()
-            .map(|m| (m.index, m.clone()))
-            .collect();
-
-        // Group source summaries by source type for easier lookup
-        let mut source_slots: HashMap<String, Vec<(String, usize)>> = HashMap::new();
-
-        for (prefix, label, slot_idx, _group_idx) in summaries.iter() {
-            let source_type = label.split_whitespace().next().unwrap_or("").to_lowercase();
-            source_slots
-                .entry(source_type)
-                .or_default()
-                .push((prefix.clone(), *slot_idx));
-        }
-
-        // Track which slots we've used for each source type
-        let mut used_instances: HashMap<String, usize> = HashMap::new();
-
-        // Build new mappings
-        let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
-
-        // Sort defaults by index for predictable order
-        let mut sorted_defaults: Vec<_> = defaults.iter().collect();
-        sorted_defaults.sort_by_key(|(idx, _)| *idx);
-
-        // Process defaults, detecting groups (4 consecutive with same source/instance)
-        let mut i = 0;
-        while i < sorted_defaults.len() {
-            let (idx, default) = sorted_defaults[i];
-
-            // Check if this is the start of a group (4 consecutive with same source/instance)
-            let is_group = if i + 3 < sorted_defaults.len() && !default.source.is_empty() {
-                let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
-                let consecutive = group_indices.windows(2).all(|w| w[1] == w[0] + 1);
-
-                if consecutive {
-                    let group_defaults: Vec<&PlaceholderDefault> =
-                        (0..4).map(|j| sorted_defaults[i + j].1).collect();
-
-                    // Check same source and instance
-                    let same_source_instance = group_defaults
-                        .iter()
-                        .all(|d| d.source == default.source && d.instance == default.instance);
-
-                    // Check fields are caption/value/unit/max
-                    let fields: Vec<&str> =
-                        group_defaults.iter().map(|d| d.field.as_str()).collect();
-                    let standard_fields = fields == ["caption", "value", "unit", "max"];
-
-                    same_source_instance && standard_fields
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            if is_group {
-                // Process as a group - check if ANY member has an existing configured source
-                let group_indices: Vec<u32> = (0..4).map(|j| *sorted_defaults[i + j].0).collect();
-                let existing_prefix = group_indices
-                    .iter()
-                    .filter_map(|idx| existing_mappings.get(idx))
-                    .find(|m| !m.slot_prefix.is_empty())
-                    .map(|m| m.slot_prefix.clone());
-
-                let slot_prefix = if let Some(prefix) = existing_prefix {
-                    // Use the existing configured prefix for all group members
-                    prefix
-                } else {
-                    // Auto-configure: find a slot for this source type
-                    let source_type = default.source.to_lowercase();
-                    if let Some(slots) = source_slots.get(&source_type) {
-                        let instance = default.instance as usize;
-                        let used = used_instances.entry(source_type.clone()).or_insert(0);
-
-                        let slot_to_use = if instance > 0 {
-                            slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
-                        } else {
-                            let target = *used;
-                            slots.get(target)
-                        };
-
-                        if let Some((prefix, _)) = slot_to_use {
-                            if instance == 0 {
-                                *used += 1;
-                            }
-                            prefix.clone()
-                        } else {
-                            String::new()
-                        }
-                    } else {
-                        String::new()
-                    }
-                };
-
-                // Add all 4 group members with the same prefix
-                for j in 0..4 {
-                    let (group_idx, group_default) = sorted_defaults[i + j];
-                    new_mappings.push(PlaceholderMapping {
-                        index: *group_idx,
-                        slot_prefix: slot_prefix.clone(),
-                        field: group_default.field.clone(),
-                        format: group_default.format.clone(),
-                    });
-                }
-                i += 4;
-            } else {
-                // Process as individual mapping
-                // Check if there's an existing mapping with a configured source
-                if let Some(existing) = existing_mappings.get(idx) {
-                    if !existing.slot_prefix.is_empty() {
-                        // Preserve the existing mapping
-                        new_mappings.push(existing.clone());
-                        i += 1;
-                        continue;
-                    }
-                }
-
-                // No existing configured mapping, try to auto-configure
-                if default.source.is_empty() {
-                    new_mappings.push(PlaceholderMapping {
-                        index: *idx,
-                        slot_prefix: String::new(),
-                        field: default.field.clone(),
-                        format: default.format.clone(),
-                    });
-                    i += 1;
-                    continue;
-                }
-
-                let source_type = default.source.to_lowercase();
-
-                if let Some(slots) = source_slots.get(&source_type) {
-                    let instance = default.instance as usize;
-                    let used = used_instances.entry(source_type.clone()).or_insert(0);
-
-                    let slot_to_use = if instance > 0 {
-                        slots.iter().find(|(_, slot_idx)| *slot_idx == instance)
-                    } else {
-                        let target = *used;
-                        slots.get(target)
-                    };
-
-                    if let Some((prefix, _)) = slot_to_use {
-                        new_mappings.push(PlaceholderMapping {
-                            index: *idx,
-                            slot_prefix: prefix.clone(),
-                            field: default.field.clone(),
-                            format: default.format.clone(),
-                        });
-                        if instance == 0 {
-                            *used += 1;
-                        }
-                    } else {
-                        new_mappings.push(PlaceholderMapping {
-                            index: *idx,
-                            slot_prefix: String::new(),
-                            field: default.field.clone(),
-                            format: default.format.clone(),
-                        });
-                    }
-                } else {
-                    new_mappings.push(PlaceholderMapping {
-                        index: *idx,
-                        slot_prefix: String::new(),
-                        field: default.field.clone(),
-                        format: default.format.clone(),
-                    });
-                }
-                i += 1;
-            }
-        }
-
+            .filter(|m| !m.slot_prefix.is_empty())
+            .count();
+        log::info!(
+            "CSS template: {} placeholders, {} mapped to a source slot",
+            new_mappings.len(),
+            mapped
+        );
         drop(defaults);
-        drop(summaries);
 
         // Apply new mappings
         config.borrow_mut().mappings = new_mappings;
@@ -1294,201 +1164,69 @@ impl CssTemplateConfigWidget {
     /// Connect the auto-configure button handler
     /// This must be called after the widget is fully constructed
     pub fn connect_auto_config_handler(&self) {
-        let self_config = self.config.clone();
-        let self_on_change = self.on_change.clone();
-        let self_source_summaries = self.source_summaries.clone();
-        let self_placeholder_defaults = self.placeholder_defaults.clone();
-        let self_placeholder_hints = self.placeholder_hints.clone();
-        let self_mappings_container = self.mappings_container.clone();
+        self.connect_mapping_button(&self.auto_config_btn, false);
+    }
 
-        self.auto_config_btn.connect_clicked(move |_| {
-            Self::apply_auto_config_internal(
-                &self_config,
-                &self_on_change,
-                &self_source_summaries,
-                &self_placeholder_hints,
-                &self_placeholder_defaults,
-                &self_mappings_container,
+    /// Connect the scan placeholders button handler.
+    ///
+    /// Reads the template's `{{N}}` placeholders and its
+    /// `rg-placeholder-config` block, replaces the mappings and maps every
+    /// placeholder it can to a slot of the panel's source.
+    pub fn connect_scan_handler(&self) {
+        self.connect_mapping_button(&self.scan_btn, true);
+    }
+
+    fn connect_mapping_button(&self, button: &Button, replace: bool) {
+        let config = self.config.clone();
+        let on_change = self.on_change.clone();
+        let source_summaries = self.source_summaries.clone();
+        let slot_kinds = self.slot_kinds.clone();
+        let placeholder_defaults = self.placeholder_defaults.clone();
+        let placeholder_hints = self.placeholder_hints.clone();
+        let mappings_container = self.mappings_container.clone();
+        let on_request_slots = self.on_request_slots.clone();
+
+        button.connect_clicked(move |_| {
+            if replace {
+                // Scanning sets the panel up: first the source slots the
+                // template asks for, then the mapping onto them. No borrow is
+                // held here, since the dialog answers by pushing the new slot
+                // list back into this widget.
+                let wanted = std::fs::read_to_string(&config.borrow().html_path)
+                    .map(|html| {
+                        wanted_slots(
+                            &detect_placeholders(&html),
+                            &extract_placeholder_defaults(&html),
+                        )
+                    })
+                    .unwrap_or_default();
+                if !wanted.is_empty() {
+                    if let Some(hook) = on_request_slots.borrow().as_ref() {
+                        hook(wanted);
+                    }
+                }
+            }
+            Self::map_placeholders(
+                &config,
+                &on_change,
+                &source_summaries,
+                &slot_kinds,
+                &placeholder_hints,
+                &placeholder_defaults,
+                &mappings_container,
+                replace,
             );
         });
     }
 
-    /// Connect the scan placeholders button handler
-    ///
-    /// This scans the HTML template for placeholders and creates mappings based on:
-    /// 1. The rg-placeholder-config JSON block (if present) for hints and groupings
-    /// 2. Direct detection of {{N}} patterns in the HTML
-    ///
-    /// Existing mappings are cleared and replaced with the scanned results.
-    pub fn connect_scan_handler(&self) {
-        let self_config = self.config.clone();
-        let self_on_change = self.on_change.clone();
-        let self_source_summaries = self.source_summaries.clone();
-        let self_placeholder_hints = self.placeholder_hints.clone();
-        let self_placeholder_defaults = self.placeholder_defaults.clone();
-        let self_mappings_container = self.mappings_container.clone();
+    /// The dialog's handler for "create these source slots".
+    pub fn set_on_request_slots<F: Fn(Vec<(String, String)>) + 'static>(&self, f: F) {
+        *self.on_request_slots.borrow_mut() = Some(Box::new(f));
+    }
 
-        self.scan_btn.connect_clicked(move |_| {
-            let config = self_config.borrow();
-            let html_path = &config.html_path;
-
-            // Read the HTML file
-            let html = match std::fs::read_to_string(html_path) {
-                Ok(content) => content,
-                Err(e) => {
-                    log::error!("Failed to read HTML template: {}", e);
-                    return;
-                }
-            };
-            drop(config);
-
-            // Detect all placeholders in the HTML
-            let placeholder_indices = detect_placeholders(&html);
-            if placeholder_indices.is_empty() {
-                log::warn!("No placeholders found in HTML template");
-                return;
-            }
-
-            // Extract defaults/hints from the config block
-            let defaults = extract_placeholder_defaults(&html);
-            let hints = extract_placeholder_hints(&html);
-
-            // Update the shared state
-            *self_placeholder_hints.borrow_mut() = hints.clone();
-            *self_placeholder_defaults.borrow_mut() = defaults.clone();
-
-            // Build new mappings based on detected placeholders
-            let mut new_mappings: Vec<PlaceholderMapping> = Vec::new();
-
-            // Process placeholders, detecting groups
-            let mut idx = 0;
-            while idx < placeholder_indices.len() {
-                let placeholder_idx = placeholder_indices[idx];
-
-                // Check if this could be the start of a group (4 consecutive with same source/instance)
-                let is_group = if idx + 3 < placeholder_indices.len() {
-                    // Check if we have defaults for all 4 and they're from the same source/instance
-                    let indices: Vec<u32> = (0..4).map(|i| placeholder_indices[idx + i]).collect();
-
-                    // Check if all 4 have defaults with same source and instance
-                    let group_defaults: Vec<Option<&PlaceholderDefault>> =
-                        indices.iter().map(|i| defaults.get(i)).collect();
-
-                    if group_defaults.iter().all(|d| d.is_some()) {
-                        let defs: Vec<&PlaceholderDefault> =
-                            group_defaults.into_iter().flatten().collect();
-
-                        // Check same source and instance
-                        let first_source = &defs[0].source;
-                        let first_instance = defs[0].instance;
-                        let same_source_instance = defs
-                            .iter()
-                            .all(|d| &d.source == first_source && d.instance == first_instance);
-
-                        // Check if fields are caption/value/unit/max
-                        let fields: Vec<&str> = defs.iter().map(|d| d.field.as_str()).collect();
-                        let standard_fields = fields == ["caption", "value", "unit", "max"];
-
-                        same_source_instance && standard_fields && !first_source.is_empty()
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-
-                if is_group {
-                    // Create 4 mappings for the group
-                    let fields = ["caption", "value", "unit", "max"];
-                    for (i, field) in fields.iter().enumerate() {
-                        let pidx = placeholder_indices[idx + i];
-                        let default = defaults.get(&pidx);
-                        new_mappings.push(PlaceholderMapping {
-                            index: pidx,
-                            slot_prefix: String::new(), // Will be set by auto-configure
-                            field: field.to_string(),
-                            format: default.and_then(|d| d.format.clone()),
-                        });
-                    }
-                    idx += 4;
-                } else {
-                    // Create single mapping
-                    let default = defaults.get(&placeholder_idx);
-                    new_mappings.push(PlaceholderMapping {
-                        index: placeholder_idx,
-                        slot_prefix: String::new(),
-                        field: default
-                            .map(|d| d.field.clone())
-                            .unwrap_or_else(|| "value".to_string()),
-                        format: default.and_then(|d| d.format.clone()),
-                    });
-                    idx += 1;
-                }
-            }
-
-            // Apply new mappings
-            self_config.borrow_mut().mappings = new_mappings;
-
-            // Rebuild UI - clear existing rows
-            while let Some(child) = self_mappings_container.first_child() {
-                self_mappings_container.remove(&child);
-            }
-
-            // Add rows for each mapping, detecting groups
-            let config = self_config.borrow();
-            let mappings = &config.mappings;
-            let mut map_idx = 0;
-
-            while map_idx < mappings.len() {
-                // Check if this could be the start of a group
-                let is_group_ui = if map_idx + 3 < mappings.len() {
-                    let fields: Vec<&str> = mappings[map_idx..map_idx + 4]
-                        .iter()
-                        .map(|m| m.field.as_str())
-                        .collect();
-                    fields == ["caption", "value", "unit", "max"]
-                } else {
-                    false
-                };
-
-                if is_group_ui {
-                    let group_mappings: Vec<PlaceholderMapping> =
-                        mappings[map_idx..map_idx + 4].to_vec();
-                    CssTemplateConfigWidget::add_source_group_row(
-                        &self_mappings_container,
-                        map_idx,
-                        &group_mappings,
-                        self_config.clone(),
-                        self_on_change.clone(),
-                        self_source_summaries.clone(),
-                        self_placeholder_hints.clone(),
-                    );
-                    map_idx += 4;
-                } else {
-                    CssTemplateConfigWidget::add_mapping_row(
-                        &self_mappings_container,
-                        map_idx,
-                        &mappings[map_idx],
-                        self_config.clone(),
-                        self_on_change.clone(),
-                        self_source_summaries.clone(),
-                        self_placeholder_hints.clone(),
-                    );
-                    map_idx += 1;
-                }
-            }
-            drop(config);
-
-            // Trigger change callback
-            if let Some(ref cb) = *self_on_change.borrow() {
-                cb();
-            }
-
-            log::info!(
-                "Scanned template: found {} placeholders",
-                placeholder_indices.len()
-            );
-        });
+    /// What each slot of the panel's source measures (from the tree dialog).
+    pub fn set_slot_kinds(&self, kinds: Vec<SlotKind>) {
+        *self.slot_kinds.borrow_mut() = kinds;
     }
 
     /// Set source summaries directly (from combo widget)

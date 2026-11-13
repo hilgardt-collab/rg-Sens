@@ -177,7 +177,9 @@ fn resend_values_after_load(webview: &WebView, data: &Arc<Mutex<DisplayData>>) {
     webview.connect_load_changed(move |_, event| {
         if event == webkit6::LoadEvent::Finished {
             if let Ok(mut data) = data.lock() {
-                data.last_js_values.clear();
+                // Not the empty string: a page with nothing mapped has an
+                // empty payload and would never get its first call.
+                data.last_js_values = "\u{0}".to_string();
                 data.dirty = true;
             }
         }
@@ -451,6 +453,10 @@ impl TemplateBackend for WebKitBackend {
                         data.dirty = false;
 
                         let js_values = build_js_values(&data);
+                        let animation = (
+                            data.config.animation_enabled,
+                            data.config.animation_speed.clamp(0.1, 10.0),
+                        );
 
                         if js_values != data.last_js_values {
                             data.last_js_values = js_values.clone();
@@ -528,8 +534,9 @@ impl TemplateBackend for WebKitBackend {
                             if let Some(ref webview) = state.webview {
                                 EVAL_COUNT.fetch_add(1, Ordering::Relaxed);
                                 let js_call = format!(
-                                    "if (window.updateValues) {{ window.updateValues({{{}}}); }}",
-                                    js_values
+                                    "if (window.rgSetMotion) {{ window.rgSetMotion({}, {}); }} \
+                                     if (window.updateValues) {{ window.updateValues({{{}}}); }}",
+                                    animation.0, animation.1, js_values
                                 );
                                 webview.evaluate_javascript(
                                     &js_call,
@@ -723,14 +730,15 @@ mod tests {
         assert_eq!(mapped(&values, "min"), "--");
     }
 
-    /// The shipped Art Deco and Art Nouveau examples: every placeholder they
+    /// The shipped Art Deco, Art Nouveau and Steampunk examples: every placeholder they
     /// use has an auto-configure entry, the numbering has no holes, the two
-    /// share one mapping, and neither loads anything from the network.
+    /// share one mapping, and none loads anything from the network.
     #[test]
     fn example_panels_are_fully_configured() {
         let deco = include_str!("../../examples/art_deco_panel.html");
         let nouveau = include_str!("../../examples/art_nouveau_panel.html");
-        for (html, count) in [(deco, 74u32), (nouveau, 74)] {
+        let steampunk = include_str!("../../examples/steampunk_panel.html");
+        for (html, count) in [(deco, 74u32), (nouveau, 74), (steampunk, 74)] {
             let placeholders = detect_placeholders(html);
             assert_eq!(placeholders, (0..count).collect::<Vec<u32>>());
             let defaults = extract_placeholder_defaults(html);
@@ -742,17 +750,16 @@ mod tests {
             }
             assert!(!html.contains("fonts.googleapis.com"));
         }
-        let (deco, nouveau) = (
-            extract_placeholder_defaults(deco),
-            extract_placeholder_defaults(nouveau),
-        );
-        for (index, default) in &deco {
-            let other = &nouveau[index];
-            assert_eq!(
-                (&default.source, &default.field),
-                (&other.source, &other.field),
-                "placeholder {index} differs between the two panels"
-            );
+        let deco = extract_placeholder_defaults(deco);
+        for other in [nouveau, steampunk] {
+            let other = extract_placeholder_defaults(other);
+            for (index, default) in &deco {
+                assert_eq!(
+                    (&default.source, &default.field),
+                    (&other[index].source, &other[index].field),
+                    "placeholder {index} differs between the panels"
+                );
+            }
         }
     }
 }

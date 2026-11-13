@@ -1,0 +1,50 @@
+/* Art Deco Sensor Panel: stylesheet for art_deco_panel.html (rg-Sens CSS Template displayer).
+   Colours, fonts and the few classes the page's script switches; the
+   drawing itself is inline in the HTML. Setup notes are at the top of the
+   HTML file. */
+
+/* Bundled fonts (SIL Open Font License, see fonts/<family>/OFL.txt). Keep the
+   fonts folder next to this file; without it the page falls back to serif. */
+@font-face { font-family: "Limelight"; font-weight: 400; font-style: normal;
+  src: local("Limelight"), url("fonts/limelight/Limelight-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Josefin Sans"; font-weight: 100 700; font-style: normal;
+  src: local("Josefin Sans"), url("fonts/josefin-sans/JosefinSans%5Bwght%5D.ttf") format("truetype"); }
+:root {
+  --accent: #D4AF37;
+  --mid: var(--accent);
+  --hi: color-mix(in srgb, var(--accent), white 68%);
+  --lt: color-mix(in srgb, var(--accent), white 32%);
+  --dk: color-mix(in srgb, var(--accent), black 42%);
+  --dp: color-mix(in srgb, var(--accent), black 66%);
+  --pin: color-mix(in srgb, var(--accent) 3.5%, transparent);
+  --bg: #0B0A0C;
+  --groove: rgba(11, 10, 12, 0.6);
+  --text: #F2E9D3;
+  --label: #A8996F;
+  --track: #2A251C;
+  --ink: #1A1408;
+  --warn: #E39A3B;
+  --hot: #E5654C;
+}
+html, body { margin: 0; background: var(--bg); }
+[hidden] { display: none !important; }
+/* values change once per update; no transitions, so nothing repaints in between */
+.rg-placeholder { transition: none; }
+
+.stats { display: flex; border-bottom: 1px solid var(--mid); margin-top: -8px; }
+.stat { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 11px 0; }
+.stat:not([hidden]) ~ .stat:not([hidden]) { border-left: 1px solid var(--mid); }
+
+.nets { display: flex; }
+.net { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 12px; padding-right: 12px; }
+.net:not([hidden]) ~ .net:not([hidden]) { border-left: 1px solid var(--mid); padding-left: 18px; padding-right: 0; }
+
+/* fan bar: 22 slanted segments, the last lit one brightest */
+.segs { display: flex; gap: 3px; height: 12px; }
+.segs i { flex: 1; background: var(--track); clip-path: polygon(30% 0, 100% 0, 70% 100%, 0 100%); }
+.segs i.on { background: linear-gradient(180deg, var(--hi) 0%, var(--mid) 50%, var(--dk) 100%); }
+.segs i.tip { background: linear-gradient(180deg, #fff 0%, var(--hi) 50%, var(--lt) 100%); }
+
+/* gauge arc: accent below 72, amber from 72, red-orange from 85 */
+.arc.warn { stroke: var(--warn) !important; }
+.arc.hot { stroke: var(--hot) !important; }

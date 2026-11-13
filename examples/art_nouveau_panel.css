@@ -1,0 +1,54 @@
+/* Art Nouveau Sensor Panel: stylesheet for art_nouveau_panel.html (rg-Sens CSS Template displayer).
+   Colours, fonts and the few classes the page's script switches; the
+   drawing itself is inline in the HTML. Setup notes are at the top of the
+   HTML file. */
+
+/* Bundled fonts (SIL Open Font License, see fonts/<family>/OFL.txt). Keep the
+   fonts folder next to this file; without it the page falls back to serif. */
+@font-face { font-family: "Federo"; font-weight: 400; font-style: normal;
+  src: local("Federo"), url("fonts/federo/Federo-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: normal;
+  src: local("Cormorant Garamond"), url("fonts/cormorant-garamond/CormorantGaramond%5Bwght%5D.ttf") format("truetype"); }
+@font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: italic;
+  src: local("Cormorant Garamond Italic"), url("fonts/cormorant-garamond/CormorantGaramond-Italic%5Bwght%5D.ttf") format("truetype"); }
+:root {
+  --metal: #C9A24A;
+  --foliage: #8FAE8B;
+  --m-hi: color-mix(in srgb, var(--metal), white 62%);
+  --m-lt: color-mix(in srgb, var(--metal), white 30%);
+  --m-mid: var(--metal);
+  --m-dk: color-mix(in srgb, var(--metal), black 42%);
+  --dots: color-mix(in srgb, var(--metal) 7%, transparent);
+  --l-lt: color-mix(in srgb, var(--foliage), white 35%);
+  --l-mid: var(--foliage);
+  --l-dk: color-mix(in srgb, var(--foliage), black 45%);
+  --bg: #101915;
+  --panel: #18241F;
+  --halo: #14201B;
+  --cream: #EFE6CF;
+  --label: #B7AC8C;
+  --rose: #C46B7C;
+  --track: #22302A;
+  --unlit: #3E5048;
+  --leading: #0B1310;
+  --warn: #E0893A;
+  --hot: #D9536B;
+}
+html, body { margin: 0; background: var(--bg); }
+[hidden] { display: none !important; }
+/* values change once per update; no transitions, so nothing repaints in between */
+.rg-placeholder { transition: none; }
+
+/* fan meter: 18 leaves on a stem, lit ones alternate metal and foliage, the last lit one is cream */
+.leaves path { fill: none; stroke: var(--unlit); stroke-width: 1; }
+.leaves path.on { stroke: none; }
+.leaves path.on.g { fill: url(#nv-gold) var(--m-mid); }
+.leaves path.on.s { fill: url(#nv-sage) var(--l-mid); }
+.leaves path.tip { fill: var(--cream); stroke: none; }
+
+/* gauge arc: metal below 72, amber from 72, red-rose from 85 */
+.arc.warn { stroke: var(--warn) !important; }
+.arc.hot { stroke: var(--hot) !important; }
+
+.net { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 12px; }
+.net:not([hidden]) ~ .net:not([hidden]) { padding-left: 16px; border-left: 1px solid var(--l-dk); }

@@ -103,6 +103,11 @@ pub trait DisplayEditor {
     /// Combo-compatible displayers get the slot summaries (css_template
     /// uses them for its placeholder mapping).
     fn set_source_summaries(&self, _summaries: Vec<(String, String, usize, u32)>) {}
+    /// The editor asks for source slots, as `(source, metric)` pairs
+    /// (css_template's Scan Placeholders creates what its template needs).
+    fn set_on_request_slots(&self, _cb: Rc<dyn Fn(Vec<(String, String)>)>) {}
+    /// What each slot measures (css_template maps placeholders by it).
+    fn set_slot_kinds(&self, _kinds: Vec<crate::ui::css_template_display::SlotKind>) {}
     fn cleanup(&self) {}
     /// An editor may split into pages; the tree shows them as child nodes
     /// of Display. A one-element path is a section; a longer path (a list
@@ -300,6 +305,12 @@ impl DisplayEditor for CssTemplateEditor {
     }
     fn set_source_summaries(&self, summaries: Vec<(String, String, usize, u32)>) {
         self.0.set_source_summaries(summaries);
+    }
+    fn set_slot_kinds(&self, kinds: Vec<crate::ui::css_template_display::SlotKind>) {
+        self.0.set_slot_kinds(kinds);
+    }
+    fn set_on_request_slots(&self, cb: Rc<dyn Fn(Vec<(String, String)>)>) {
+        self.0.set_on_request_slots(move |wanted| cb(wanted));
     }
 }
 

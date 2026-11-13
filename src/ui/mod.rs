@@ -204,6 +204,8 @@ impl CssTemplateConfigWidget {
         CssTemplateDisplayConfig::default()
     }
     pub fn set_source_summaries(&self, _summaries: Vec<(String, String, usize, u32)>) {}
+    pub fn set_slot_kinds(&self, _kinds: Vec<crate::ui::css_template_display::SlotKind>) {}
+    pub fn set_on_request_slots<F: Fn(Vec<(String, String)>) + 'static>(&self, _f: F) {}
     pub fn set_on_change<F: Fn() + 'static>(&self, _f: F) {}
 }
 
