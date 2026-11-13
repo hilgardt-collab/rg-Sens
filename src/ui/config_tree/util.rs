@@ -591,6 +591,39 @@ mod css_template_setup_tests {
         );
     }
 
+    /// The LCARS-style panel's per-core placeholders read the CPU usage
+    /// sensor (every CPU sensor publishes `coreN_usage`): scanning makes no
+    /// extra sensor for them and binds all sixteen to the one the load row uses.
+    #[test]
+    fn core_placeholders_share_the_usage_sensor() {
+        let html = include_str!("../../../examples/lcars_panel.html");
+        let (placeholders, defaults) = (
+            detect_placeholders(html),
+            extract_placeholder_defaults(html),
+        );
+        let wanted = wanted_slots(&placeholders, &defaults);
+        assert_eq!(wanted.len(), 18, "{wanted:?}");
+        let mut cfg = ComboSourceConfig::default();
+        add_wanted_slots(&mut cfg, &wanted);
+        let mappings = auto_map(
+            &placeholders,
+            &defaults,
+            &HashMap::new(),
+            &combo_slot_kinds(&cfg),
+        );
+        assert_eq!(mappings.len(), 91);
+        let by_index = |i: u32| mappings.iter().find(|m| m.index == i).unwrap();
+        let usage = &by_index(9).slot_prefix;
+        assert!(!usage.is_empty());
+        for core in 0..16 {
+            let m = by_index(74 + core);
+            assert_eq!(&m.slot_prefix, usage);
+            assert_eq!(m.field, format!("core{core}_usage"));
+        }
+        assert_eq!(by_index(90).slot_prefix, by_index(0).slot_prefix);
+        assert_eq!(by_index(90).field, "year");
+    }
+
     /// Slots the user already made are used wherever they sit, and only the
     /// missing ones are added.
     #[test]

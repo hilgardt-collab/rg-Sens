@@ -431,8 +431,9 @@ CSS Template panels are enabled by default; start rg-Sens with
 
 - [Art Deco](../examples/art_deco_panel.html),
   [Art Nouveau](../examples/art_nouveau_panel.html),
-  [Steampunk](../examples/steampunk_panel.html) and
-  [Neon](../examples/neon_panel.html) panel examples - full 480x1920
+  [Steampunk](../examples/steampunk_panel.html),
+  [Neon](../examples/neon_panel.html) and
+  [LCARS-style](../examples/lcars_panel.html) panel examples - full 480x1920
   panels sharing one placeholder mapping: gauges, fan meters, bars, sections
   that hide when unmapped; setup steps are in the comment at the top of each.
   They load their fonts from `examples/fonts/` (SIL Open Font License; Special

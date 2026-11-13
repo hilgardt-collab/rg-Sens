@@ -1,0 +1,181 @@
+/* LCARS-style Sensor Panel: stylesheet for lcars_panel.html (rg-Sens CSS Template displayer).
+   Setup notes are at the top of the HTML file. */
+
+/* Bundled font: Antonio, SIL Open Font License (fonts/antonio/OFL.txt). Keep
+   the fonts folder next to this file: condensed fallbacks are poor, and a
+   wide font makes the bar titles too long. */
+@font-face { font-family: "Antonio"; font-weight: 100 700; font-style: normal;
+  src: local("Antonio"), url("fonts/antonio/Antonio%5Bwght%5D.ttf") format("truetype"); }
+
+:root {
+  /* Scheme: classic, cool or alert. */
+  --scheme: classic;
+  /* 1 switches to the alert scheme while any temperature is at 85 or more. */
+  --auto-alert: 1;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Fan bar full scale when a fan has no maximum of its own. */
+  --fan-max: 2400;
+
+  --f1: #FF9900; --f2: #CC99CC; --f3: #9999FF;
+  --c2: #FF9966; --c3: #9999CC; --c4: #99CCFF; --c5: #CC6699;
+  --tan: #FFCC99; --red: #FF5555;
+}
+:root[data-scheme="cool"] {
+  --f1: #5599FF; --f2: #88AAEE; --f3: #6677CC;
+  --c2: #99CCFF; --c3: #7788BB; --c4: #66CCEE; --c5: #AA99EE;
+  --tan: #D6E8FF; --red: #FF6677;
+}
+:root[data-scheme="alert"] {
+  --f1: #DD3333; --f2: #CC5555; --f3: #AA3344;
+  --c2: #FF7766; --c3: #CC8888; --c4: #FF9988; --c5: #BB4466;
+  --tan: #FFD0C8; --red: #FF3333;
+}
+html, body { margin: 0; background: #000; }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+@keyframes lc-scan { 0%,100% { filter: brightness(1); } 6% { filter: brightness(1.5); } 14% { filter: brightness(1); } }
+@keyframes lc-blink { 0%,49% { opacity: 1; } 50%,100% { opacity: .25; } }
+@keyframes lc-alert { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes lc-sweep { from { transform: translateX(-20px); } to { transform: translateX(352px); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+  background: #000; font-family: "Antonio", "Arial Narrow", sans-serif; color: var(--tan);
+  text-transform: uppercase; padding: 14px 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.panel h1, .panel h2 { margin: 0; padding: 0 4px; font-weight: 600; white-space: nowrap; }
+
+/* ---- frame: 96px side column + content, elbow / content / elbow ---- */
+.frame { flex: 1 1 auto; display: grid; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: 56px 1fr 56px; --f: var(--f1); }
+.frame.b { --f: var(--f2); }
+.frame.c { --f: var(--f3); }
+.elbow { position: relative; background: var(--f); border-radius: 48px 0 0 0; }
+.elbow.low { border-radius: 0 0 0 48px; }
+.elbow span, .side span { position: absolute; right: 8px; bottom: 3px; font-size: 14px; font-weight: 600; color: #000; }
+.elbow.low span { bottom: auto; top: 3px; }
+.rail { position: relative; }
+.rail .bar { position: absolute; top: 0; left: 0; right: 0; height: 22px; display: flex; gap: 6px; align-items: flex-start; }
+.rail.low .bar { top: auto; bottom: 0; align-items: flex-end; }
+.rail .bar > div { height: 22px; background: var(--f); }
+.rail .bar > .grow { flex: 1; }
+.rail .bar > .cap { width: 22px; border-radius: 0 11px 11px 0; }
+.rail .bar > h1 { font-size: 31px; line-height: 22px; letter-spacing: .02em; color: var(--f); }
+.rail .bar > h2 { font-size: 27px; line-height: 22px; color: var(--f); }
+.rail .bar > .status { padding: 0 4px; font-size: 22px; font-weight: 600; line-height: 22px; white-space: nowrap; color: var(--tan); }
+.rail .bar > .status.big { font-size: 25px; }
+.fillet { position: absolute; top: 22px; left: 0; width: 28px; height: 28px; background: var(--f); }
+.fillet > div { width: 100%; height: 100%; background: #000; border-top-left-radius: 28px; }
+.rail.low .fillet { top: auto; bottom: 22px; }
+.rail.low .fillet > div { border-radius: 0 0 0 28px; }
+/* Alert scheme: the first frame's elbows and bars pulse. */
+:root[data-scheme="alert"] .frame.a .pulse { animation: lc-alert 1.2s ease-in-out infinite; }
+
+.side { display: flex; flex-direction: column; gap: 5px; padding: 5px 0; }
+.side > div { position: relative; min-height: 34px; animation: lc-scan 7s ease-in-out infinite; }
+.content { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; padding: 14px 0 14px 18px; min-height: 0; }
+.frame.c .content { gap: 10px; }
+/* Accent blocks inside bars and headers: these win over the bar's own colour. */
+.bg-f1 { background: var(--f1) !important; } .bg-c2 { background: var(--c2) !important; } .bg-c3 { background: var(--c3) !important; }
+.bg-c4 { background: var(--c4) !important; } .bg-c5 { background: var(--c5) !important; }
+.fg-f1 { color: var(--f1); } .fg-c2 { color: var(--c2); } .fg-c3 { color: var(--c3); }
+.fg-c4 { color: var(--c4); } .fg-c5 { color: var(--c5); }
+
+/* ---- time ---- */
+.time { display: flex; align-items: flex-end; justify-content: space-between; }
+.time > div { display: flex; flex-direction: column; }
+.time .cap { font-size: 16px; font-weight: 600; letter-spacing: .06em; color: var(--c2); }
+.clock { font-size: 112px; font-weight: 600; line-height: .9; color: var(--tan); }
+.time .right { align-items: flex-end; gap: 6px; padding-bottom: 6px; }
+.date { font-size: 28px; font-weight: 600; line-height: 1; white-space: nowrap; color: var(--f1); }
+.year { font-size: 18px; line-height: 1; color: var(--c3); }
+.lamps { display: flex; gap: 4px; margin-top: 4px; }
+.lamps i { width: 18px; height: 12px; border-radius: 6px; animation: lc-blink 1.1s steps(1) infinite; }
+
+/* ---- sub-section header ---- */
+.block { display: flex; flex-direction: column; gap: 10px; }
+.sub { display: flex; align-items: center; gap: 6px; height: 18px; --s: var(--c2); }
+.sub > div { height: 18px; background: var(--s); }
+.sub > .l { width: 26px; border-radius: 9px 0 0 9px; }
+.sub > .grow { flex: 1; }
+.sub > .tag { width: 30px; }
+.sub > .r { width: 14px; border-radius: 0 9px 9px 0; }
+.sub h2 { font-size: 22px; line-height: 18px; color: var(--s); }
+
+/* ---- temperature + thermal bar ---- */
+.thermal { display: flex; align-items: flex-end; gap: 14px; }
+.thermal > .big { display: flex; flex-direction: column; flex: none; }
+.thermal .name { font-size: 15px; font-weight: 600; color: var(--f1); max-width: 150px; overflow: hidden; white-space: nowrap; }
+.thermal .big > div { display: flex; align-items: flex-start; }
+.temp { font-size: 92px; font-weight: 600; line-height: .85; color: var(--tan); }
+.thermal.critical .temp { color: var(--red); }
+.deg { font-size: 26px; font-weight: 600; color: var(--f1); margin-left: 3px; }
+.thermal > .scale { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
+.scale .head { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; color: var(--c4); }
+.thermal.elevated .head { color: var(--f1); }
+.thermal.critical .head { color: var(--red); }
+.cells { display: flex; gap: 3px; height: 34px; }
+.cells i { flex: 1; background: var(--c4); opacity: .2; }
+.cells i.warm { background: var(--f1); }
+.cells i.hot { background: var(--red); }
+.cells i.on { opacity: 1; }
+.scale .marks { display: flex; justify-content: space-between; font-size: 13px; color: var(--c3); }
+
+/* ---- data rows ---- */
+.row { display: flex; align-items: center; gap: 6px; height: 28px; --p: var(--c3); }
+.pill { width: 118px; flex: none; height: 28px; box-sizing: border-box; border-radius: 14px 0 0 14px; background: var(--p);
+  display: flex; align-items: flex-end; justify-content: flex-end; padding: 0 10px 2px 0;
+  font-size: 16px; font-weight: 600; color: #000; white-space: nowrap; overflow: hidden; }
+.row .v { flex: 1; text-align: right; font-size: 27px; font-weight: 600; line-height: 1; color: var(--tan); white-space: nowrap; }
+.row .u { font-size: 16px; color: var(--f1); }
+.row .end { width: 14px; flex: none; height: 28px; border-radius: 0 14px 14px 0; background: var(--p); }
+
+/* ---- cores: four to a row up to eight, eight to a row beyond ---- */
+.cores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; }
+.core { display: flex; flex-direction: column; gap: 3px; }
+.core > div:first-child { display: flex; align-items: baseline; justify-content: space-between; }
+.core .n { font-size: 13px; font-weight: 600; color: var(--f1); }
+.core .p { font-size: 20px; font-weight: 600; line-height: 1; color: var(--tan); }
+.core .t { height: 5px; background: color-mix(in srgb, var(--c3) 25%, transparent); }
+.core .t i { display: block; height: 5px; width: 0; background: var(--c3); }
+.cores.many { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px 6px; }
+.cores.many .n { font-size: 10px; }
+.cores.many .p { font-size: 15px; }
+
+/* ---- fans ---- */
+.fans { display: flex; flex-direction: column; gap: 9px; }
+.fans .pill { width: 104px; }
+.segs { flex: 1; min-width: 0; display: flex; gap: 2px; height: 20px; }
+.segs i { flex: 1; background: var(--p); opacity: .2; }
+.segs i.on { opacity: 1; }
+.segs i.tip { background: var(--tan); opacity: 1; }
+.fans .v { flex: none; width: 62px; font-size: 25px; }
+.foot { text-align: right; font-size: 13px; color: var(--c3); }
+
+/* ---- memory ---- */
+.memory { display: flex; gap: 14px; align-items: stretch; }
+.meters { display: flex; gap: 10px; }
+.meter { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 54px; --p: var(--c4); }
+.slats { display: flex; flex-direction: column-reverse; gap: 3px; width: 54px; }
+.slats i { height: 6px; background: var(--p); opacity: .2; }
+.slats i.on { opacity: 1; }
+.meter .tag { width: 54px; height: 22px; border-radius: 11px; background: var(--p); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #000; }
+.readout { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+.readout > div { display: flex; flex-direction: column; gap: 1px; align-items: flex-end; }
+.readout .nm { font-size: 14px; font-weight: 600; color: var(--p); white-space: nowrap; }
+.readout .amt { font-size: 26px; font-weight: 600; line-height: 1; color: var(--tan); white-space: nowrap; }
+.readout .of { font-size: 15px; color: var(--f1); }
+.readout .pc { font-size: 14px; color: var(--c3); }
+
+/* ---- communications chart ---- */
+.chart-box { display: flex; flex-direction: column; gap: 4px; }
+.chart-box .lbl { display: flex; justify-content: space-between; font-size: 13px; color: var(--c3); }
+.chart { position: relative; height: 120px; overflow: hidden; }
+.chart svg { position: absolute; top: 0; left: 0; }
+.chart .dn { fill: var(--c4); }
+.chart .up { fill: var(--f1); }
+.sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 16px; background: rgba(255,255,255,0.14); animation: lc-sweep 4s linear infinite; }
+.still .sweep { display: none; }

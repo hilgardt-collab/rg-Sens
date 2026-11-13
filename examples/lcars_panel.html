@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<title>LCARS-style Sensor Panel</title>
+<!--
+  LCARS-style sensor panel for the rg-Sens CSS Template displayer, 480x1920
+  portrait. A sibling of the Art Deco, Art Nouveau, Steampunk and Neon panels:
+  the same placeholders 0-73 and the same setup, plus per-core CPU load and
+  the year.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names, year
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the row label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two temperatures ("Package", "Edge"), the fan rows and the
+  memory readouts; set them on the sensors.
+
+  Per-core load reads the CPU usage sensor: every CPU sensor also publishes
+  core0_usage, core1_usage and so on, and the "CPU cores" binding shows the
+  first sixteen. Cores the machine does not have are hidden; up to eight cores
+  are drawn four to a row, more than eight as a compact grid of eight to a
+  row. To show other cores, change a placeholder's field on the Bindings tab.
+
+  Anything left unbound is hidden: a row, a meter, a sub-section, a frame. The
+  processor's power row has no rg-Sens source and stays hidden unless you bind
+  a sensor to it by hand.
+
+  The communications chart keeps the last 60 seconds (48 samples) of down and
+  up speed in the page, on a shared scale that follows the peak. It starts
+  empty and survives a reload of the template, not a restart of rg-Sens.
+
+  Scheme: classic, cool or alert, set with --scheme at the top of
+  lcars_panel.css. With --auto-alert at 1 the panel switches to the alert
+  scheme while the CPU or GPU temperature is at 85 or more.
+
+  Motion: the side blocks, indicator lamps, the chart's scan line and the
+  alert pulse move at --motion-fps frames a second. 0 turns motion off, as do
+  the panel's Animation switch and the system's reduced-motion setting.
+
+  Font: Antonio, loaded from the fonts folder next to this file; copy that
+  folder along with the template. Nothing is fetched from the network.
+
+  The side-block codes and frame tags (SENSOR 01, 03 CPU, THERMAL ...) are
+  decoration; edit them in the markup below.
+-->
+<link rel="stylesheet" href="lcars_panel.css">
+</head>
+<body>
+<div class="panel">
+
+  <!-- ===== Frame A: time, processor, graphics ===== -->
+  <section class="frame a">
+    <div class="elbow pulse"><span>SENSOR 01</span></div>
+    <div class="rail">
+      <div class="bar"><div class="grow pulse"></div><div class="bg-c4" style="width: 36px"></div><h1>SYSTEM SENSORS</h1><div class="cap pulse"></div></div>
+      <div class="fillet pulse"><div></div></div>
+    </div>
+    <div class="side">
+      <div class="bg-c2" style="flex: 2 1 0px; animation-delay: 0.00s"><span>01 TIME</span></div>
+      <div class="bg-f1" style="flex: 1.2 1 0px; animation-delay: 0.55s"><span>02 CPU</span></div>
+      <div class="bg-c3" style="flex: 3 1 0px; animation-delay: 1.10s"><span>03 CPU</span></div>
+      <div class="bg-c4" style="flex: 1.6 1 0px; animation-delay: 1.65s"><span>04 CORES</span></div>
+      <div class="bg-c5" style="flex: 1.2 1 0px; animation-delay: 2.20s"><span>05 GPU</span></div>
+      <div class="bg-c2" style="flex: 3 1 0px; animation-delay: 2.75s"><span>06 GPU</span></div>
+      <div class="bg-f1" style="flex: 0.8 1 0px; animation-delay: 3.30s"><span>07</span></div>
+    </div>
+    <div class="content">
+      <div class="time" data-need="0">
+        <div><span class="cap">LOCAL TIME</span><span class="clock" data-clock="0">--:--</span></div>
+        <div class="right">
+          <span class="date" data-date>&nbsp;</span>
+          <span class="year" data-year="90">&nbsp;</span>
+          <div class="lamps"><i class="bg-c4" style="animation-duration: 1.1s"></i><i class="bg-f1" style="animation-duration: 1.47s"></i><i class="bg-c2" style="animation-duration: 1.84s"></i><i class="bg-c5" style="animation-duration: 2.21s"></i></div>
+        </div>
+      </div>
+
+      <div class="block" data-section="cpu">
+        <div class="sub" style="--s: var(--c2)"><div class="l"></div><h2>PROCESSOR</h2><div class="grow"></div><div class="tag bg-c3"></div><div class="r"></div></div>
+        <div class="thermal" data-thermal="5" data-need="5">
+          <div class="big">
+            <span class="name" data-cap="4" data-default="PACKAGE">PACKAGE</span>
+            <div><span class="temp" data-num="5" data-places="0">--</span><span class="deg">°C</span></div>
+          </div>
+          <div class="scale">
+            <div class="head"><span>THERMAL</span><span data-state>NOMINAL</span></div>
+            <div class="cells" data-cells></div>
+            <div class="marks"><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+          </div>
+        </div>
+        <div class="row" style="--p: var(--c3)" data-need="9"><div class="pill">LOAD</div><div class="v"><span data-num="9" data-places="0">--</span><span class="u"> <span data-unit="10"></span></span></div><div class="end"></div></div>
+        <div class="row" style="--p: var(--c2)" data-need="13"><div class="pill">CLOCK</div><div class="v"><span data-num="13" data-places="2">--</span><span class="u"> <span data-unit="14"></span></span></div><div class="end"></div></div>
+        <div class="row" style="--p: var(--c4)" data-need="17"><div class="pill">POWER</div><div class="v"><span data-num="17" data-places="0">--</span><span class="u"> <span data-unit="18"></span></span></div><div class="end"></div></div>
+        <div class="cores" data-cores>
+          <div class="core" data-need="74"><div><span class="n">C1</span><span class="p" data-num="74" data-places="0">--</span></div><div class="t"><i data-core="74"></i></div></div>
+          <div class="core" data-need="75"><div><span class="n">C2</span><span class="p" data-num="75" data-places="0">--</span></div><div class="t"><i data-core="75"></i></div></div>
+          <div class="core" data-need="76"><div><span class="n">C3</span><span class="p" data-num="76" data-places="0">--</span></div><div class="t"><i data-core="76"></i></div></div>
+          <div class="core" data-need="77"><div><span class="n">C4</span><span class="p" data-num="77" data-places="0">--</span></div><div class="t"><i data-core="77"></i></div></div>
+          <div class="core" data-need="78"><div><span class="n">C5</span><span class="p" data-num="78" data-places="0">--</span></div><div class="t"><i data-core="78"></i></div></div>
+          <div class="core" data-need="79"><div><span class="n">C6</span><span class="p" data-num="79" data-places="0">--</span></div><div class="t"><i data-core="79"></i></div></div>
+          <div class="core" data-need="80"><div><span class="n">C7</span><span class="p" data-num="80" data-places="0">--</span></div><div class="t"><i data-core="80"></i></div></div>
+          <div class="core" data-need="81"><div><span class="n">C8</span><span class="p" data-num="81" data-places="0">--</span></div><div class="t"><i data-core="81"></i></div></div>
+          <div class="core" data-need="82"><div><span class="n">C9</span><span class="p" data-num="82" data-places="0">--</span></div><div class="t"><i data-core="82"></i></div></div>
+          <div class="core" data-need="83"><div><span class="n">C10</span><span class="p" data-num="83" data-places="0">--</span></div><div class="t"><i data-core="83"></i></div></div>
+          <div class="core" data-need="84"><div><span class="n">C11</span><span class="p" data-num="84" data-places="0">--</span></div><div class="t"><i data-core="84"></i></div></div>
+          <div class="core" data-need="85"><div><span class="n">C12</span><span class="p" data-num="85" data-places="0">--</span></div><div class="t"><i data-core="85"></i></div></div>
+          <div class="core" data-need="86"><div><span class="n">C13</span><span class="p" data-num="86" data-places="0">--</span></div><div class="t"><i data-core="86"></i></div></div>
+          <div class="core" data-need="87"><div><span class="n">C14</span><span class="p" data-num="87" data-places="0">--</span></div><div class="t"><i data-core="87"></i></div></div>
+          <div class="core" data-need="88"><div><span class="n">C15</span><span class="p" data-num="88" data-places="0">--</span></div><div class="t"><i data-core="88"></i></div></div>
+          <div class="core" data-need="89"><div><span class="n">C16</span><span class="p" data-num="89" data-places="0">--</span></div><div class="t"><i data-core="89"></i></div></div>
+        </div>
+      </div>
+
+      <div class="block" data-section="gpu">
+        <div class="sub" style="--s: var(--c5)"><div class="l"></div><h2>GRAPHICS</h2><div class="grow"></div><div class="tag bg-f1"></div><div class="r"></div></div>
+        <div class="thermal" data-thermal="21" data-need="21">
+          <div class="big">
+            <span class="name" data-cap="20" data-default="EDGE">EDGE</span>
+            <div><span class="temp" data-num="21" data-places="0">--</span><span class="deg">°C</span></div>
+          </div>
+          <div class="scale">
+            <div class="head"><span>THERMAL</span><span data-state>NOMINAL</span></div>
+            <div class="cells" data-cells></div>
+            <div class="marks"><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+          </div>
+        </div>
+        <div class="row" style="--p: var(--c3)" data-need="25"><div class="pill">UTILISATION</div><div class="v"><span data-num="25" data-places="0">--</span><span class="u"> <span data-unit="26"></span></span></div><div class="end"></div></div>
+        <div class="row" style="--p: var(--c2)" data-need="29"><div class="pill">CLOCK</div><div class="v"><span data-num="29" data-places="2">--</span><span class="u"> <span data-unit="30"></span></span></div><div class="end"></div></div>
+        <div class="row" style="--p: var(--c4)" data-need="33"><div class="pill">POWER</div><div class="v"><span data-num="33" data-places="0">--</span><span class="u"> <span data-unit="34"></span></span></div><div class="end"></div></div>
+      </div>
+    </div>
+    <div class="elbow low pulse"><span>THERMAL</span></div>
+    <div class="rail low">
+      <div class="fillet pulse"><div></div></div>
+      <div class="bar"><div class="pulse" style="width: 60px"></div><div class="bg-c2" style="width: 24px"></div><span class="status" data-status>ALL SYSTEMS NOMINAL</span><div class="grow pulse"></div><div class="cap pulse"></div></div>
+    </div>
+  </section>
+
+  <!-- ===== Frame B: cooling, memory ===== -->
+  <section class="frame b" data-section="b">
+    <div class="elbow"><span>SENSOR 02</span></div>
+    <div class="rail">
+      <div class="bar"><div style="width: 90px"></div><h2>COOLING</h2><div class="grow"></div><div class="bg-c4" style="width: 40px"></div><div class="cap"></div></div>
+      <div class="fillet"><div></div></div>
+    </div>
+    <div class="side">
+      <div class="bg-c4" style="flex: 3 1 0px; animation-delay: 1.50s"><span>11 FANS</span></div>
+      <div class="bg-c2" style="flex: 0.8 1 0px; animation-delay: 2.05s"><span>12</span></div>
+      <div class="bg-c3" style="flex: 1.2 1 0px; animation-delay: 2.60s"><span>13 MEM</span></div>
+      <div class="bg-f1" style="flex: 3 1 0px; animation-delay: 3.15s"><span>14 MEM</span></div>
+      <div class="bg-c5" style="flex: 0.8 1 0px; animation-delay: 3.70s"><span>15</span></div>
+    </div>
+    <div class="content">
+      <div class="fans" data-section="fans">
+        <div class="row" style="--p: var(--c4)" data-need="37"><div class="pill" data-cap="36" data-default="FAN 1">FAN 1</div><div class="segs" data-segs="37" data-max="39"></div><div class="v" data-num="37" data-places="0">--</div><div class="end"></div></div>
+        <div class="row" style="--p: var(--c2)" data-need="41"><div class="pill" data-cap="40" data-default="FAN 2">FAN 2</div><div class="segs" data-segs="41" data-max="43"></div><div class="v" data-num="41" data-places="0">--</div><div class="end"></div></div>
+        <div class="row" style="--p: var(--c3)" data-need="45"><div class="pill" data-cap="44" data-default="FAN 3">FAN 3</div><div class="segs" data-segs="45" data-max="47"></div><div class="v" data-num="45" data-places="0">--</div><div class="end"></div></div>
+        <div class="row" style="--p: var(--c5)" data-need="49"><div class="pill" data-cap="48" data-default="FAN 4">FAN 4</div><div class="segs" data-segs="49" data-max="51"></div><div class="v" data-num="49" data-places="0">--</div><div class="end"></div></div>
+        <div class="foot" data-fan-note>&nbsp;</div>
+      </div>
+      <div class="block" data-section="memory">
+        <div class="sub" style="--s: var(--c3)"><div class="l"></div><h2>MEMORY</h2><div class="grow"></div><div class="tag bg-f1"></div><div class="r"></div></div>
+        <div class="memory">
+          <div class="meters">
+          <div class="meter" style="--p: var(--c4)" data-need="53"><div class="slats" data-slats="53" data-max="55"></div><div class="tag">RAM</div></div>
+          <div class="meter" style="--p: var(--c2)" data-need="57"><div class="slats" data-slats="57" data-max="59"></div><div class="tag">VRAM</div></div>
+          <div class="meter" style="--p: var(--c5)" data-need="61"><div class="slats" data-slats="61" data-max="63"></div><div class="tag">DISK</div></div>
+          </div>
+          <div class="readout">
+          <div style="--p: var(--c4)" data-need="53"><span class="nm" data-cap="52" data-default="SYSTEM RAM">SYSTEM RAM</span><span class="amt"><span data-num="53" data-places="1">--</span><span class="of"> / <span data-num="55" data-places="0">--</span> <span data-unit="54"></span></span></span><span class="pc"><span data-fill-pct="53" data-max="55">--</span> PERCENT</span></div>
+          <div style="--p: var(--c2)" data-need="57"><span class="nm" data-cap="56" data-default="VIDEO RAM">VIDEO RAM</span><span class="amt"><span data-num="57" data-places="1">--</span><span class="of"> / <span data-num="59" data-places="0">--</span> <span data-unit="58"></span></span></span><span class="pc"><span data-fill-pct="57" data-max="59">--</span> PERCENT</span></div>
+          <div style="--p: var(--c5)" data-need="61"><span class="nm" data-cap="60" data-default="DISK">DISK</span><span class="amt"><span data-num="61" data-places="1">--</span><span class="of"> / <span data-num="63" data-places="0">--</span> <span data-unit="62"></span></span></span><span class="pc"><span data-fill-pct="61" data-max="63">--</span> PERCENT</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="elbow low"><span>STORAGE</span></div>
+    <div class="rail low">
+      <div class="fillet"><div></div></div>
+      <div class="bar"><div class="grow"></div><div class="bg-c5" style="width: 50px"></div><div class="cap"></div></div>
+    </div>
+  </section>
+
+  <!-- ===== Frame C: communications, uptime ===== -->
+  <section class="frame c">
+    <div class="elbow"><span>SENSOR 03</span></div>
+    <div class="rail">
+      <div class="bar"><div style="width: 40px"></div><div class="bg-c2" style="width: 24px"></div><h2>COMMUNICATIONS</h2><div class="grow"></div><div class="cap"></div></div>
+      <div class="fillet"><div></div></div>
+    </div>
+    <div class="side">
+      <div class="bg-c4" style="flex: 1.2 1 0px; animation-delay: 3.00s"><span>21 DOWN</span></div>
+      <div class="bg-f1" style="flex: 1.2 1 0px; animation-delay: 3.55s"><span>22 UP</span></div>
+      <div class="bg-c3" style="flex: 3 1 0px; animation-delay: 4.10s"><span>23 HIST</span></div>
+    </div>
+    <div class="content">
+      <div class="row" style="--p: var(--c4)" data-need="65"><div class="pill">DOWNLINK</div><div class="v"><span data-num="65" data-places="1">--</span><span class="u"> <span data-unit="66"></span></span></div><div class="end"></div></div>
+      <div class="row" style="--p: var(--f1)" data-need="69"><div class="pill">UPLINK</div><div class="v"><span data-num="69" data-places="1">--</span><span class="u"> <span data-unit="70"></span></span></div><div class="end"></div></div>
+      <div class="chart-box" data-need="65">
+        <div class="lbl"><span>DOWN</span><span>LAST 60 SECONDS</span></div>
+        <div class="chart">
+          <svg aria-hidden="true" width="348" height="120" viewBox="0 0 348 120" data-chart></svg>
+          <div class="sweep"></div>
+        </div>
+        <div class="lbl"><span>UP</span></div>
+      </div>
+    </div>
+    <div class="elbow low"><span>UPTIME</span></div>
+    <div class="rail low">
+      <div class="fillet"><div></div></div>
+      <div class="bar"><div style="width: 40px"></div><span class="status big" data-need="73">UPTIME <span data-uptime="73">--</span></span><div class="grow"></div><div class="bg-c2" style="width: 30px"></div><div class="cap"></div></div>
+    </div>
+  </section>
+</div>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"},
+    "74": {"hint": "CPU cores - Core 1", "source": "cpu", "metric": "usage", "instance": 1, "field": "core0_usage", "format": "{:.0}"},
+    "75": {"hint": "CPU cores - Core 2", "source": "cpu", "metric": "usage", "instance": 1, "field": "core1_usage", "format": "{:.0}"},
+    "76": {"hint": "CPU cores - Core 3", "source": "cpu", "metric": "usage", "instance": 1, "field": "core2_usage", "format": "{:.0}"},
+    "77": {"hint": "CPU cores - Core 4", "source": "cpu", "metric": "usage", "instance": 1, "field": "core3_usage", "format": "{:.0}"},
+    "78": {"hint": "CPU cores - Core 5", "source": "cpu", "metric": "usage", "instance": 1, "field": "core4_usage", "format": "{:.0}"},
+    "79": {"hint": "CPU cores - Core 6", "source": "cpu", "metric": "usage", "instance": 1, "field": "core5_usage", "format": "{:.0}"},
+    "80": {"hint": "CPU cores - Core 7", "source": "cpu", "metric": "usage", "instance": 1, "field": "core6_usage", "format": "{:.0}"},
+    "81": {"hint": "CPU cores - Core 8", "source": "cpu", "metric": "usage", "instance": 1, "field": "core7_usage", "format": "{:.0}"},
+    "82": {"hint": "CPU cores - Core 9", "source": "cpu", "metric": "usage", "instance": 1, "field": "core8_usage", "format": "{:.0}"},
+    "83": {"hint": "CPU cores - Core 10", "source": "cpu", "metric": "usage", "instance": 1, "field": "core9_usage", "format": "{:.0}"},
+    "84": {"hint": "CPU cores - Core 11", "source": "cpu", "metric": "usage", "instance": 1, "field": "core10_usage", "format": "{:.0}"},
+    "85": {"hint": "CPU cores - Core 12", "source": "cpu", "metric": "usage", "instance": 1, "field": "core11_usage", "format": "{:.0}"},
+    "86": {"hint": "CPU cores - Core 13", "source": "cpu", "metric": "usage", "instance": 1, "field": "core12_usage", "format": "{:.0}"},
+    "87": {"hint": "CPU cores - Core 14", "source": "cpu", "metric": "usage", "instance": 1, "field": "core13_usage", "format": "{:.0}"},
+    "88": {"hint": "CPU cores - Core 15", "source": "cpu", "metric": "usage", "instance": 1, "field": "core14_usage", "format": "{:.0}"},
+    "89": {"hint": "CPU cores - Core 16", "source": "cpu", "metric": "usage", "instance": 1, "field": "core15_usage", "format": "{:.0}"},
+    "90": {"hint": "Clock - Year", "source": "clock", "instance": 1, "field": "year", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_STEP = 4, CELLS = 20;   // thermal bar: 20 to 100 degrees C
+  var WARM = 72, HOT = 85;
+  var FAN_SEGS = 16, SLATS = 18;
+  var SAMPLES = 48, SAMPLE_MS = 1250;       // 60 s of history
+  var SVG = 'http://www.w3.org/2000/svg';
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var FAN_MAX = cssNum('--fan-max', 2400);
+  var SCHEME = (css.getPropertyValue('--scheme') || 'classic').trim() || 'classic';
+  var AUTO_ALERT = cssNum('--auto-alert', 1) > 0;
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places, grouped) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p, useGrouping: !!grouped });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  function cells(el, count, cls) {
+    for (var i = 0; i < count; i++) {
+      var c = document.createElement('i');
+      if (cls) c.className = cls(i);
+      el.appendChild(c);
+    }
+  }
+  // Light the first `lit` cells; `tip` marks the last lit one.
+  function light(el, lit, tip) {
+    if (el.dataset.lit === String(lit)) return;
+    el.dataset.lit = String(lit);
+    for (var i = 0; i < el.children.length; i++) {
+      el.children[i].classList.toggle('on', i < lit);
+      if (tip) el.children[i].classList.toggle('tip', i === lit - 1);
+    }
+  }
+
+  // ------------------------------------------------------- drawn once
+  // Thermal cells: a cell is warm or hot by the temperature it stands for.
+  each('[data-cells]', function (el) {
+    cells(el, CELLS, function (i) {
+      var top = T_MIN + T_STEP * (i + 1);
+      return top > HOT ? 'hot' : top > WARM ? 'warm' : '';
+    });
+  });
+  each('[data-segs]', function (el) { cells(el, FAN_SEGS); });
+  each('[data-slats]', function (el) { cells(el, SLATS); });
+  // Chart: one down bar above the centre line and one up bar below it per sample.
+  var bars = [];
+  each('[data-chart]', function (svg) {
+    for (var i = 0; i < SAMPLES; i++) {
+      var pair = ['dn', 'up'].map(function (cls) {
+        var r = document.createElementNS(SVG, 'rect');
+        r.setAttribute('x', (i * 348 / SAMPLES).toFixed(2));
+        r.setAttribute('width', '5');
+        r.setAttribute('height', '0');
+        r.setAttribute('y', cls === 'dn' ? '59' : '62');
+        r.setAttribute('class', cls);
+        svg.appendChild(r);
+        return r;
+      });
+      bars.push(pair);
+    }
+  });
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-lcars-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000) {
+      Object.keys(hist).forEach(function (k) { if (Array.isArray(saved.hist[k])) hist[k] = saved.hist[k].slice(-SAMPLES); });
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  function drawChart() {
+    // Shared scale: the taller of the two fills its half. Newest on the right.
+    var peak = Math.max.apply(null, hist.down.concat(hist.up, [0]));
+    var full = Math.max(peak * 1.1, 0.01), offset = SAMPLES - hist.down.length;
+    for (var i = 0; i < bars.length; i++) {
+      var at = i - offset;
+      var dn = at >= 0 ? clamp01(hist.down[at] / full) * 55 : 0;
+      var up = at >= 0 && at < hist.up.length ? clamp01(hist.up[at] / full) * 55 : 0;
+      attr(bars[i][0], 'y', (59 - dn).toFixed(1)); attr(bars[i][0], 'height', dn.toFixed(1));
+      attr(bars[i][1], 'height', up.toFixed(1));
+    }
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    // The two series stay the same length, so a bar pair is one moment.
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  if (hist.up.length !== hist.down.length) { hist.down = []; hist.up = []; }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  function level(t) { return t >= HOT ? 2 : t >= WARM ? 1 : 0; }
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: the first four digits of the time ("9:24 PM" shows 09:24).
+    var digits = known(v['0']) ? String(v['0']).replace(/\D/g, '') : '';
+    if (digits.length === 3 || digits.length === 5) digits = '0' + digits;
+    each('[data-clock]', function (el) {
+      text(el, digits.length >= 4 ? digits.slice(0, 2) + ':' + digits.slice(2, 4) : '--:--');
+    });
+    each('[data-date]', function (el) {    // FRI 13 NOV
+      var parts = [known(v['1']) ? String(v['1']).slice(0, 3) : '', known(v['2']) ? String(v['2']) : '',
+                   known(v['3']) ? String(v['3']).slice(0, 3) : ''];
+      text(el, parts.filter(Boolean).join(' ') || '\u00a0');
+    });
+    each('[data-year]', function (el) {
+      var y = num(v[el.dataset.year]);
+      text(el, isFinite(y) ? String(Math.round(y)) : '\u00a0');
+    });
+
+    each('[data-num]', function (el) {
+      text(el, fmt(num(v[el.dataset.num]), +el.dataset.places));
+    });
+    each('[data-unit]', function (el) { var u = v[el.dataset.unit]; text(el, known(u) ? String(u) : ''); });
+    each('[data-cap]', function (el) {
+      var c = v[el.dataset.cap];
+      text(el, known(c) ? String(c) : el.dataset.default);
+    });
+    each('[data-uptime]', function (el) {  // 4D 07:12
+      var sec = num(v[el.dataset.uptime]);
+      if (!isFinite(sec)) { text(el, '--'); return; }
+      var d = Math.floor(sec / 86400), h = Math.floor(sec / 3600) % 24, m = Math.floor(sec / 60) % 60;
+      var two = function (n) { return (n < 10 ? '0' : '') + n; };
+      text(el, (d > 0 ? d + 'D ' : '') + two(h) + ':' + two(m));
+    });
+
+    // Temperatures: lit cells, state label, and the worse of the two overall.
+    var worst = 0;
+    each('[data-thermal]', function (el) {
+      var t = num(v[el.dataset.thermal]), lv = isFinite(t) ? level(t) : 0;
+      worst = Math.max(worst, lv);
+      attr(el, 'class', 'thermal' + (lv === 2 ? ' critical' : lv === 1 ? ' elevated' : ''));
+      text(el.querySelector('[data-state]'), ['NOMINAL', 'ELEVATED', 'CRITICAL'][lv]);
+      var lit = isFinite(t) ? Math.round((t - T_MIN) / T_STEP) : 0;
+      light(el.querySelector('[data-cells]'), Math.max(0, Math.min(CELLS, lit)));
+    });
+    each('[data-status]', function (el) {
+      text(el, ['ALL SYSTEMS NOMINAL', 'THERMAL ELEVATED', 'THERMAL CRITICAL'][worst]);
+    });
+    attr(root, 'data-scheme', AUTO_ALERT && worst === 2 ? 'alert' : SCHEME);
+
+    // Cores: a 0-100 bar each; more than eight switch to the compact grid.
+    var shown = 0;
+    each('[data-core]', function (el) {
+      var p = num(v[el.dataset.core]);
+      if (isFinite(p)) shown++;
+      style(el, 'width', (share(p, 100, 100) * 100).toFixed(0) + '%');
+    });
+    each('[data-cores]', function (el) {
+      attr(el, 'class', 'cores' + (shown > 8 ? ' many' : ''));
+      var hide = anyMapped && shown === 0;
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+
+    // Fans: sixteen segments against the fan's maximum, the last lit one bright.
+    var fans = 0, fanMax = 0;
+    each('[data-segs]', function (el) {
+      var rpm = num(v[el.dataset.segs]), max = num(v[el.dataset.max]);
+      if (!(max > 0)) max = FAN_MAX;
+      if (isFinite(rpm)) { fans++; fanMax = Math.max(fanMax, max); }
+      var lit = Math.round(share(rpm, max, FAN_MAX) * FAN_SEGS);
+      light(el, rpm > 0 ? Math.max(1, lit) : 0, true);
+    });
+    each('[data-fan-note]', function (el) {
+      text(el, fans ? 'RPM \u00b7 FULL SCALE ' + fmt(fanMax, 0) : '\u00a0');
+    });
+
+    // Memory: eighteen slats and a percentage per pool.
+    each('[data-slats]', function (el) {
+      var val = num(v[el.dataset.slats]), max = num(v[el.dataset.max]);
+      light(el, Math.round(share(val, max, 100) * SLATS));
+    });
+    each('[data-fill-pct]', function (el) {
+      var val = num(v[el.dataset.fillPct]), max = num(v[el.dataset.max]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design
+    // (eight cores of it).
+    each('[data-need]', function (el) {
+      var id = el.dataset.need;
+      var hide = anyMapped ? !isFinite(num(id === '0' ? digits : v[id])) : +id >= 82 && +id <= 89;
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+    // Innermost sections first, so a frame sees its sub-sections' state.
+    var sections = Array.prototype.slice.call(document.querySelectorAll('[data-section]')).reverse();
+    sections.forEach(function (el) {
+      // A row counts as hidden when it or a sub-section around it is; the
+      // section's own state is what is being decided, so it is not consulted.
+      var hide = el.querySelector('[data-need]') !== null &&
+                 Array.prototype.every.call(el.querySelectorAll('[data-need]'), function (n) {
+                   for (var p = n; p !== el; p = p.parentElement) if (p.hidden) return true;
+                   return false;
+                 });
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], tick = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var t = (Date.now() - EPOCH) * speed;
+    if (tick % (fps * 5 | 0 || 1) === 0) anims = document.getAnimations();   // the alert pulse comes and goes
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    tick++;
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    tick = 0;
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  attr(root, 'data-scheme', SCHEME);
+  applyMotion();
+})();
+</script>
+</body>
+</html>

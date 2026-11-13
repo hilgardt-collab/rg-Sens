@@ -684,7 +684,7 @@ mod tests {
         assert_eq!(mapped(&values, "min"), "--");
     }
 
-    /// The shipped Art Deco, Art Nouveau, Steampunk and Neon examples: every placeholder they
+    /// The shipped Art Deco, Art Nouveau, Steampunk, Neon and LCARS-style examples: every placeholder they
     /// use has an auto-configure entry, the numbering has no holes, the two
     /// share one mapping, and none loads anything from the network.
     #[test]
@@ -711,7 +711,12 @@ mod tests {
         assert!(!neon.contains("fonts.googleapis.com"));
         let deco = extract_placeholder_defaults(deco);
         assert_eq!(extract_placeholder_defaults(neon).len(), deco.len());
-        for other in [nouveau, steampunk, neon] {
+        // LCARS adds per-core load (74-89) and the year (90) to the shared 74.
+        let lcars = include_str!("../../examples/lcars_panel.html");
+        assert!(detect_placeholders(lcars).is_empty());
+        assert!(!lcars.contains("fonts.googleapis.com"));
+        assert_eq!(extract_placeholder_defaults(lcars).len(), 91);
+        for other in [nouveau, steampunk, neon, lcars] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {
                 assert_eq!(
