@@ -19,6 +19,16 @@
 //!                           "value"); replaces the changing feed
 //!   size=WxH                window size (default 900x600)
 //!   snapshot=FILE.png       save what the widget drew after 4 s
+//!   resize=WxH[,WxH...]     the widget sits in a Fixed at `size`, as a panel
+//!                           does in the grid, and is given each of these
+//!                           sizes in turn, 3 s apart; the snapshot is taken
+//!                           2 s after the last one
+//!   reapply=on              also re-apply the panel's config at each resize,
+//!                           as Panel Properties does (the page reloads)
+//!   settle_ms=N             how long after the last size the snapshot is
+//!                           taken (default 2000)
+//!   resize_ms=N             time between those sizes (default 3000; a few
+//!                           tens of ms imitates dragging a panel's edge)
 //!   animation=on|off        the panel's Animation switch (default on)
 //!   options=ID=VALUE,...    values for the template's own options
 //! ```
@@ -118,6 +128,14 @@ fn main() {
         });
     let snapshot = arg("snapshot", "");
     let animation = arg("animation", "on") == "on";
+    let reapply = arg("reapply", "off") == "on";
+    let settle_ms: u64 = arg("settle_ms", "2000").parse().unwrap_or(2000);
+    let resize_ms: u64 = arg("resize_ms", "3000").parse().unwrap_or(3000);
+    let resizes: Vec<(i32, i32)> = arg("resize", "")
+        .split(',')
+        .filter_map(|size| size.split_once('x'))
+        .filter_map(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
+        .collect();
     let (win_w, win_h) = arg("size", "900x600")
         .split_once('x')
         .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
@@ -176,12 +194,46 @@ fn main() {
         let displayer = Rc::new(RefCell::new(displayer));
 
         let widget = displayer.borrow().create_widget();
-        window.set_child(Some(&widget));
+        if resizes.is_empty() {
+            window.set_child(Some(&widget));
+        } else {
+            // the way the grid holds a panel: a Fixed and a size request
+            let fixed = gtk4::Fixed::new();
+            widget.set_size_request(win_w, win_h);
+            fixed.put(&widget, 0.0, 0.0);
+            // in a scrolled window, so a panel larger than the window is
+            // still given its size
+            let scrolled = gtk4::ScrolledWindow::new();
+            scrolled.set_child(Some(&fixed));
+            window.set_child(Some(&scrolled));
+            for (i, (w, h)) in resizes.iter().copied().enumerate() {
+                let widget = widget.clone();
+                let (displayer, config) = (displayer.clone(), config.clone());
+                glib::timeout_add_local_once(Duration::from_millis(resize_ms * (i as u64 + 1)), move || {
+                    if reapply {
+                        displayer.borrow_mut().apply_config(&config).expect("config applies");
+                    }
+                    widget.set_size_request(w, h);
+                    widget.queue_resize();
+                });
+            }
+        }
         window.present();
 
         if !snapshot.is_empty() {
             let (window, path) = (window.clone(), snapshot.clone());
-            glib::timeout_add_local_once(Duration::from_secs(4), move || {
+            // Frames the window was given: a window the compositor is not
+            // showing gets none, is never laid out and draws nothing.
+            let frames = Rc::new(Cell::new(0u32));
+            window.add_tick_callback({
+                let frames = frames.clone();
+                move |_, _| {
+                    frames.set(frames.get() + 1);
+                    glib::ControlFlow::Continue
+                }
+            });
+            let after = if resizes.is_empty() { 4000 } else { resize_ms * resizes.len() as u64 + settle_ms };
+            glib::timeout_add_local_once(Duration::from_millis(after), move || {
                 let paintable = gtk4::WidgetPaintable::new(Some(&widget));
                 let (w, h) = (widget.width() as f64, widget.height() as f64);
                 let snap = gtk4::Snapshot::new();
@@ -190,7 +242,7 @@ fn main() {
                     .to_node()
                     .zip(window.renderer())
                     .map(|(node, renderer)| renderer.render_texture(&node, None).save_to_png(&path));
-                eprintln!("snapshot {w}x{h} -> {path}: {saved:?}");
+                eprintln!("snapshot {w}x{h} after {} frames -> {path}: {saved:?}", frames.get());
             });
         }
 

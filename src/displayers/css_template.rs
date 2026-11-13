@@ -189,6 +189,18 @@ impl Displayer for CssTemplateDisplayer {
                 serde_json::from_value::<CssTemplateDisplayConfig>(config_value.clone())
             {
                 if let Ok(mut display_data) = self.data.lock() {
+                    // The same config again (a resize or any other edit in
+                    // Panel Properties re-applies the whole panel): keep the
+                    // page. Reloading it blanks the panel for a second or two
+                    // and drops what the page has collected. With hot reload
+                    // off an apply is the only way to pick up an edited
+                    // template file, so that case still reloads.
+                    if css_config.hot_reload
+                        && serde_json::to_value(&display_data.config).ok()
+                            == serde_json::to_value(&css_config).ok()
+                    {
+                        return Ok(());
+                    }
                     display_data.config = css_config;
                     // Keep exactly the slots the mappings read. The default
                     // set stops at 10 items per group, which silently dropped
@@ -257,5 +269,41 @@ impl Displayer for CssTemplateDisplayer {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Re-applying an identical config (what a panel resize in Panel
+    /// Properties does) must not ask the backend to reload the page; a real
+    /// change, or hot reload being off, still does.
+    #[test]
+    fn an_unchanged_config_does_not_reload_the_page() {
+        let mut displayer = CssTemplateDisplayer::new();
+        let reload_pending = |d: &CssTemplateDisplayer| d.data.lock().unwrap().config_changed;
+        let clear = |d: &CssTemplateDisplayer| d.data.lock().unwrap().config_changed = false;
+        let config = |value: Value| HashMap::from([("css_template_config".to_string(), value)]);
+
+        let first = config(json!({"embedded_html": "<p>{{0}}</p>", "hot_reload": true}));
+        displayer.apply_config(&first).unwrap();
+        assert!(reload_pending(&displayer));
+        clear(&displayer);
+
+        displayer.apply_config(&first).unwrap();
+        assert!(!reload_pending(&displayer), "same config: the page stays");
+
+        let edited = config(json!({"embedded_html": "<b>{{0}}</b>", "hot_reload": true}));
+        displayer.apply_config(&edited).unwrap();
+        assert!(reload_pending(&displayer), "a changed config reloads");
+        clear(&displayer);
+
+        let manual = config(json!({"embedded_html": "<b>{{0}}</b>", "hot_reload": false}));
+        displayer.apply_config(&manual).unwrap();
+        clear(&displayer);
+        displayer.apply_config(&manual).unwrap();
+        assert!(reload_pending(&displayer), "hot reload off: apply reloads");
     }
 }

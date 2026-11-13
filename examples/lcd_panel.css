@@ -1,0 +1,190 @@
+/* LCD Sensor Panel: stylesheet for lcd_panel.html (rg-Sens CSS Template displayer).
+   Setup notes are at the top of the HTML file. */
+
+/* Bundled font: Share Tech Mono, SIL Open Font License (OFL.txt in its
+   folder). Keep the fonts folder next to this file; without it the page
+   falls back to the system monospace. */
+@font-face { font-family: "Share Tech Mono"; font-weight: 400; font-style: normal;
+  src: local("Share Tech Mono"), url("fonts/share-tech-mono/ShareTechMono-Regular.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel (cover, contain or stretch). */
+  --rg-fit: cover;
+  /* Backlight: green (reflective), blue, amber or red (night). */
+  --backlight: green;
+  /* Ticks a second for what switches: colons, fan icons, status lights.
+     0 turns motion off. */
+  --motion-fps: 8;
+  /* The warning triangle lights from this temperature. */
+  --warn-temp: 72;
+  /* Fan bar full scale when a fan has no maximum of its own. */
+  --fan-max: 2400;
+  /* Network chart full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  /* Classic Green: a reflective LCD, dark segments casting a shadow. */
+  --seg: #1A2015;
+  --ghost: rgba(26, 32, 21, 0.085);
+  --legend: #3D4733;
+  --lcd: linear-gradient(170deg, #BAC5A5 0%, #A6B292 55%, #97A384 100%);
+  --fx: drop-shadow(1.6px 1.8px 0 rgba(0, 0, 0, 0.16));
+}
+:root[data-backlight="blue"] {
+  --seg: #EAF3FF;
+  --ghost: rgba(255, 255, 255, 0.08);
+  --legend: #C4D9FF;
+  --lcd: radial-gradient(ellipse at 50% 45%, #3D7BFF 0%, #2457D6 60%, #1A3FA0 100%);
+  --fx: drop-shadow(0 0 4px rgba(200, 230, 255, 0.7));
+}
+:root[data-backlight="amber"] {
+  --seg: #2B1500;
+  --ghost: rgba(43, 21, 0, 0.09);
+  --legend: #5E360C;
+  --lcd: radial-gradient(ellipse at 50% 45%, #FFC560 0%, #F2A53A 60%, #D9862A 100%);
+  --fx: drop-shadow(1.4px 1.6px 0 rgba(80, 30, 0, 0.2));
+}
+:root[data-backlight="red"] {
+  --seg: #FF3B2F;
+  --ghost: rgba(255, 59, 47, 0.075);
+  --legend: #C0584F;
+  --lcd: linear-gradient(180deg, #140909, #070303);
+  --fx: drop-shadow(0 0 5px rgba(255, 59, 47, 0.75));
+}
+
+html, body { margin: 0; background: #1D1E21; }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* ---------------------------------------------------------------- housing */
+.panel { width: 480px; height: 1920px; box-sizing: border-box; position: relative; overflow: hidden;
+  background-color: #1E1F22;
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 8%, rgba(255,255,255,0) 92%, rgba(0,0,0,0.3) 100%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  font-family: "Share Tech Mono", monospace; color: #C9CCD2; padding: 22px;
+  display: flex; flex-direction: column; justify-content: space-between; }
+.panel span { white-space: nowrap; }
+
+.top { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; }
+.top .title { display: flex; flex-direction: column; gap: 2px; }
+.top .title span { font-size: 17px; letter-spacing: 0.3em; color: #E6E8EC; }
+.top .title span + span { font-size: 10px; color: #FF8A00; }
+.leds { display: flex; gap: 14px; }
+.leds div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.leds span { font-size: 9px; letter-spacing: 0.14em; color: #8E9299; }
+.led { width: 9px; height: 9px; border-radius: 50%; background: #46E07A;
+  box-shadow: 0 0 6px #46E07A, inset 0 -1px 2px rgba(0,0,0,0.4); }
+.led.amber { background: #FFB020; box-shadow: 0 0 6px #FFB020, inset 0 -1px 2px rgba(0,0,0,0.4); }
+.led.dim { opacity: 0.25; }
+
+.panel > section { display: flex; flex-direction: column; gap: 6px; }
+.ch { display: flex; align-items: center; gap: 10px; }
+.ch span { font-size: 12px; letter-spacing: 0.24em; color: #FF8A00; }
+.ch i { flex: 1; height: 1px; background: #3A3C42; }
+.ch i + span { font-size: 10px; letter-spacing: 0.2em; color: #6E727A; }
+.bezel { border-radius: 10px; padding: 4px; background: linear-gradient(180deg, #0A0B0D, #33353A);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.07); }
+.lcd { position: relative; overflow: hidden; border-radius: 7px; background: var(--lcd);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,0.4); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
+  color: var(--legend); }
+/* glass glare */
+.lcd::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
+  background: linear-gradient(118deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 32%); }
+
+/* ------------------------------------------------- what the LCD switches */
+/* Lit items cast a shadow on a reflective LCD and glow on a backlit one. */
+.fx, .seg { filter: var(--fx); }
+/* Seven-segment readouts: every position keeps its seven segments, lit or ghost. */
+.seg { display: block; flex: none; overflow: visible; }
+.seg polygon { fill: var(--ghost); }
+.seg polygon.on { fill: var(--seg); }
+.seg.blank polygon.colon { opacity: 0; }
+/* Block bars: one <i> per block, written by the script. */
+.cells { display: flex; gap: 2px; }
+.cells i { flex: 1; background: var(--ghost); }
+.cells i.on { background: var(--seg); }
+/* Indicator words printed in the segment layer: lit or ghost. */
+.ind span { color: var(--ghost); }
+.ind span.on { color: var(--seg); }
+.lg { font-size: 11px; letter-spacing: 0.14em; }
+
+/* ------------------------------------------------------------------- time */
+.clock { padding: 14px 16px 12px; }
+.clock > div { display: flex; align-items: center; justify-content: space-between; }
+.clock > div + div { align-items: flex-end; }
+.clock .ind { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; font-size: 14px; }
+.clock .days { flex-direction: row; gap: 7px; }
+.clock .date { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.clock .date .lg { font-size: 10px; }
+
+/* ------------------------------------------------ processor and graphics */
+.unit { padding: 12px 16px; gap: 10px; }
+.unit .head { display: flex; align-items: flex-start; gap: 10px; }
+.unit .temp { display: flex; flex-direction: column; gap: 4px; }
+.unit .temp .lg { letter-spacing: 0.16em; max-width: 226px; overflow: hidden; }
+.unit .temp > div { display: flex; align-items: flex-start; gap: 6px; }
+.unit .deg { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.unit .deg span { font-size: 26px; line-height: 1; color: var(--seg); }
+.warn polygon { fill: none; stroke: var(--ghost); stroke-width: 2.4; stroke-linejoin: round; }
+.warn rect { fill: var(--ghost); }
+.warn.on polygon { stroke: var(--seg); }
+.warn.on rect { fill: var(--seg); }
+.unit .reads { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 4px; }
+.unit .reads > div { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; }
+.unit .reads .lg { letter-spacing: 0.12em; padding-bottom: 2px; }
+.unit .reads > div > div { display: flex; align-items: flex-end; gap: 4px; }
+.unit .reads .u { width: 28px; font-size: 12px; padding-bottom: 1px; }
+.unit .scale { display: flex; flex-direction: column; gap: 3px; }
+.unit .scale .cells { height: 14px; }
+.unit .scale .marks { display: flex; justify-content: space-between; font-size: 10px; }
+.cores { display: flex; align-items: flex-end; gap: 10px; }
+.cores > span { font-size: 10px; letter-spacing: 0.14em; writing-mode: vertical-rl; transform: rotate(180deg); }
+.cores > div { flex: 1; display: grid; grid-template-columns: repeat(var(--cores, 8), minmax(0, 1fr)); gap: 8px; }
+.cores.many > div { gap: 4px; }
+.core { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.core .cells { flex-direction: column-reverse; width: 100%; }
+.core .cells i { flex: none; height: 5px; }
+.core span { font-size: 10px; }
+
+/* ---------------------------------------------------------------- cooling */
+.fan { display: flex; align-items: center; gap: 8px; }
+.fan > svg:first-child { flex: none; }
+.fan circle { fill: var(--seg); }
+.fan circle:first-child { fill: none; stroke: var(--seg); stroke-width: 1.6; }
+.fan path { fill: var(--seg); }
+.fan g + g, .fan.flip g { visibility: hidden; }
+.fan.flip g + g { visibility: visible; }
+.fan .name { width: 66px; flex: none; overflow: hidden; font-size: 12px; letter-spacing: 0.1em; }
+.fan .cells { flex: 1; min-width: 0; height: 16px; margin-left: 6px; }
+.note { display: flex; justify-content: flex-end; font-size: 10px; letter-spacing: 0.14em; }
+
+/* ----------------------------------------------------------------- memory */
+.mem { display: flex; align-items: center; gap: 8px; }
+.mem .name { width: 44px; flex: none; overflow: hidden; font-size: 12px; letter-spacing: 0.1em; }
+.mem .val { width: 66px; flex: none; display: flex; justify-content: flex-end; }
+.mem .of { width: 54px; flex: none; font-size: 11px; }
+.mem .cells { flex: 1; min-width: 0; height: 16px; }
+
+/* ---------------------------------------------------------------- network */
+.net { padding: 14px 16px 12px; gap: 10px; }
+.net .now { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.net .now > div { display: flex; align-items: flex-end; gap: 6px; }
+.net .now > div + div { justify-content: flex-end; }
+.net .now span { font-size: 12px; padding-bottom: 2px; }
+.net .now .u { font-size: 11px; }
+.net .chart { display: flex; gap: 8px; align-items: stretch; }
+.net .chart > div { display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; padding: 2px 0; }
+.net .chart svg { flex: none; overflow: visible; }
+.net .chart rect { fill: var(--ghost); }
+.net .chart rect.on { fill: var(--seg); }
+.net .axis { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.14em; padding-left: 26px; }
+
+/* ----------------------------------------------------------------- uptime */
+.up { display: flex; align-items: center; gap: 14px; }
+.up .bezel { flex: 1; }
+.up .lcd { padding: 12px 16px; flex-direction: row; align-items: flex-end; justify-content: space-between; }
+.up .lg { padding-bottom: 2px; }
+.keys { display: flex; flex-direction: column; gap: 8px; }
+.keys div { display: flex; align-items: center; gap: 8px; }
+.keys i { width: 38px; height: 16px; border-radius: 8px; background: linear-gradient(180deg, #4A4D54, #2A2C31);
+  box-shadow: 0 2px 0 #0B0C0E, inset 0 1px 0 rgba(255,255,255,0.15); }
+.keys span { font-size: 10px; letter-spacing: 0.16em; color: #8E9299; }

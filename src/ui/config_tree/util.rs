@@ -624,6 +624,33 @@ mod css_template_setup_tests {
         }
         assert_eq!(by_index(90).slot_prefix, by_index(0).slot_prefix);
         assert_eq!(by_index(90).field, "year");
+
+        // The LCD panel has the same cores and reads its alarm indicator
+        // from the clock: no extra sensor either.
+        let html = include_str!("../../../examples/lcd_panel.html");
+        let (placeholders, defaults) = (
+            detect_placeholders(html),
+            extract_placeholder_defaults(html),
+        );
+        let wanted = wanted_slots(&placeholders, &defaults);
+        assert_eq!(wanted.len(), 18, "{wanted:?}");
+        let mut cfg = ComboSourceConfig::default();
+        add_wanted_slots(&mut cfg, &wanted);
+        let mappings = auto_map(
+            &placeholders,
+            &defaults,
+            &HashMap::new(),
+            &combo_slot_kinds(&cfg),
+        );
+        assert_eq!(mappings.len(), 91);
+        let by_index = |i: u32| mappings.iter().find(|m| m.index == i).unwrap();
+        for core in 0..16 {
+            let m = by_index(74 + core);
+            assert_eq!(m.slot_prefix, by_index(9).slot_prefix);
+            assert_eq!(m.field, format!("core{core}_usage"));
+        }
+        assert_eq!(by_index(91).slot_prefix, by_index(0).slot_prefix);
+        assert_eq!(by_index(91).field, "alarm_enabled");
     }
 
     /// Slots the user already made are used wherever they sit, and only the

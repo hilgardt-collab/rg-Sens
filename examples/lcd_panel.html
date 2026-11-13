@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<title>LCD Sensor Panel</title>
+<!--
+  LCD sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait:
+  a multi-channel instrument with seven-segment readouts. A sibling of the
+  Art Deco, Art Nouveau, Steampunk, Neon, LCARS-style, Warrior and Leather &
+  Wood panels: the same placeholders 0-73 and the same setup, plus per-core
+  CPU load and the alarm indicator.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, with day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the row label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two temperatures ("PKG TEMP", "EDGE TEMP"), the fan rows
+  and the memory rows; set them on the sensors.
+
+  Per-core load reads the CPU usage sensor: every CPU sensor also publishes
+  core0_usage, core1_usage and so on, and the "CPU cores" binding shows the
+  first sixteen as columns of eight cells. Cores the machine does not have
+  are hidden. To show other cores, change a placeholder's field on the
+  Bindings tab.
+
+  Anything left unbound is hidden: a row, a whole section. The processor's
+  power row has no rg-Sens source and stays hidden unless you bind a sensor to
+  it by hand on the Bindings tab.
+
+  Every number is drawn by one seven-segment renderer (seg7 in the script
+  below): each position always has its seven segments, lit or ghost, so an
+  empty position shows a faint 8 as on a real LCD. A readout has a fixed
+  number of positions; a value too long for it drops decimals first and only
+  then gains a position. A clock in MHz is shown in GHz.
+
+  The clock follows the bound clock's format: 24H lights for a 24-hour time,
+  AM or PM for a 12-hour one, ALM while an alarm is set. The weekday and the
+  DAY-MON date come from the clock's day and month names.
+
+  The network chart keeps the last 60 seconds (24 columns) of inbound and
+  outbound speed in the page: inbound up to nine cells upward, outbound up to
+  five downward, on one shared scale. It starts empty and survives a reload
+  of the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of lcd_panel.css): backlight
+  (Classic Green, Blue Backlight, Amber, Night Red), how the design fits the
+  panel, the tick rate of what moves, the temperature that lights the warning
+  triangle, and the full scale of the fan bars and the network chart. The
+  design is drawn for 480x1920 and is scaled to whatever size the panel has.
+
+  Motion: nothing fades, an LCD switches. The clock and uptime colons blink
+  once a second, each fan icon flips between two frames faster with RPM, the
+  NET light flickers while there is traffic and the DISK light now and then
+  (rg-Sens has no disk activity source). --motion-fps is how often these are
+  looked at; 0 turns motion off, as do the panel's Animation switch and the
+  system's reduced-motion setting. The MODE, SET and LIGHT keys are printed
+  decoration.
+
+  Font: Share Tech Mono for the printed legends, loaded from the fonts folder
+  next to this file; copy that folder along with the template. Nothing is
+  fetched from the network.
+-->
+<link rel="stylesheet" href="lcd_panel.css">
+</head>
+<body>
+<div class="panel">
+
+  <header class="top">
+    <div class="title"><span>SYSTEM SENSORS</span><span>MULTI-CHANNEL MONITOR</span></div>
+    <div class="leds">
+      <div><i class="led"></i><span>PWR</span></div>
+      <div><i class="led amber" data-led="disk"></i><span>DISK</span></div>
+      <div><i class="led" data-led="net"></i><span>NET</span></div>
+    </div>
+  </header>
+
+  <section data-need="0">
+    <div class="ch"><span>TIME</span><i></i><span>CH 00</span></div>
+    <div class="bezel"><div class="lcd clock">
+      <div>
+        <svg class="seg" data-clock="0" data-h="110"></svg>
+        <div class="ind fx" data-mode="0" data-alarm="91"><span>24H</span><span>AM</span><span>PM</span><span>ALM</span></div>
+      </div>
+      <div>
+        <div class="ind days fx" data-days="1"><span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span><span>SU</span></div>
+        <div class="date"><span class="lg">DAY - MON</span><svg class="seg" data-date data-h="32"></svg></div>
+      </div>
+    </div></div>
+  </section>
+
+
+  <section data-section="cpu">
+    <div class="ch"><span>PROCESSOR</span><i></i><span>CH 01</span></div>
+    <div class="bezel"><div class="lcd unit">
+      <div class="head">
+        <div class="temp" data-need="5">
+          <span class="lg" data-cap="4" data-default="PKG TEMP">PKG TEMP</span>
+          <div>
+            <svg class="seg" data-num="5" data-h="96" data-digits="3" data-places="0"></svg>
+            <div class="deg fx">
+              <span data-unit="6" data-default="°C">°C</span>
+              <svg class="warn" data-warn="5" aria-hidden="true" width="26" height="23" viewBox="0 0 26 23"><polygon points="13,1 25,22 1,22"></polygon><rect x="11.8" y="8" width="2.4" height="7"></rect><rect x="11.8" y="17" width="2.4" height="2.4"></rect></svg>
+            </div>
+          </div>
+        </div>
+        <div class="reads">
+            <div data-need="9"><span class="lg">LOAD</span><div><svg class="seg" data-num="9" data-h="26" data-digits="3" data-places="0"></svg><span class="u" data-unit="10" data-default="%">%</span></div></div>
+            <div data-need="13"><span class="lg">CLOCK</span><div><svg class="seg" data-num="13" data-h="26" data-digits="3" data-places="2" data-ghz></svg><span class="u" data-unit="14" data-default="GHZ" data-ghz>GHZ</span></div></div>
+            <div data-need="17"><span class="lg">POWER</span><div><svg class="seg" data-num="17" data-h="26" data-digits="3" data-places="0"></svg><span class="u" data-unit="18" data-default="W">W</span></div></div>
+        </div>
+      </div>
+      <div class="scale" data-need="5">
+        <div class="cells fx" data-temp="5" data-count="20"></div>
+        <div class="marks"><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+      </div>
+      <div class="cores" data-cores>
+        <span>CORES</span>
+        <div>
+          <div class="core" data-need="74"><div class="cells fx" data-core="74" data-count="8"></div><span>C1</span></div>
+          <div class="core" data-need="75"><div class="cells fx" data-core="75" data-count="8"></div><span>C2</span></div>
+          <div class="core" data-need="76"><div class="cells fx" data-core="76" data-count="8"></div><span>C3</span></div>
+          <div class="core" data-need="77"><div class="cells fx" data-core="77" data-count="8"></div><span>C4</span></div>
+          <div class="core" data-need="78"><div class="cells fx" data-core="78" data-count="8"></div><span>C5</span></div>
+          <div class="core" data-need="79"><div class="cells fx" data-core="79" data-count="8"></div><span>C6</span></div>
+          <div class="core" data-need="80"><div class="cells fx" data-core="80" data-count="8"></div><span>C7</span></div>
+          <div class="core" data-need="81"><div class="cells fx" data-core="81" data-count="8"></div><span>C8</span></div>
+          <div class="core" data-need="82"><div class="cells fx" data-core="82" data-count="8"></div><span>C9</span></div>
+          <div class="core" data-need="83"><div class="cells fx" data-core="83" data-count="8"></div><span>C10</span></div>
+          <div class="core" data-need="84"><div class="cells fx" data-core="84" data-count="8"></div><span>C11</span></div>
+          <div class="core" data-need="85"><div class="cells fx" data-core="85" data-count="8"></div><span>C12</span></div>
+          <div class="core" data-need="86"><div class="cells fx" data-core="86" data-count="8"></div><span>C13</span></div>
+          <div class="core" data-need="87"><div class="cells fx" data-core="87" data-count="8"></div><span>C14</span></div>
+          <div class="core" data-need="88"><div class="cells fx" data-core="88" data-count="8"></div><span>C15</span></div>
+          <div class="core" data-need="89"><div class="cells fx" data-core="89" data-count="8"></div><span>C16</span></div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section data-section="gpu">
+    <div class="ch"><span>GRAPHICS</span><i></i><span>CH 02</span></div>
+    <div class="bezel"><div class="lcd unit">
+      <div class="head">
+        <div class="temp" data-need="21">
+          <span class="lg" data-cap="20" data-default="EDGE TEMP">EDGE TEMP</span>
+          <div>
+            <svg class="seg" data-num="21" data-h="96" data-digits="3" data-places="0"></svg>
+            <div class="deg fx">
+              <span data-unit="22" data-default="°C">°C</span>
+              <svg class="warn" data-warn="21" aria-hidden="true" width="26" height="23" viewBox="0 0 26 23"><polygon points="13,1 25,22 1,22"></polygon><rect x="11.8" y="8" width="2.4" height="7"></rect><rect x="11.8" y="17" width="2.4" height="2.4"></rect></svg>
+            </div>
+          </div>
+        </div>
+        <div class="reads">
+            <div data-need="25"><span class="lg">UTIL</span><div><svg class="seg" data-num="25" data-h="26" data-digits="3" data-places="0"></svg><span class="u" data-unit="26" data-default="%">%</span></div></div>
+            <div data-need="29"><span class="lg">CLOCK</span><div><svg class="seg" data-num="29" data-h="26" data-digits="3" data-places="2" data-ghz></svg><span class="u" data-unit="30" data-default="GHZ" data-ghz>GHZ</span></div></div>
+            <div data-need="33"><span class="lg">POWER</span><div><svg class="seg" data-num="33" data-h="26" data-digits="3" data-places="0"></svg><span class="u" data-unit="34" data-default="W">W</span></div></div>
+        </div>
+      </div>
+      <div class="scale" data-need="21">
+        <div class="cells fx" data-temp="21" data-count="20"></div>
+        <div class="marks"><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section data-section="fans">
+    <div class="ch"><span>COOLING</span><i></i><span>CH 03</span></div>
+    <div class="bezel"><div class="lcd">
+      <div class="fan" data-fan="37" data-need="37">
+        <svg class="fx" aria-hidden="true" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12.5"></circle><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(0 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(120 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(240 14 14)"></path></g><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(60 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(180 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(300 14 14)"></path></g><circle cx="14" cy="14" r="2.2"></circle></svg>
+        <span class="name" data-cap="36" data-default="FAN 1">FAN 1</span>
+        <svg class="seg" data-num="37" data-h="28" data-digits="4" data-places="0"></svg>
+        <div class="cells fx" data-bar="37" data-max="39" data-scale="--fan-max" data-count="12"></div>
+      </div>
+      <div class="fan" data-fan="41" data-need="41">
+        <svg class="fx" aria-hidden="true" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12.5"></circle><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(0 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(120 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(240 14 14)"></path></g><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(60 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(180 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(300 14 14)"></path></g><circle cx="14" cy="14" r="2.2"></circle></svg>
+        <span class="name" data-cap="40" data-default="FAN 2">FAN 2</span>
+        <svg class="seg" data-num="41" data-h="28" data-digits="4" data-places="0"></svg>
+        <div class="cells fx" data-bar="41" data-max="43" data-scale="--fan-max" data-count="12"></div>
+      </div>
+      <div class="fan" data-fan="45" data-need="45">
+        <svg class="fx" aria-hidden="true" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12.5"></circle><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(0 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(120 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(240 14 14)"></path></g><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(60 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(180 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(300 14 14)"></path></g><circle cx="14" cy="14" r="2.2"></circle></svg>
+        <span class="name" data-cap="44" data-default="FAN 3">FAN 3</span>
+        <svg class="seg" data-num="45" data-h="28" data-digits="4" data-places="0"></svg>
+        <div class="cells fx" data-bar="45" data-max="47" data-scale="--fan-max" data-count="12"></div>
+      </div>
+      <div class="fan" data-fan="49" data-need="49">
+        <svg class="fx" aria-hidden="true" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12.5"></circle><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(0 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(120 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(240 14 14)"></path></g><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(60 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(180 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(300 14 14)"></path></g><circle cx="14" cy="14" r="2.2"></circle></svg>
+        <span class="name" data-cap="48" data-default="FAN 4">FAN 4</span>
+        <svg class="seg" data-num="49" data-h="28" data-digits="4" data-places="0"></svg>
+        <div class="cells fx" data-bar="49" data-max="51" data-scale="--fan-max" data-count="12"></div>
+      </div>
+      <div class="note" data-fan-note>RPM · BAR FULL SCALE 2400</div>
+    </div></div>
+  </section>
+
+  <section data-section="memory">
+    <div class="ch"><span>MEMORY</span><i></i><span>CH 04</span></div>
+    <div class="bezel"><div class="lcd">
+      <div class="mem" data-need="53">
+        <span class="name" data-cap="52" data-default="RAM">RAM</span>
+        <div class="val"><svg class="seg" data-num="53" data-h="26" data-digits="3" data-places="1"></svg></div>
+        <span class="of" data-of="55" data-unit-of="54">&nbsp;</span>
+        <div class="cells fx" data-bar="53" data-max="55" data-scale="100" data-count="12"></div>
+      </div>
+      <div class="mem" data-need="57">
+        <span class="name" data-cap="56" data-default="VRAM">VRAM</span>
+        <div class="val"><svg class="seg" data-num="57" data-h="26" data-digits="3" data-places="1"></svg></div>
+        <span class="of" data-of="59" data-unit-of="58">&nbsp;</span>
+        <div class="cells fx" data-bar="57" data-max="59" data-scale="100" data-count="12"></div>
+      </div>
+      <div class="mem" data-need="61">
+        <span class="name" data-cap="60" data-default="DISK">DISK</span>
+        <div class="val"><svg class="seg" data-num="61" data-h="26" data-digits="3" data-places="1"></svg></div>
+        <span class="of" data-of="63" data-unit-of="62">&nbsp;</span>
+        <div class="cells fx" data-bar="61" data-max="63" data-scale="100" data-count="12"></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section data-section="network">
+    <div class="ch"><span>NETWORK</span><i></i><span>CH 05</span></div>
+    <div class="bezel"><div class="lcd net">
+      <div class="now">
+        <div data-need="65"><span>IN</span><svg class="seg" data-num="65" data-h="40" data-digits="3" data-places="1"></svg><span class="u" data-unit="66" data-default="MB/S">MB/S</span></div>
+        <div data-need="69"><span>OUT</span><svg class="seg" data-num="69" data-h="40" data-digits="3" data-places="1"></svg><span class="u" data-unit="70" data-default="MB/S">MB/S</span></div>
+      </div>
+      <div class="chart">
+        <div><span>IN</span><span>OUT</span></div>
+        <svg class="fx" data-chart aria-hidden="true" width="360" height="146" viewBox="0 0 370 150"></svg>
+      </div>
+      <div class="axis"><span>-60S</span><span>-30S</span><span>NOW</span></div>
+    </div></div>
+  </section>
+
+  <section data-need="73">
+    <div class="ch"><span>UPTIME</span><i></i><span>CH 06</span></div>
+    <div class="up">
+      <div class="bezel"><div class="lcd">
+        <span class="lg">HRS:MIN</span>
+        <svg class="seg" data-uptime="73" data-h="46"></svg>
+      </div></div>
+      <div class="keys" aria-hidden="true">
+        <div><i></i><span>MODE</span></div>
+        <div><i></i><span>SET</span></div>
+        <div><i></i><span>LIGHT</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "backlight", "label": "Backlight", "type": "choice", "var": "--backlight", "default": "green", "choices": [{"value": "green", "label": "Classic Green"}, {"value": "blue", "label": "Blue Backlight"}, {"value": "amber", "label": "Amber"}, {"value": "red", "label": "Night Red"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "cover", "help": "How the design is scaled to the panel's size", "choices": [{"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Stretch to the panel"}]},
+    {"id": "fps", "label": "Motion ticks per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 8, "help": "How often the colons, fan icons and status lights are switched; 0 turns motion off"},
+    {"id": "warn_temp", "label": "Warning triangle from (°C)", "type": "number", "var": "--warn-temp", "min": 30, "max": 110, "step": 1, "default": 72},
+    {"id": "fan_max", "label": "Fan full scale (RPM)", "type": "number", "var": "--fan-max", "min": 500, "max": 10000, "step": 100, "default": 2400, "help": "Used when a fan has no maximum of its own"},
+    {"id": "net_max", "label": "Network chart full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"},
+    "74": {"hint": "CPU cores - Core 1", "source": "cpu", "metric": "usage", "instance": 1, "field": "core0_usage", "format": "{:.0}"},
+    "75": {"hint": "CPU cores - Core 2", "source": "cpu", "metric": "usage", "instance": 1, "field": "core1_usage", "format": "{:.0}"},
+    "76": {"hint": "CPU cores - Core 3", "source": "cpu", "metric": "usage", "instance": 1, "field": "core2_usage", "format": "{:.0}"},
+    "77": {"hint": "CPU cores - Core 4", "source": "cpu", "metric": "usage", "instance": 1, "field": "core3_usage", "format": "{:.0}"},
+    "78": {"hint": "CPU cores - Core 5", "source": "cpu", "metric": "usage", "instance": 1, "field": "core4_usage", "format": "{:.0}"},
+    "79": {"hint": "CPU cores - Core 6", "source": "cpu", "metric": "usage", "instance": 1, "field": "core5_usage", "format": "{:.0}"},
+    "80": {"hint": "CPU cores - Core 7", "source": "cpu", "metric": "usage", "instance": 1, "field": "core6_usage", "format": "{:.0}"},
+    "81": {"hint": "CPU cores - Core 8", "source": "cpu", "metric": "usage", "instance": 1, "field": "core7_usage", "format": "{:.0}"},
+    "82": {"hint": "CPU cores - Core 9", "source": "cpu", "metric": "usage", "instance": 1, "field": "core8_usage", "format": "{:.0}"},
+    "83": {"hint": "CPU cores - Core 10", "source": "cpu", "metric": "usage", "instance": 1, "field": "core9_usage", "format": "{:.0}"},
+    "84": {"hint": "CPU cores - Core 11", "source": "cpu", "metric": "usage", "instance": 1, "field": "core10_usage", "format": "{:.0}"},
+    "85": {"hint": "CPU cores - Core 12", "source": "cpu", "metric": "usage", "instance": 1, "field": "core11_usage", "format": "{:.0}"},
+    "86": {"hint": "CPU cores - Core 13", "source": "cpu", "metric": "usage", "instance": 1, "field": "core12_usage", "format": "{:.0}"},
+    "87": {"hint": "CPU cores - Core 14", "source": "cpu", "metric": "usage", "instance": 1, "field": "core13_usage", "format": "{:.0}"},
+    "88": {"hint": "CPU cores - Core 15", "source": "cpu", "metric": "usage", "instance": 1, "field": "core14_usage", "format": "{:.0}"},
+    "89": {"hint": "CPU cores - Core 16", "source": "cpu", "metric": "usage", "instance": 1, "field": "core15_usage", "format": "{:.0}"},
+    "91": {"hint": "Clock - Alarm set (lights ALM)", "source": "clock", "instance": 1, "field": "alarm_enabled"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100;
+  var COLS = 24, IN_CELLS = 9, OUT_CELLS = 5, SAMPLE_MS = 2500;   // 60 s of history
+  var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  var SVG = 'http://www.w3.org/2000/svg';
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var WARN = cssNum('--warn-temp', 72), NET_MAX = cssNum('--net-max', 0);
+  // The backlight is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-backlight', (css.getPropertyValue('--backlight') || 'green').trim() || 'green');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+  // Write only what changed: an untouched page does not repaint.
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+
+  // ------------------------------------------------- seven-segment renderer
+  // seg7:begin
+  // Which of the segments a-g a character lights. A space lights none, which
+  // leaves the position's ghost 8.
+  var SEGS = {
+    '0': 'abcdef', '1': 'bc', '2': 'abdeg', '3': 'abcdg', '4': 'bcfg', '5': 'acdfg', '6': 'acdefg',
+    '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', '-': 'g', ' ': '',
+    'C': 'adef', 'E': 'adefg', 'H': 'bcefg', 'P': 'abefg', 'U': 'bcdef'
+  };
+  // The polygons of `str` at digit height H, in drawing order: seven per
+  // digit position (a b c d e f g), two squares for ':', one for '.'.
+  // Digit width 0.52 H, stroke 0.11 H, gap a fifth of the stroke, spacing
+  // 0.13 H, italic skew 0.105; a 1 px margin all round.
+  function seg7(str, H) {
+    var W = 0.52 * H, t = 0.11 * H, h = t / 2, g = 0.2 * t, sp = 0.13 * H;
+    var polys = [], x = 0, end = 0;
+    function pt(px, py) { return (1 + px + (H - py) * 0.105).toFixed(1) + ',' + (1 + py).toFixed(1); }
+    function hor(x0, yc) {            // pointed bar from x0 across the digit, centred on yc
+      var a = x0 + h + g, b = x0 + W - h - g;
+      return [pt(a, yc), pt(a + h, yc - h), pt(b - h, yc - h), pt(b, yc), pt(b - h, yc + h), pt(a + h, yc + h)].join(' ');
+    }
+    function ver(xc, y0, y1) {        // pointed bar from y0 down to y1, centred on xc
+      return [pt(xc, y0), pt(xc + h, y0 + h), pt(xc + h, y1 - h), pt(xc, y1), pt(xc - h, y1 - h), pt(xc - h, y0 + h)].join(' ');
+    }
+    function square(px, py) {
+      return [pt(px, py), pt(px + t, py), pt(px + t, py + t), pt(px, py + t)].join(' ');
+    }
+    for (var i = 0; i < str.length; i++) {
+      var ch = str.charAt(i);
+      if (ch === ':') {
+        var cx = x + 0.6 * t;
+        polys.push({ p: square(cx, 0.32 * H - h), kind: 'colon', on: true });
+        polys.push({ p: square(cx, 0.72 * H - h), kind: 'colon', on: true });
+        end = x + 2.2 * t; x = end + sp;
+      } else if (ch === '.') {        // tucked into the previous digit's bottom-right
+        polys.push({ p: square(x - 0.6 * t, H - 1.08 * t), kind: 'dot', on: true });
+        x += 1.2 * t; end = x - sp;
+      } else {
+        var lit = SEGS[ch] || '', mid = H / 2, l = x + h, r = x + W - h;
+        var shapes = [hor(x, h), ver(r, h + g, mid - g), ver(r, mid + g, H - h - g), hor(x, H - h),
+                      ver(l, mid + g, H - h - g), ver(l, h + g, mid - g), hor(x, mid)];
+        for (var k = 0; k < 7; k++) polys.push({ p: shapes[k], kind: '', on: lit.indexOf('abcdefg'.charAt(k)) >= 0 });
+        end = x + W; x = end + sp;
+      }
+    }
+    return { polys: polys, width: Math.ceil(end + H * 0.105) + 3, height: Math.ceil(H) + 3 };
+  }
+  // seg7:end
+
+  // A number in `digits` positions, right-aligned: decimals are dropped until
+  // it fits, and only a whole number that is still too long gains positions.
+  // Padding spaces draw as ghost 8s; a missing value draws as two dashes.
+  function fit(n, digits, places) {
+    var s = '--';
+    if (isFinite(n)) {
+      for (var p = places; p >= 0; p--) {
+        s = n.toFixed(p);
+        if (s.replace('.', '').length <= digits) break;
+      }
+    }
+    var pad = digits - s.replace('.', '').length;
+    return (pad > 0 ? new Array(pad + 1).join(' ') : '') + s;
+  }
+
+  // Show `str` in a readout. The polygons are built once per layout (which
+  // positions are digits, colons, points); after that an update only switches
+  // segments between lit and ghost.
+  function draw(svg, str) {
+    if (svg.getAttribute('data-text') === str) return;
+    var layout = str.replace(/[^:.]/g, 'd'), i, k;
+    if (svg.getAttribute('data-layout') !== layout) {
+      var shape = seg7(str, +svg.getAttribute('data-h'));
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      for (i = 0; i < shape.polys.length; i++) {
+        var s = shape.polys[i], poly = document.createElementNS(SVG, 'polygon');
+        poly.setAttribute('points', s.p);
+        var cls = (s.kind === 'colon' ? 'colon ' : '') + (s.on ? 'on' : '');
+        if (cls) poly.setAttribute('class', cls.trim());
+        svg.appendChild(poly);
+      }
+      svg.setAttribute('width', shape.width);
+      svg.setAttribute('height', shape.height);
+      svg.setAttribute('viewBox', '0 0 ' + shape.width + ' ' + shape.height);
+      svg.setAttribute('data-layout', layout);
+    } else {
+      var kids = svg.childNodes;
+      for (i = 0, k = 0; i < str.length; i++) {
+        var ch = str.charAt(i);
+        if (ch === ':') { k += 2; continue; }
+        if (ch === '.') { k += 1; continue; }
+        var lit = SEGS[ch] || '';
+        for (var j = 0; j < 7; j++) flag(kids[k + j], 'on', lit.indexOf('abcdefg'.charAt(j)) >= 0);
+        k += 7;
+      }
+    }
+    svg.setAttribute('data-text', str);
+    svg.setAttribute('aria-label', str.replace(/^ +/, ''));
+  }
+
+  // ------------------------------------------------------- drawn once
+  // Block bars and core columns: `data-count` blocks each.
+  each('[data-count]', function (el) {
+    for (var i = +el.getAttribute('data-count'); i > 0; i--) el.appendChild(document.createElement('i'));
+  });
+  // Light the first n blocks of a bar.
+  function light(el, n) {
+    if (el.getAttribute('data-lit') === String(n)) return;
+    el.setAttribute('data-lit', String(n));
+    for (var i = 0; i < el.children.length; i++) flag(el.children[i], 'on', i < n);
+  }
+  // Network chart: 24 columns, each nine cells up from the centre line (in)
+  // and five down (out). Cell k of column c is rect c * 14 + k.
+  each('[data-chart]', function (svg) {
+    for (var c = 0; c < COLS; c++) {
+      for (var k = 0; k < IN_CELLS + OUT_CELLS; k++) {
+        var rect = document.createElementNS(SVG, 'rect');
+        rect.setAttribute('x', (c * 354.6 / (COLS - 1)).toFixed(1));
+        rect.setAttribute('y', (k < IN_CELLS ? 84 - 10.5 * k : 100 + 10.5 * (k - IN_CELLS)).toFixed(1));
+        rect.setAttribute('width', '12');
+        rect.setAttribute('height', '9');
+        svg.appendChild(rect);
+      }
+    }
+  });
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-lcd-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-COLS); hist.up = saved.hist.up.slice(-COLS);
+    }
+  } catch (e) { /* no storage: the chart starts empty */ }
+
+  // The value a full column stands for, shared by both directions. `peak` is
+  // the largest sample of the last minute, `fixed` the Network chart full
+  // scale option (0 when it is left to follow the peak).
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    // Follow the peak in steps (1, 2, 4, 8, 16 ...), so the columns do not
+    // all change height each time the peak moves a little.
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+
+  // Newest sample in the right-hand column. A cell lights for traffic of any
+  // size, so a trickle still shows.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var rects = svg.childNodes, first = COLS - hist.down.length;
+    function cells(v, count) { return v > 0 ? Math.max(1, Math.round(clamp01(v / full) * count)) : 0; }
+    for (var c = 0; c < COLS; c++) {
+      var inLit = c < first ? 0 : cells(hist.down[c - first], IN_CELLS);
+      var outLit = c < first ? 0 : cells(hist.up[c - first], OUT_CELLS);
+      for (var k = 0; k < IN_CELLS + OUT_CELLS; k++) {
+        flag(rects[c * (IN_CELLS + OUT_CELLS) + k], 'on', k < IN_CELLS ? k < inLit : k - IN_CELLS < outLit);
+      }
+    }
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > COLS) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time (" 9:24" for "9:24 PM"),
+    // 24H / AM / PM from its format, ALM while an alarm is set.
+    var time = known(v['0']) ? String(v['0']) : '';
+    var hm = /(\d{1,2}):(\d{2})/.exec(time);
+    each('[data-clock]', function (el) {
+      draw(el, hm ? (hm[1].length < 2 ? ' ' : '') + hm[1] + ':' + hm[2] : '--:--');
+    });
+    each('[data-mode]', function (el) {
+      var am = /am/i.test(time), pm = /pm/i.test(time), alarm = String(v[el.getAttribute('data-alarm')]);
+      var on = [!!hm && !am && !pm, am, pm, /^(true|1)$/i.test(alarm)];
+      for (var i = 0; i < el.children.length; i++) flag(el.children[i], 'on', on[i]);
+    });
+    each('[data-days]', function (el) {
+      var day = known(v[el.getAttribute('data-days')]) ? String(v[el.getAttribute('data-days')]).slice(0, 2).toUpperCase() : '';
+      for (var i = 0; i < el.children.length; i++) flag(el.children[i], 'on', el.children[i].textContent === day);
+    });
+    each('[data-date]', function (el) {   // 13-11
+      var day = num(v['2']), month = MONTHS.indexOf(String(v['3'] || '').slice(0, 3).toLowerCase()) + 1;
+      draw(el, (isFinite(day) ? two(Math.round(day)) : '--') + '-' + (month ? two(month) : '--'));
+    });
+
+    each('[data-num]', function (el) {
+      var id = el.getAttribute('data-num'), n = num(v[id]);
+      // a clock in MHz reads in GHz, like the unit printed beside it
+      if (el.hasAttribute('data-ghz') && /mhz/i.test(String(v[+id + 1] || ''))) n /= 1000;
+      draw(el, fit(n, +el.getAttribute('data-digits'), +el.getAttribute('data-places')));
+    });
+    each('[data-unit]', function (el) {
+      var u = v[el.getAttribute('data-unit')];
+      var shown = known(u) ? String(u).toUpperCase() : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-ghz') && shown === 'MHZ' ? 'GHZ' : shown);
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      text(el, known(c) ? String(c).toUpperCase() : el.getAttribute('data-default'));
+    });
+    each('[data-uptime]', function (el) {  // 103:12, hours and minutes
+      var sec = num(v[el.getAttribute('data-uptime')]);
+      draw(el, isFinite(sec) ? fit(Math.floor(sec / 3600), 3, 0) + ':' + two(Math.floor(sec / 60) % 60) : ' --:--');
+    });
+
+    // Temperatures: twenty blocks for 20-100 degrees and the warning triangle.
+    each('[data-temp]', function (el) {
+      var t = num(v[el.getAttribute('data-temp')]);
+      light(el, isFinite(t) ? Math.round(clamp01((t - T_MIN) / (T_MAX - T_MIN)) * el.children.length) : 0);
+    });
+    each('[data-warn]', function (el) { flag(el, 'on', num(v[el.getAttribute('data-warn')]) >= WARN); });
+
+    // Cores: eight cells each, as many columns as the machine has cores.
+    var cores = 0;
+    each('[data-core]', function (el) {
+      var p = num(v[el.getAttribute('data-core')]);
+      if (isFinite(p)) cores++;
+      light(el, p >= 1 ? Math.max(1, Math.round(clamp01(p / 100) * el.children.length)) : 0);
+    });
+    each('[data-cores]', function (el) {
+      var shown = String(cores || 8);
+      if (el.style.getPropertyValue('--cores') !== shown) el.style.setProperty('--cores', shown);
+      flag(el, 'many', cores > 8);
+      var hide = anyMapped && cores === 0;
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+
+    // Bars: against the sensor's own maximum, else the limit in the
+    // stylesheet (a number, or the name of a custom property).
+    var fanScale = 0;
+    each('[data-bar]', function (el) {
+      var id = el.getAttribute('data-bar'), val = num(v[id]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (scale === '--fan-max') {
+        fanRpm[id] = isFinite(val) ? val : 0;
+        if (isFinite(val)) fanScale = Math.max(fanScale, max > 0 ? max : fallback);
+      }
+      light(el, val > 0 ? Math.max(1, Math.round(share(val, max, fallback) * el.children.length)) : 0);
+    });
+    each('[data-fan-note]', function (el) {
+      text(el, 'RPM · BAR FULL SCALE ' + Math.round(fanScale || cssNum('--fan-max', 2400)));
+    });
+    each('[data-of]', function (el) {      // /32GB
+      var max = num(v[el.getAttribute('data-of')]), u = v[el.getAttribute('data-unit-of')];
+      var shown = isFinite(max) ? String(Math.round(max * 10) / 10) : '';
+      text(el, shown ? '/' + shown + (known(u) ? String(u).toUpperCase() : '') : ' ');
+    });
+
+    latest.down = num(v['65']); latest.up = num(v['69']);
+
+    // Hide what has no data. With nothing bound at all, show the whole design
+    // (eight cores of it).
+    each('[data-need]', function (el) {
+      var id = el.getAttribute('data-need');
+      var hide = anyMapped ? !(id === '0' ? hm : isFinite(num(v[id]))) : +id >= 82 && +id <= 89;
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+    each('[data-section]', function (el) {
+      var hide = el.querySelector('[data-need]') !== null &&
+                 el.querySelector('[data-need]:not([hidden])') === null;
+      if (el.hidden !== hide) el.hidden = hide;
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // An LCD switches, it does not fade: one timer looks at the wall clock
+  // --motion-fps times a second and flips what is due. Only a flip writes to
+  // the page, so the rate is how punctual the switching is, not what it costs.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, last = 0, clock = 0, fanPhase = {};
+
+  function frame(still) {
+    var now = Date.now(), dt = Math.min((now - last) / 1000, 1) * speed;
+    last = now; clock += dt;
+    // Colons: half a second on, half a second off.
+    var blank = !still && clock % 1 >= 0.5;
+    each('[data-clock], [data-uptime]', function (el) { flag(el, 'blank', blank); });
+    // Fan icons: two frames, a full flip every 900 / RPM seconds, but never
+    // faster than the ticker can show (two ticks a frame).
+    each('[data-fan]', function (el) {
+      var id = el.getAttribute('data-fan'), rpm = fanRpm[id] || 0;
+      if (still || rpm <= 0) { flag(el, 'flip', false); return; }
+      var half = Math.max(450 / rpm, 2 * speed / fps);
+      fanPhase[id] = ((fanPhase[id] || 0) + dt / (2 * half)) % 1;
+      flag(el, 'flip', fanPhase[id] >= 0.5);
+    });
+    // Status lights: DISK winks every 1.7 s, NET every 0.9 s while there is traffic.
+    var traffic = latest.down > 0 || latest.up > 0;
+    each('[data-led]', function (el) {
+      var net = el.getAttribute('data-led') === 'net';
+      var p = net ? ((clock + 0.3) % 0.9) / 0.9 : (clock % 1.7) / 1.7;
+      flag(el, 'dim', !still && (!net || traffic) && p >= 0.41 && p < 0.59);
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    if (timer) { clearInterval(timer); timer = null; }
+    last = Date.now();
+    frame(!on);                         // motion off: colons lit, fans and lights at rest
+    if (on) timer = setInterval(frame, 1000 / Math.min(fps, 30));
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // every readout drawn before the first values arrive
+})();
+</script>
+</body>
+</html>
