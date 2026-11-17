@@ -21,23 +21,23 @@ use crate::core::{
     register_animation, ConfigOption, ConfigSchema, Displayer, PanelTransform,
     ANIMATION_SNAP_THRESHOLD,
 };
-use crate::displayers::combo_displayer_base::render_content_clock;
+use crate::displayers::combo_displayer_base::{
+    content_item_key, core_bar_item_values, draw_content_item, shown_glide,
+};
 use crate::displayers::combo_utils::{self, AnimatedValue};
-use crate::ui::arc_display::render_arc;
+use crate::displayers::layer_canvas::{LayerCache, LayerCanvas, LayerKey, LayerKind, LayerSink};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::group_title::render_group_title;
 use crate::ui::lcars_display::{
     calculate_item_layouts_with_orientation, get_content_bounds, render_content_background,
-    render_content_bar, render_content_core_bars, render_content_graph, render_content_static,
-    render_content_text, render_divider, render_lcars_frame, ContentDisplayType, ContentItemConfig, SplitOrientation,
+    render_divider, render_lcars_frame, ContentDisplayType, ContentItemConfig, SplitOrientation,
 };
-use crate::ui::speedometer_display::render_speedometer_with_theme;
 
 pub use rg_sens_types::display_configs::themed_configs::LcarsDisplayConfig;
 
 /// Cached frame layout data for LCARS (stored in draw closure, not Send/Sync).
-/// Only stores computed geometry — frame rendering is done directly to the
-/// GTK-provided Cairo context to avoid CPU→GPU texture uploads with GL/NGL renderers.
+/// Only stores computed geometry; the picture itself is kept as render nodes
+/// (see `layer_canvas`).
 struct LcarsLayoutCache {
     /// Size the cache was computed at
     width: i32,
@@ -105,7 +105,8 @@ impl LcarsComboDisplayer {
     /// `cached_prefixes` contains pre-computed prefixes like ["group1_1", "group1_2", ...]
     #[allow(clippy::too_many_arguments)]
     fn draw_content_items(
-        cr: &Context,
+        sink: &mut LayerSink,
+        config_version: u64,
         x: f64,
         y: f64,
         w: f64,
@@ -117,10 +118,10 @@ impl LcarsComboDisplayer {
         bar_values: &HashMap<String, AnimatedValue>,
         core_bar_values: &HashMap<String, Vec<AnimatedValue>>,
         graph_history: &HashMap<String, VecDeque<DataPoint>>,
-    ) -> Result<(), cairo::Error> {
+    ) {
         let count = cached_prefixes.len() as u32;
         if count == 0 || w <= 0.0 || h <= 0.0 {
-            return Ok(());
+            return;
         }
 
         // Get item orientation for this group (default to layout orientation)
@@ -166,8 +167,10 @@ impl LcarsComboDisplayer {
         let mut key_buf = String::with_capacity(32);
         // Hoisted default so per-item config lookups can borrow instead of clone
         let default_item_config = ContentItemConfig::default();
+        let empty_history = VecDeque::new();
 
-        // Draw each item
+        // Each item is a layer of its own: one that reads the same inputs as
+        // on the frame before keeps its render node and costs nothing.
         for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
             let prefix = &cached_prefixes[i];
             let item_data = combo_utils::get_item_data(values, prefix);
@@ -179,6 +182,7 @@ impl LcarsComboDisplayer {
                 .content_items
                 .get(prefix)
                 .unwrap_or(&default_item_config);
+            let display_as = item_config.display_as;
 
             // Get animated percent - reuse buffer for bar_key
             key_buf.clear();
@@ -188,209 +192,73 @@ impl LcarsComboDisplayer {
                 .get(key_buf.as_str())
                 .map(|av| av.current)
                 .unwrap_or_else(|| item_data.percent());
+            let animated_percent = shown_glide(item_config, animated_percent);
 
-            match item_config.display_as {
-                ContentDisplayType::Bar => {
-                    render_content_bar(
+            let history = if display_as == ContentDisplayType::Graph {
+                key_buf.clear();
+                key_buf.push_str(prefix);
+                key_buf.push_str("_graph");
+                graph_history
+                    .get(key_buf.as_str())
+                    .unwrap_or(&empty_history)
+            } else {
+                &empty_history
+            };
+
+            let core_values = if display_as == ContentDisplayType::CoreBars {
+                core_bar_item_values(prefix, item_config, values, core_bar_values)
+            } else {
+                Vec::new()
+            };
+
+            let rect = (item_x, item_y, item_w, item_h);
+            let key = content_item_key(
+                config_version,
+                rect,
+                display_as,
+                &slot_values,
+                animated_percent,
+                &core_values,
+                history,
+            );
+            sink.layer(
+                (LayerKind::Item, group_idx as u32, i as u32),
+                key,
+                Some(rect),
+                &|cr| {
+                    if let Err(e) = draw_content_item(
                         cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        &item_config.bar_config,
+                        rect,
+                        prefix,
+                        item_config,
                         &config.frame.theme,
                         &item_data,
+                        &slot_values,
                         animated_percent,
-                        Some(&slot_values),
-                    )?;
-                }
-                ContentDisplayType::Text => {
-                    render_content_text(
-                        cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        &item_config.bar_config,
-                        &config.frame.theme,
-                        &item_data,
-                        Some(&slot_values),
-                    )?;
-                }
-                ContentDisplayType::Graph => {
-                    // Get graph history for this slot - reuse buffer for the key
-                    key_buf.clear();
-                    key_buf.push_str(prefix);
-                    key_buf.push_str("_graph");
-                    let empty_history = VecDeque::new();
-                    let history = graph_history
-                        .get(key_buf.as_str())
-                        .unwrap_or(&empty_history);
-
-                    if let Err(e) = render_content_graph(
-                        cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        &item_config.graph_config,
-                        &config.frame.theme,
                         history,
-                        &slot_values,
-                    ) {
-                        log::warn!("Failed to render graph for {}: {}", prefix, e);
-                        // Fall back to text display on error
-                        render_content_text(
-                            cr,
-                            item_x,
-                            item_y,
-                            item_w,
-                            item_h,
-                            &item_config.bar_config,
-                            &config.frame.theme,
-                            &item_data,
-                            Some(&slot_values),
-                        )?;
-                    }
-                }
-                ContentDisplayType::LevelBar => {
-                    // A bar at the item's fixed height (sized like a graph
-                    // above); the item page shares the bar editor
-                    render_content_bar(
-                        cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        &item_config.bar_config,
-                        &config.frame.theme,
-                        &item_data,
-                        animated_percent,
-                        Some(&slot_values),
-                    )?;
-                }
-                ContentDisplayType::CoreBars => {
-                    // Use animated core values if available, otherwise fall back to raw values
-                    let core_bars_config = &item_config.core_bars_config;
-                    let core_values: Vec<f64> = if let Some(animated) = core_bar_values.get(prefix)
-                    {
-                        // Use animated current values
-                        animated.iter().map(|av| av.current).collect()
-                    } else {
-                        // Fall back to raw values (for first frame before animation starts)
-                        let capacity = core_bars_config
-                            .end_core
-                            .saturating_sub(core_bars_config.start_core)
-                            + 1;
-                        let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
-                        // Use KeyBuffer to avoid format! allocation per core
-                        for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
-                            let value = combo_utils::with_key_buffer(|buf| {
-                                let core_key = buf.build_core_key(prefix, core_idx);
-                                values.get(core_key).and_then(|v| v.as_f64())
-                            })
-                            .unwrap_or(0.0);
-                            raw_values.push(value / 100.0);
-                        }
-
-                        // If no specific core values found, try to find any core values
-                        if raw_values.is_empty() {
-                            for core_idx in 0..128 {
-                                let value = combo_utils::with_key_buffer(|buf| {
-                                    let core_key = buf.build_core_key(prefix, core_idx);
-                                    values.get(core_key).and_then(|v| v.as_f64())
-                                });
-                                if let Some(v) = value {
-                                    raw_values.push(v / 100.0);
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-                        raw_values
-                    };
-
-                    // Render core bars
-                    render_content_core_bars(
-                        cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        core_bars_config,
-                        &config.frame.theme,
                         &core_values,
-                        Some(&slot_values),
-                    )?;
-                }
-                ContentDisplayType::Static => {
-                    // Render static background with optional text overlay
-                    render_content_static(
-                        cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        &item_config.static_config,
-                        &config.frame.theme,
-                        Some(&slot_values),
-                    )?;
-                }
-                ContentDisplayType::Arc => {
-                    cr.save()?;
-                    cr.translate(item_x, item_y);
-                    render_arc(
-                        cr,
-                        &item_config.arc_config,
-                        &config.frame.theme,
-                        animated_percent,
-                        &slot_values,
-                        item_w,
-                        item_h,
-                    )?;
-                    cr.restore()?;
-                }
-                ContentDisplayType::ClockAnalog => {
-                    render_content_clock(
-                        cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        &item_config.clock_analog_config,
-                        &config.frame.theme,
-                        &slot_values,
-                    )?;
-                }
-                ContentDisplayType::Speedometer => {
-                    cr.save()?;
-                    cr.translate(item_x, item_y);
-                    if let Err(e) = render_speedometer_with_theme(
-                        cr,
-                        &item_config.speedometer_config,
-                        animated_percent,
-                        &slot_values,
-                        item_w,
-                        item_h,
-                        &config.frame.theme,
                     ) {
-                        log::warn!("Failed to render speedometer for {}: {}", prefix, e);
+                        log::debug!("LCARS item {} render error: {}", prefix, e);
                     }
-                    cr.restore()?;
-                }
-            }
+                    0.0
+                },
+            );
         }
-
-        Ok(())
     }
 
-    /// Render the complete frame (static frame + dynamic content) directly to
-    /// the GTK-provided Cairo context.
-    ///
-    /// Frame rendering uses native Cairo draw operations (rectangles, arcs, fills)
-    /// which are efficient on GL/NGL-backed contexts. Group layouts are cached to
-    /// avoid redundant computation, but no ImageSurface is used — this prevents
-    /// the CPU→GPU texture uploads that freeze GL renderers.
+    /// Render frame, dividers and content items to any Cairo context, for
+    /// example an offscreen `ImageSurface` (tests, previews). The GTK widget
+    /// path is `create_widget`; this shares its drawing code.
+    pub fn render_to_context(&self, cr: &Context, width: i32, height: i32) {
+        if let Ok(data) = self.data.lock() {
+            let cache = Rc::new(RefCell::new(None));
+            Self::render_frame_and_content(cr, width, height, &data, &cache);
+        }
+    }
+
+    /// Render the complete panel (frame and content) to one Cairo context,
+    /// under the panel's transform. Every layer is drawn; the widget goes
+    /// through `render_layers` with a cache instead.
     fn render_frame_and_content(
         cr: &Context,
         width: i32,
@@ -398,18 +266,24 @@ impl LcarsComboDisplayer {
         data: &DisplayData,
         layout_cache: &Rc<RefCell<Option<LcarsLayoutCache>>>,
     ) {
+        data.transform.apply(cr, width as f64, height as f64);
+        let mut sink = LayerSink::direct(cr);
+        Self::render_layers(&mut sink, width, height, data, layout_cache);
+        data.transform.restore(cr);
+    }
+
+    /// The panel as layers (see `layer_canvas`): the frame with the content
+    /// background and the dividers, each enabled group title, each content
+    /// item. Group layouts are cached to avoid redundant computation.
+    fn render_layers(
+        sink: &mut LayerSink,
+        width: i32,
+        height: i32,
+        data: &DisplayData,
+        layout_cache: &Rc<RefCell<Option<LcarsLayoutCache>>>,
+    ) {
         let w = width as f64;
         let h = height as f64;
-
-        data.transform.apply(cr, w, h);
-
-        // Always render frame directly to cr — native GPU operations on GL contexts
-        if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
-            log::debug!("LCARS frame render error: {}", e);
-        }
-        if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
-            log::debug!("LCARS content background render error: {}", e);
-        }
 
         let content_bounds = get_content_bounds(&data.config.frame, w, h);
 
@@ -504,47 +378,63 @@ impl LcarsComboDisplayer {
             layouts
         });
 
-        // Draw dividers directly to cr
+        // The frame, the content background and the dividers: one layer that
+        // only the config and the size decide
         let (content_x, content_y, content_w, content_h) = content_bounds;
         let group_count = data.config.frame.group_item_counts.len();
         let divider_config = &data.config.frame.divider_config;
-        if group_count > 1 {
-            for &(gx, gy, gw, gh) in group_layouts.iter().take(group_count - 1) {
-                match data.config.frame.layout_orientation {
-                    SplitOrientation::Vertical => {
-                        let divider_x = gx + gw + divider_config.spacing_before;
-                        let _ = render_divider(
-                            cr,
-                            divider_x,
-                            content_y,
-                            divider_config.width,
-                            content_h,
-                            divider_config,
-                            SplitOrientation::Vertical,
-                            &data.config.frame.theme,
-                        );
-                    }
-                    SplitOrientation::Horizontal => {
-                        let divider_y = gy + gh + divider_config.spacing_before;
-                        let _ = render_divider(
-                            cr,
-                            content_x,
-                            divider_y,
-                            content_w,
-                            divider_config.width,
-                            divider_config,
-                            SplitOrientation::Horizontal,
-                            &data.config.frame.theme,
-                        );
+        let mut chrome_key = LayerKey::new();
+        chrome_key.u64(data.config_version).f64(w).f64(h);
+        sink.layer(
+            (LayerKind::Chrome, 0, 0),
+            chrome_key.finish(),
+            None,
+            &|cr| {
+                if let Err(e) = render_lcars_frame(cr, &data.config.frame, w, h) {
+                    log::debug!("LCARS frame render error: {}", e);
+                }
+                if let Err(e) = render_content_background(cr, &data.config.frame, w, h) {
+                    log::debug!("LCARS content background render error: {}", e);
+                }
+                if group_count > 1 {
+                    for &(gx, gy, gw, gh) in group_layouts.iter().take(group_count - 1) {
+                        match data.config.frame.layout_orientation {
+                            SplitOrientation::Vertical => {
+                                let divider_x = gx + gw + divider_config.spacing_before;
+                                let _ = render_divider(
+                                    cr,
+                                    divider_x,
+                                    content_y,
+                                    divider_config.width,
+                                    content_h,
+                                    divider_config,
+                                    SplitOrientation::Vertical,
+                                    &data.config.frame.theme,
+                                );
+                            }
+                            SplitOrientation::Horizontal => {
+                                let divider_y = gy + gh + divider_config.spacing_before;
+                                let _ = render_divider(
+                                    cr,
+                                    content_x,
+                                    divider_y,
+                                    content_w,
+                                    divider_config.width,
+                                    divider_config,
+                                    SplitOrientation::Horizontal,
+                                    &data.config.frame.theme,
+                                );
+                            }
+                        }
                     }
                 }
-            }
-        }
+
+                0.0
+            },
+        );
 
         // Clip to content area for dynamic content
-        cr.save().ok();
-        cr.rectangle(content_x, content_y, content_w, content_h);
-        cr.clip();
+        sink.set_clip(Some((content_x, content_y, content_w, content_h)));
 
         // Draw dynamic content items for each group
         for (group_idx, &(gx, gy, gw, gh)) in group_layouts.iter().enumerate() {
@@ -557,15 +447,24 @@ impl LcarsComboDisplayer {
             // rectangle; the items get the rest (as the generic path does).
             let (gy, gh) = match data.config.frame.group_titles.get(group_idx) {
                 Some(title) if title.enabled => {
-                    let used =
-                        render_group_title(cr, gx, gy, gw, gh, title, &data.config.frame.theme)
-                            .unwrap_or(0.0);
+                    let mut key = LayerKey::new();
+                    key.u64(data.config_version).rect((gx, gy, gw, gh));
+                    let used = sink.layer(
+                        (LayerKind::Title, group_idx as u32, 0),
+                        key.finish(),
+                        None,
+                        &|cr| {
+                            render_group_title(cr, gx, gy, gw, gh, title, &data.config.frame.theme)
+                                .unwrap_or(0.0)
+                        },
+                    );
                     (gy + used, gh - used)
                 }
                 _ => (gy, gh),
             };
-            let _ = Self::draw_content_items(
-                cr,
+            Self::draw_content_items(
+                sink,
+                data.config_version,
                 gx,
                 gy,
                 gw,
@@ -580,8 +479,7 @@ impl LcarsComboDisplayer {
             );
         }
 
-        cr.restore().ok();
-        data.transform.restore(cr);
+        sink.set_clip(None);
     }
 }
 
@@ -601,32 +499,33 @@ impl Displayer for LcarsComboDisplayer {
     }
 
     fn create_widget(&self) -> Widget {
-        let drawing_area = DrawingArea::new();
-        drawing_area.set_size_request(400, 300);
+        let canvas = LayerCanvas::new();
+        canvas.set_size_request(400, 300);
 
-        // Layout cache lives in the draw closure (not Send/Sync required)
+        // Layout and layer caches live in the draw closure (not Send/Sync required)
         let layout_cache: Rc<RefCell<Option<LcarsLayoutCache>>> = Rc::new(RefCell::new(None));
-        let layout_cache_clone = layout_cache.clone();
+        let layers = Rc::new(RefCell::new(LayerCache::default()));
 
-        // Set up draw function
+        // The panel is drawn as layers, so that a frame on which one item
+        // moved records, rasterises and uploads that item and nothing else
+        // (see `layer_canvas`). A poisoned lock draws nothing (transparent).
         let data_clone = self.data.clone();
-        drawing_area.set_draw_func(move |_, cr, width, height| {
+        canvas.set_snapshot_func(move |snapshot, width, height| {
             let Ok(data) = data_clone.lock() else {
-                super::paint_gl_fallback(cr);
                 return;
             };
-
-            // Render directly to the GTK-provided context. All Cairo draw operations
-            // (rectangles, arcs, fills) are native GPU operations on GL/NGL contexts.
-            // No ImageSurface is used, avoiding CPU→GPU texture uploads.
-            Self::render_frame_and_content(
-                cr,
-                width,
-                height,
-                &data,
-                &layout_cache_clone,
+            let mut layers = layers.borrow_mut();
+            let mut sink = LayerSink::cached(
+                snapshot,
+                &mut layers,
+                width as f64,
+                height as f64,
+                &data.transform,
             );
+            Self::render_layers(&mut sink, width, height, &data, &layout_cache);
+            sink.finish();
         });
+        let drawing_area: DrawingArea = canvas.upcast();
 
         // Register with global animation manager for smooth animations
         let data_for_animation = self.data.clone();
@@ -747,8 +646,7 @@ impl Displayer for LcarsComboDisplayer {
 
         // Phase 2: Expensive pre-computation (no lock held)
         let prefixes = combo_utils::generate_prefixes(&group_item_counts);
-        let prefix_set: std::collections::HashSet<String> =
-            prefixes.iter().cloned().collect();
+        let prefix_set: std::collections::HashSet<String> = prefixes.iter().cloned().collect();
         let mut filtered_values = HashMap::with_capacity(prefixes.len() * 8);
         combo_utils::filter_values_with_owned_prefix_set(data, &prefix_set, &mut filtered_values);
 
@@ -960,5 +858,123 @@ impl Displayer for LcarsComboDisplayer {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::{DisplayerConfig, PanelData};
+    use crate::displayers::layer_canvas::test_support::{same_picture, slot_values};
+
+    /// The saved LCARS panel, taken through a sequence of updates, must look
+    /// the same drawn as cached layers as it does drawn in one go (see the
+    /// themed frames' test in `combo_generic`):
+    /// `GDK_BACKEND=broadway BROADWAY_DISPLAY=:7 cargo test --lib lcars_layers_match -- --ignored`
+    #[test]
+    #[ignore = "needs a display"]
+    fn lcars_layers_match_the_direct_drawing() {
+        gtk4::init().expect("a display");
+        let (width, height) = (480, 960);
+        let mut panel: PanelData =
+            serde_json::from_str(include_str!("../../examples/LcarS.json")).expect("panel file");
+        panel.sync_group_structure();
+        assert!(matches!(panel.displayer_config, DisplayerConfig::Lcars(_)));
+        let mut displayer = LcarsComboDisplayer::new();
+        displayer
+            .apply_config_typed(&panel.displayer_config)
+            .expect("config applies");
+        let counts: Vec<usize> = {
+            let data = displayer.data.lock().unwrap();
+            let counts = &data.config.frame.group_item_counts;
+            counts.iter().map(|&n| n as usize).collect()
+        };
+        let prefixes = combo_utils::generate_prefixes(&counts);
+        assert!(!prefixes.is_empty());
+
+        let mut layers = LayerCache::default();
+        let layout_cache = Rc::new(RefCell::new(None));
+        let direct_cache = Rc::new(RefCell::new(None));
+        let mut redrawn = Vec::new();
+        // step 0 draws everything; 1 and 2 change a third of the slots, the
+        // glide half way on 2; 3 changes nothing; 4 scales the panel (every layer anew); 5
+        // applies the config again
+        for step in 0..6u64 {
+            let mut values = slot_values(&prefixes, &|i| match step {
+                0 => 0,
+                1 => u64::from(i % 3 == 0),
+                2 | 3 => u64::from(i % 3 == 0) + 2 * u64::from(i % 3 == 1),
+                _ => 5,
+            });
+            if step >= 4 {
+                values.insert("_panel_scale".to_string(), Value::from(0.9));
+            }
+            if step == 5 {
+                displayer
+                    .apply_config_typed(&panel.displayer_config)
+                    .expect("config applies");
+            }
+            displayer.update_data(&values);
+            if step == 2 {
+                let mut data = displayer.data.lock().unwrap();
+                let data = &mut *data;
+                let bars = data.bar_values.values_mut();
+                for value in bars.chain(data.core_bar_values.values_mut().flatten()) {
+                    value.current += (value.target - value.current) * 0.5;
+                }
+            }
+            let data = displayer.data.lock().unwrap();
+            redrawn.push(same_picture(
+                &format!("LCARS, step {step}"),
+                step >= 4,
+                width,
+                height,
+                &mut layers,
+                &|cr| {
+                    LcarsComboDisplayer::render_frame_and_content(
+                        cr,
+                        width,
+                        height,
+                        &data,
+                        &direct_cache,
+                    )
+                },
+                &|snapshot, layers| {
+                    let mut sink = LayerSink::cached(
+                        snapshot,
+                        layers,
+                        width as f64,
+                        height as f64,
+                        &data.transform,
+                    );
+                    LcarsComboDisplayer::render_layers(
+                        &mut sink,
+                        width,
+                        height,
+                        &data,
+                        &layout_cache,
+                    );
+                    sink.finish();
+                },
+            ));
+        }
+        let all = redrawn[0];
+        assert!(all > 2, "{redrawn:?}");
+        assert!(redrawn[1] > 0 && redrawn[1] < all, "{redrawn:?}");
+        // every update adds a point to a graph; nothing else has changed
+        let graphs = {
+            let data = displayer.data.lock().unwrap();
+            let items = &data.config.frame.content_items;
+            prefixes
+                .iter()
+                .filter_map(|prefix| items.get(prefix))
+                .filter(|item| item.display_as == ContentDisplayType::Graph)
+                .count() as u64
+        };
+        assert!(
+            redrawn[3] <= graphs,
+            "unchanged values redraw the graphs alone ({graphs}): {redrawn:?}"
+        );
+        assert_eq!(redrawn[5], all, "a new config redraws everything");
     }
 }

@@ -70,6 +70,20 @@ pub fn render_bar(
     Ok(())
 }
 
+/// The value a bar draws for `value`: a segmented bar changes only when
+/// another segment lights, so every value on one step draws as that step
+/// (see [`segment_step`](crate::render_utils::segment_step)); the other
+/// styles follow the value itself. `render_bar(.., shown_value(config, v), ..)`
+/// is the picture of `render_bar(.., v, ..)`.
+pub fn shown_value(config: &BarDisplayConfig, value: f64) -> f64 {
+    match config.style {
+        BarStyle::Segmented => {
+            crate::render_utils::segment_step(value.clamp(0.0, 1.0), config.segment_count)
+        }
+        BarStyle::Full | BarStyle::Rectangle => value,
+    }
+}
+
 /// Calculate tapered dimension at position t (0.0 to 1.0)
 fn calculate_tapered_dimension(base_dim: f64, t: f64, style: BarTaperStyle, amount: f64) -> f64 {
     match style {
@@ -884,4 +898,89 @@ fn render_text_overlay(
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod shown_value_tests {
+    use super::*;
+
+    fn pixels(width: i32, height: i32, draw: impl Fn(&cairo::Context)) -> Vec<u8> {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            draw(&cr);
+        }
+        surface.flush();
+        let mut out = Vec::new();
+        surface
+            .with_data(|data| out.extend_from_slice(data))
+            .unwrap();
+        out
+    }
+
+    /// Every `{key}` object of the content items of a saved panel.
+    fn saved_configs<T: serde::de::DeserializeOwned>(panel: &str, key: &str) -> Vec<T> {
+        let panel: serde_json::Value = serde_json::from_str(panel).unwrap();
+        let items = panel["displayer_config"]["frame"]["content_items"]
+            .as_object()
+            .unwrap();
+        items
+            .values()
+            .filter_map(|item| serde_json::from_value(item[key].clone()).ok())
+            .collect()
+    }
+
+    /// A segmented bar drawn with the step its value is on is the bar drawn
+    /// with the value: the default one, tapered and reversed ones, and every
+    /// bar of the saved LCARS and Material panels.
+    #[test]
+    fn a_segmented_bar_draws_its_step() {
+        let theme = ComboThemeConfig::default();
+        let values = std::collections::HashMap::new();
+        let mut configs: Vec<BarDisplayConfig> = Vec::new();
+        for (count, direction, taper) in [
+            (10, BarFillDirection::LeftToRight, BarTaperStyle::None),
+            (24, BarFillDirection::RightToLeft, BarTaperStyle::Both),
+            (7, BarFillDirection::BottomToTop, BarTaperStyle::None),
+            (12, BarFillDirection::TopToBottom, BarTaperStyle::End),
+        ] {
+            configs.push(BarDisplayConfig {
+                style: BarStyle::Segmented,
+                segment_count: count,
+                fill_direction: direction,
+                taper_style: taper,
+                ..Default::default()
+            });
+        }
+        configs.extend(saved_configs(
+            include_str!("../../../examples/LcarS.json"),
+            "bar_config",
+        ));
+        configs.extend(saved_configs(
+            include_str!("../../../examples/Material.json"),
+            "bar_config",
+        ));
+        let mut segmented = 0;
+        for config in &configs {
+            if config.style != BarStyle::Segmented {
+                assert_eq!(shown_value(config, 0.4321), 0.4321);
+                continue;
+            }
+            segmented += 1;
+            for i in 0..=120 {
+                let value = i as f64 / 120.0;
+                let shown = shown_value(config, value);
+                let draw = |v: f64| {
+                    pixels(200, 60, |cr| {
+                        render_bar(cr, config, &theme, v, &values, 200.0, 60.0).unwrap()
+                    })
+                };
+                assert!(draw(value) == draw(shown), "value {value} drawn as {shown}");
+            }
+        }
+        assert!(
+            segmented >= 6,
+            "the saved panels have segmented bars ({segmented})"
+        );
+    }
 }

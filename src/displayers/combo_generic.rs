@@ -18,17 +18,20 @@ use crate::displayers::combo_displayer_base::{
     setup_combo_animation_timer_ext, ComboDisplayData, ComboFrameConfig, ContentDrawParams,
     FrameRenderer, LayoutFrameConfig, ThemedFrameConfig,
 };
+use crate::displayers::layer_canvas::{LayerCache, LayerCanvas, LayerKey, LayerKind, LayerSink};
 use crate::ui::group_title::render_group_title;
 
-/// Cached frame layout data to avoid re-computing group layouts every frame.
-/// Only stores computed geometry — frame rendering is done directly to the
-/// GTK-provided Cairo context to avoid CPU→GPU texture uploads with GL/NGL renderers.
+/// What drawing the frame yields besides the picture: where the content goes.
+/// Kept so that a frame whose layer is reused (see `layer_canvas`) still
+/// tells where the items are.
 struct FrameLayoutCache {
     /// Size the cache was computed at
     width: i32,
     height: i32,
     /// Config version when cache was created
     config_version: u64,
+    /// Content bounds from frame render
+    content_bounds: (f64, f64, f64, f64),
     /// Group layouts from frame render
     group_layouts: Vec<(f64, f64, f64, f64)>,
 }
@@ -100,13 +103,9 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
         }
     }
 
-    /// Render the complete frame (static frame + dynamic content) directly to
-    /// the GTK-provided Cairo context.
-    ///
-    /// Frame rendering uses native Cairo draw operations (rectangles, arcs, fills)
-    /// which are efficient on GL/NGL-backed contexts. Group layouts are cached to
-    /// avoid redundant computation, but no ImageSurface is used — this prevents
-    /// the CPU→GPU texture uploads that freeze GL renderers.
+    /// Render the complete panel (frame and content) to one Cairo context,
+    /// under the panel's transform. Every layer is drawn; the widget goes
+    /// through `render_layers` with a cache instead.
     fn render_frame_and_content(
         cr: &Context,
         width: i32,
@@ -115,57 +114,74 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
         renderer: &Arc<R>,
         layout_cache: &Rc<RefCell<Option<FrameLayoutCache>>>,
     ) {
+        data.combo.transform.apply(cr, width as f64, height as f64);
+        let mut sink = LayerSink::direct(cr);
+        Self::render_layers(&mut sink, width, height, data, renderer, layout_cache);
+        data.combo.transform.restore(cr);
+    }
+
+    /// The panel as layers (see `layer_canvas`): the frame with the group
+    /// dividers, each enabled group title, each content item, the overlay
+    /// effects. The frame layer also yields the content bounds and the group
+    /// layouts, kept in `layout_cache` under the same key as the layer.
+    fn render_layers(
+        sink: &mut LayerSink,
+        width: i32,
+        height: i32,
+        data: &DisplayData<R::Config>,
+        renderer: &Arc<R>,
+        layout_cache: &Rc<RefCell<Option<FrameLayoutCache>>>,
+    ) {
         let w = width as f64;
         let h = height as f64;
+        let version = data.config_version;
 
-        data.combo.transform.apply(cr, w, h);
+        // The frame and the dividers: one layer that only the config and the
+        // size decide. Drawing the frame is what tells where the content
+        // goes, so the layer leaves that in the layout cache.
+        let mut chrome_key = LayerKey::new();
+        chrome_key.u64(version).f64(w).f64(h);
+        sink.layer(
+            (LayerKind::Chrome, 0, 0),
+            chrome_key.finish(),
+            None,
+            &|cr| {
+                let content_bounds = match renderer.render_frame(cr, &data.config, w, h) {
+                    Ok(bounds) => bounds,
+                    Err(e) => {
+                        log::debug!("{} frame render error: {}", renderer.theme_name(), e);
+                        *layout_cache.borrow_mut() = None;
+                        return 0.0;
+                    }
+                };
+                let (cx, cy, cw, ch) = content_bounds;
+                let group_layouts = renderer.calculate_group_layouts(&data.config, cx, cy, cw, ch);
+                renderer.draw_group_dividers(cr, &data.config, &group_layouts);
+                *layout_cache.borrow_mut() = Some(FrameLayoutCache {
+                    width,
+                    height,
+                    config_version: version,
+                    content_bounds,
+                    group_layouts,
+                });
+                0.0
+            },
+        );
 
-        // Always render frame directly to cr — native GPU operations on GL contexts
-        let content_bounds = match renderer.render_frame(cr, &data.config, w, h) {
-            Ok(bounds) => bounds,
-            Err(e) => {
-                log::debug!("{} frame render error: {}", renderer.theme_name(), e);
-                data.combo.transform.restore(cr);
-                return;
-            }
-        };
-
-        // Use cached group layouts if size and config haven't changed
-        let group_layouts = {
+        let layout = {
             let cache_ref = layout_cache.borrow();
             cache_ref
                 .as_ref()
-                .filter(|c| {
-                    c.width == width
-                        && c.height == height
-                        && c.config_version == data.config_version
-                })
-                .map(|c| c.group_layouts.clone())
+                .filter(|c| c.width == width && c.height == height && c.config_version == version)
+                .map(|c| (c.content_bounds, c.group_layouts.clone()))
+        };
+        // The frame could not be drawn: nothing to put content in
+        let Some((content_bounds, group_layouts)) = layout else {
+            return;
         };
 
-        let group_layouts = group_layouts.unwrap_or_else(|| {
-            let (cx, cy, cw, ch) = content_bounds;
-            let layouts = renderer.calculate_group_layouts(&data.config, cx, cy, cw, ch);
-
-            *layout_cache.borrow_mut() = Some(FrameLayoutCache {
-                width,
-                height,
-                config_version: data.config_version,
-                group_layouts: layouts.clone(),
-            });
-
-            layouts
-        });
-
-        // Draw dividers directly to cr
-        renderer.draw_group_dividers(cr, &data.config, &group_layouts);
-
-        let (content_x, content_y, content_w, content_h) = content_bounds;
-
         // Clip to content area for dynamic content
-        cr.save().ok();
-        cr.rectangle(content_x, content_y, content_w, content_h);
-        cr.clip();
+        sink.set_clip(Some(content_bounds));
 
         // Build draw params for dynamic content
         let draw_params = ContentDrawParams {
@@ -189,16 +205,26 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
             // rectangle; the items get the rest.
             let (gy, gh) = match data.config.group_titles().get(group_idx) {
                 Some(title) if title.enabled => {
-                    let used = render_group_title(cr, gx, gy, gw, gh, title, data.config.theme())
-                        .unwrap_or(0.0);
+                    let mut key = LayerKey::new();
+                    key.u64(version).rect((gx, gy, gw, gh));
+                    let used = sink.layer(
+                        (LayerKind::Title, group_idx as u32, 0),
+                        key.finish(),
+                        None,
+                        &|cr| {
+                            render_group_title(cr, gx, gy, gw, gh, title, data.config.theme())
+                                .unwrap_or(0.0)
+                        },
+                    );
                     (gy + used, gh - used)
                 }
                 _ => (gy, gh),
             };
 
             let config_ref = &data.config;
-            let _ = draw_content_items_generic(
-                cr,
+            draw_content_items_generic(
+                sink,
+                version,
                 gx,
                 gy,
                 gw,
@@ -213,14 +239,22 @@ impl<R: FrameRenderer> GenericComboDisplayerShared<R> {
             );
         }
 
-        cr.restore().ok();
+        sink.set_clip(None);
 
         // Draw overlay effects (e.g., CRT scanlines, vignette) on top of all content
-        if let Err(e) = renderer.render_overlay(cr, &data.config, w, h) {
-            log::debug!("{} overlay render error: {}", renderer.theme_name(), e);
-        }
-
-        data.combo.transform.restore(cr);
+        let mut overlay_key = LayerKey::new();
+        overlay_key.u64(version).f64(w).f64(h);
+        sink.layer(
+            (LayerKind::Overlay, 0, 0),
+            overlay_key.finish(),
+            None,
+            &|cr| {
+                if let Err(e) = renderer.render_overlay(cr, &data.config, w, h) {
+                    log::debug!("{} overlay render error: {}", renderer.theme_name(), e);
+                }
+                0.0
+            },
+        );
     }
 }
 
@@ -234,38 +268,46 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
     }
 
     fn create_widget(&self) -> Widget {
-        let drawing_area = DrawingArea::new();
-        drawing_area.set_size_request(400, 300);
+        let canvas = LayerCanvas::new();
+        canvas.set_size_request(400, 300);
 
         let data_clone = self.data.clone();
         let renderer_clone = self.renderer.clone();
 
-        // Layout cache lives in the draw closure (not Send/Sync required)
+        // Layout and layer caches live in the draw closure (not Send/Sync required)
         let layout_cache: Rc<RefCell<Option<FrameLayoutCache>>> = Rc::new(RefCell::new(None));
-        let layout_cache_clone = layout_cache.clone();
+        let layers = Rc::new(RefCell::new(LayerCache::default()));
 
-        drawing_area.set_draw_func(move |_, cr, width, height| {
+        // The panel is drawn as layers, so that a frame on which one item
+        // moved records, rasterises and uploads that item and nothing else
+        // (see `layer_canvas`). A poisoned lock draws nothing (transparent).
+        canvas.set_snapshot_func(move |snapshot, width, height| {
             if width < 10 || height < 10 {
                 return;
             }
 
             let Ok(data) = data_clone.lock() else {
-                super::paint_gl_fallback(cr);
                 return;
             };
-
-            // Render directly to the GTK-provided context. All Cairo draw operations
-            // (rectangles, arcs, fills) are native GPU operations on GL/NGL contexts.
-            // No ImageSurface is used, avoiding CPU→GPU texture uploads.
-            Self::render_frame_and_content(
-                cr,
+            let mut layers = layers.borrow_mut();
+            let mut sink = LayerSink::cached(
+                snapshot,
+                &mut layers,
+                width as f64,
+                height as f64,
+                &data.combo.transform,
+            );
+            Self::render_layers(
+                &mut sink,
                 width,
                 height,
                 &data,
                 &renderer_clone,
-                &layout_cache_clone,
+                &layout_cache,
             );
+            sink.finish();
         });
+        let drawing_area: DrawingArea = canvas.upcast();
 
         // Set up animation timer
         setup_combo_animation_timer_ext(
@@ -382,5 +424,196 @@ impl<R: FrameRenderer> Displayer for GenericComboDisplayerShared<R> {
 
     fn get_typed_config(&self) -> Option<DisplayerConfig> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::PanelData;
+    use crate::displayers::combo_utils;
+    use crate::displayers::layer_canvas::test_support::{same_picture, slot_values};
+    use crate::ui::lcars_display::ContentDisplayType;
+
+    /// A saved panel, taken through a sequence of updates, must look the same
+    /// drawn as cached layers as it does drawn in one go: a layer key that
+    /// misses an input would leave an old picture of an item behind. Returns
+    /// how many layers each step recorded again.
+    fn layered_matches_direct<R: FrameRenderer>(
+        renderer: R,
+        panel: &str,
+        frame_of: fn(&DisplayerConfig) -> Option<R::Config>,
+    ) -> Vec<u64> {
+        let (width, height) = (480, 960);
+        let mut panel: PanelData = serde_json::from_str(panel).expect("panel file");
+        // the frame's group counts are filled in from the source, as on load
+        panel.sync_group_structure();
+        let frame = frame_of(&panel.displayer_config).expect("a panel of this displayer");
+        let mut displayer = GenericComboDisplayerShared::new(renderer);
+        displayer.set_config(frame.clone());
+        let name = displayer.renderer.theme_name();
+        let counts: Vec<usize> = {
+            let data = displayer.data.lock().unwrap();
+            data.config.group_item_counts().to_vec()
+        };
+        let prefixes = combo_utils::generate_prefixes(&counts);
+        assert!(!prefixes.is_empty(), "{name}: the panel has no items");
+
+        let mut layers = LayerCache::default();
+        let layout_cache = Rc::new(RefCell::new(None));
+        let direct_cache = Rc::new(RefCell::new(None));
+        let mut redrawn = Vec::new();
+        // step 0 draws everything; 1 and 2 change a third of the slots, the
+        // glide half way on 2; 3 changes nothing; 4 scales the panel (every layer anew); 5
+        // applies the config again
+        for step in 0..6u64 {
+            let mut values = slot_values(&prefixes, &|i| match step {
+                0 => 0,
+                1 => u64::from(i % 3 == 0),
+                2 | 3 => u64::from(i % 3 == 0) + 2 * u64::from(i % 3 == 1),
+                _ => 5,
+            });
+            if step >= 4 {
+                values.insert("_panel_scale".to_string(), Value::from(0.9));
+            }
+            if step == 5 {
+                displayer.set_config(frame.clone());
+            }
+            displayer.update_data(&values);
+            if step == 2 {
+                let mut data = displayer.data.lock().unwrap();
+                let combo = &mut data.combo;
+                let bars = combo.bar_values.values_mut();
+                for value in bars.chain(combo.core_bar_values.values_mut().flatten()) {
+                    value.current += (value.target - value.current) * 0.5;
+                }
+            }
+            let data = displayer.data.lock().unwrap();
+            redrawn.push(same_picture(
+                &format!("{name}, step {step}"),
+                step >= 4,
+                width,
+                height,
+                &mut layers,
+                &|cr| {
+                    GenericComboDisplayerShared::<R>::render_frame_and_content(
+                        cr,
+                        width,
+                        height,
+                        &data,
+                        &displayer.renderer,
+                        &direct_cache,
+                    )
+                },
+                &|snapshot, layers| {
+                    let mut sink = LayerSink::cached(
+                        snapshot,
+                        layers,
+                        width as f64,
+                        height as f64,
+                        &data.combo.transform,
+                    );
+                    GenericComboDisplayerShared::<R>::render_layers(
+                        &mut sink,
+                        width,
+                        height,
+                        &data,
+                        &displayer.renderer,
+                        &layout_cache,
+                    );
+                    sink.finish();
+                },
+            ));
+        }
+        let all = redrawn[0];
+        assert!(all > 2, "{name}: {redrawn:?}");
+        assert!(redrawn[1] > 0 && redrawn[1] < all, "{name}: {redrawn:?}");
+        // every update adds a point to a graph; nothing else has changed
+        let graphs = {
+            let data = displayer.data.lock().unwrap();
+            let items = data.config.content_items();
+            prefixes
+                .iter()
+                .filter_map(|prefix| items.get(prefix))
+                .filter(|item| item.display_as == ContentDisplayType::Graph)
+                .count() as u64
+        };
+        assert!(
+            redrawn[3] <= graphs,
+            "{name}: unchanged values redraw the graphs alone ({graphs}): {redrawn:?}"
+        );
+        assert_eq!(redrawn[5], all, "{name}: a new config redraws everything");
+        redrawn
+    }
+
+    /// Every themed frame, each on its saved panel (Retro Terminal draws
+    /// an overlay, its scanlines, over the items; Cyberpunk and Industrial
+    /// draw a frame around each item). One test, since GTK belongs to the
+    /// thread that initialised it:
+    /// `cargo test --lib themed_layers_match -- --ignored`
+    /// on a display (`GDK_BACKEND=broadway BROADWAY_DISPLAY=:7` with
+    /// `gtk4-broadwayd :7` running does without the desktop).
+    #[test]
+    #[ignore = "needs a display"]
+    fn themed_layers_match_the_direct_drawing() {
+        gtk4::init().expect("a display");
+        macro_rules! frame {
+            ($renderer:expr, $file:literal, $variant:ident) => {
+                layered_matches_direct(
+                    $renderer,
+                    include_str!(concat!("../../examples/", $file)),
+                    |config| match config {
+                        DisplayerConfig::$variant(c) => Some(c.to_frame()),
+                        _ => None,
+                    },
+                );
+            };
+        }
+        use crate::ui;
+        frame!(
+            ui::material_display::MaterialRenderer,
+            "Material.json",
+            Material
+        );
+        frame!(
+            ui::retro_terminal_display::RetroTerminalRenderer,
+            "RetroTerminal.json",
+            RetroTerminal
+        );
+        frame!(
+            ui::art_deco_display::ArtDecoRenderer,
+            "Art Deco.json",
+            ArtDeco
+        );
+        frame!(
+            ui::cyberpunk_display::CyberpunkRenderer,
+            "Cyberpunk.json",
+            Cyberpunk
+        );
+        frame!(
+            ui::industrial_display::IndustrialRenderer,
+            "Industrial.json",
+            Industrial
+        );
+        frame!(
+            ui::fighter_hud_display::FighterHudRenderer,
+            "HUD.json",
+            FighterHud
+        );
+        frame!(
+            ui::steampunk_display::SteampunkRenderer,
+            "SteamPunk.json",
+            Steampunk
+        );
+        frame!(
+            ui::synthwave_display::SynthwaveRenderer,
+            "Synthwave.json",
+            Synthwave
+        );
+        frame!(
+            ui::art_nouveau_display::ArtNouveauRenderer,
+            "Art Nouveau.json",
+            ArtNouveau
+        );
     }
 }

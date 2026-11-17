@@ -111,23 +111,11 @@ impl PanelTransform {
         }
     }
 
-    /// Apply transform to Cairo context
-    pub fn apply(&self, cr: &Context, width: f64, height: f64) -> (f64, f64) {
-        cr.save().ok();
-
-        let translate_x = if self.translate_x.is_finite() {
-            self.translate_x
-        } else {
-            0.0
-        };
-        let translate_y = if self.translate_y.is_finite() {
-            self.translate_y
-        } else {
-            0.0
-        };
-
-        cr.translate(translate_x, translate_y);
-
+    /// The transform as `apply` uses it: `(scale, translate_x, translate_y)`
+    /// with values that cannot be used replaced (a default transform has
+    /// scale 0, which reads as 1; a scale within the threshold of 1 is 1).
+    pub fn resolved(&self) -> (f64, f64, f64) {
+        let finite_or_zero = |v: f64| if v.is_finite() { v } else { 0.0 };
         let scale = if self.scale.is_finite() && self.scale > TRANSFORM_THRESHOLD {
             self.scale
         } else if self.scale.is_finite() && self.scale > 0.0 {
@@ -135,8 +123,26 @@ impl PanelTransform {
         } else {
             1.0
         };
+        let scale = if (scale - 1.0).abs() > TRANSFORM_THRESHOLD {
+            scale
+        } else {
+            1.0
+        };
+        (
+            scale,
+            finite_or_zero(self.translate_x),
+            finite_or_zero(self.translate_y),
+        )
+    }
 
-        if (scale - 1.0).abs() > TRANSFORM_THRESHOLD {
+    /// Apply transform to Cairo context
+    pub fn apply(&self, cr: &Context, width: f64, height: f64) -> (f64, f64) {
+        cr.save().ok();
+
+        let (scale, translate_x, translate_y) = self.resolved();
+        cr.translate(translate_x, translate_y);
+
+        if scale != 1.0 {
             let center_x = width / 2.0;
             let center_y = height / 2.0;
             cr.translate(center_x, center_y);

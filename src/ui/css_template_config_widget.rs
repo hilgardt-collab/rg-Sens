@@ -11,7 +11,7 @@ use gtk4::{
 };
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::ui::css_template_display::{
@@ -28,6 +28,9 @@ const HTML_PATH_DEBOUNCE_MS: u64 = 300;
 
 type ChangeHook = Rc<RefCell<Option<Box<dyn Fn()>>>>;
 type SlotRequestHook = Rc<RefCell<Option<Box<dyn Fn(Vec<(String, String)>)>>>>;
+/// Scan Placeholders, shared by the button and the question asked after a
+/// template is picked. Set once the Bindings page exists.
+type ScanHook = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
 
 /// CSS Template configuration widget
 pub struct CssTemplateConfigWidget {
@@ -64,8 +67,9 @@ impl CssTemplateConfigWidget {
         let notebook = Notebook::new();
         notebook.set_vexpand(true);
 
+        let scan: ScanHook = Rc::new(RefCell::new(None));
         let (template_page, html_path_entry, css_path_entry, hot_reload_check, scan_btn) =
-            Self::create_template_tab(config.clone(), on_change.clone());
+            Self::create_template_tab(config.clone(), on_change.clone(), scan.clone());
         notebook.append_page(&template_page, Some(&Label::new(Some("Template"))));
 
         let bindings = BindingsPage::new(config.clone(), on_change.clone());
@@ -93,7 +97,7 @@ impl CssTemplateConfigWidget {
             animation_check,
             animation_speed_spin,
         };
-        widget.connect_scan_handler();
+        widget.connect_scan_handler(&scan);
         widget.connect_html_path_handler();
         widget.scan_btn.set_sensitive(false);
         widget
@@ -134,11 +138,11 @@ impl CssTemplateConfigWidget {
 
     /// Scan Placeholders sets the panel up: first the source slots the
     /// template asks for, then every binding from scratch.
-    fn connect_scan_handler(&self) {
+    fn connect_scan_handler(&self, scan: &ScanHook) {
         let config = self.config.clone();
         let on_request_slots = self.on_request_slots.clone();
         let bindings = Rc::downgrade(&self.bindings);
-        self.scan_btn.connect_clicked(move |_| {
+        let run: Rc<dyn Fn()> = Rc::new(move || {
             // No borrow is held across the hook: the dialog answers by
             // pushing the new slot list back into this widget.
             let wanted = read_template(&config.borrow())
@@ -158,13 +162,18 @@ impl CssTemplateConfigWidget {
                 bindings.auto_map(true);
             }
         });
+        *scan.borrow_mut() = Some(run.clone());
+        self.scan_btn.connect_clicked(move |_| run());
     }
 
     fn create_template_tab(
         config: Rc<RefCell<CssTemplateDisplayConfig>>,
         on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
+        scan: ScanHook,
     ) -> (GtkBox, Entry, Entry, CheckButton, Button) {
         let page = create_page_container();
+        // made here because picking a template may fill it in
+        let css_entry = Entry::new();
 
         // HTML Template section
         let html_section = create_section_header("HTML Template");
@@ -182,10 +191,13 @@ impl CssTemplateConfigWidget {
 
         // Connect HTML browse button
         let html_entry_clone = html_entry.clone();
+        let css_entry_for_html = css_entry.clone();
         let config_for_html = config.clone();
         let on_change_for_html = on_change.clone();
         html_browse.connect_clicked(move |btn| {
             let entry = html_entry_clone.clone();
+            let css_entry = css_entry_for_html.clone();
+            let scan = scan.clone();
             let config = config_for_html.clone();
             let on_change = on_change_for_html.clone();
 
@@ -221,11 +233,17 @@ impl CssTemplateConfigWidget {
 
                         if let Ok(file) = file_dialog.open_future(Some(&window_clone)).await {
                             if let Some(path) = file.path() {
+                                // the stylesheet as it was before this pick
+                                let css_before = config.borrow().css_path.clone();
                                 entry.set_text(&path.to_string_lossy());
-                                config.borrow_mut().html_path = path;
+                                config.borrow_mut().html_path = path.clone();
                                 if let Some(ref cb) = *on_change.borrow() {
                                     cb();
                                 }
+                                let html = std::fs::read_to_string(&path).unwrap_or_default();
+                                let ask = after_pick(&path, css_before.as_deref(), &html);
+                                ask_after_pick(&window_clone, ask, css_before, &css_entry, &scan)
+                                    .await;
                             }
                         }
                     });
@@ -249,7 +267,6 @@ impl CssTemplateConfigWidget {
         page.append(&css_section);
 
         let css_row = GtkBox::new(Orientation::Horizontal, 6);
-        let css_entry = Entry::new();
         css_entry.set_hexpand(true);
         css_entry.set_placeholder_text(Some("Path to external CSS file..."));
 
@@ -515,6 +532,98 @@ fn read_template(config: &CssTemplateDisplayConfig) -> Option<String> {
         }
     }
     config.embedded_html.clone()
+}
+
+/// The stylesheet that belongs to a template: the file of the same name
+/// with `.css` beside it (`lcars_panel.html` → `lcars_panel.css`).
+fn companion_css(html_path: &Path) -> Option<PathBuf> {
+    let css = html_path.with_extension("css");
+    (css != html_path && css.is_file()).then_some(css)
+}
+
+/// What to ask once a template has been picked.
+#[derive(Debug, Default, PartialEq)]
+struct AfterPick {
+    /// The template's stylesheet, when it has one that is not loaded yet.
+    css: Option<PathBuf>,
+    /// The template has placeholders to bind.
+    scan: bool,
+}
+
+/// `css_before` is the stylesheet that was loaded before the pick, `html`
+/// the picked template's text.
+fn after_pick(html_path: &Path, css_before: Option<&Path>, html: &str) -> AfterPick {
+    AfterPick {
+        css: companion_css(html_path).filter(|css| css_before != Some(css.as_path())),
+        scan: !detect_placeholders(html).is_empty()
+            || !extract_placeholder_defaults(html).is_empty(),
+    }
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+/// Ask a yes/no question; closing the question is a no.
+async fn confirm(window: &gtk4::Window, message: &str, detail: &str, yes: &str, no: &str) -> bool {
+    // Never raise a modal alert without a live parent: it would block every
+    // window while staying invisible.
+    if !window.is_visible() {
+        return false;
+    }
+    let dialog = gtk4::AlertDialog::builder()
+        .modal(true)
+        .message(message)
+        .detail(detail)
+        .buttons([no, yes])
+        .cancel_button(0)
+        .default_button(1)
+        .build();
+    matches!(dialog.choose_future(Some(window)).await, Ok(1))
+}
+
+/// The two questions after a template is picked: load its stylesheet, then
+/// scan it for bindings. No config borrow is held here: accepting the
+/// stylesheet goes through the entry, whose handler stores it.
+async fn ask_after_pick(
+    window: &gtk4::Window,
+    ask: AfterPick,
+    css_before: Option<PathBuf>,
+    css_entry: &Entry,
+    scan: &ScanHook,
+) {
+    if let Some(css) = ask.css {
+        let detail = match css_before.as_deref().filter(|p| !p.as_os_str().is_empty()) {
+            Some(old) => format!(
+                "It is in the same folder as the template and replaces {} as the panel's CSS file.",
+                file_name(old)
+            ),
+            None => "It is in the same folder as the template.".to_string(),
+        };
+        let message = format!("Load the stylesheet {} as well?", file_name(&css));
+        if confirm(window, &message, &detail, "Load", "Don't Load").await {
+            css_entry.set_text(&css.to_string_lossy());
+        }
+    }
+    if ask.scan
+        && confirm(
+            window,
+            "Scan the template for bindings?",
+            "This adds the source slots the template asks for (existing ones are kept) \
+             and binds every placeholder to its sensor. It replaces the existing bindings.",
+            "Scan",
+            "Not Now",
+        )
+        .await
+    {
+        // cloned out, so no borrow is held while the scan runs
+        let run = scan.borrow().clone();
+        if let Some(run) = run {
+            run();
+        }
+    }
 }
 
 /// The options the template declares (`rg-template-options`): palette,
@@ -1831,6 +1940,52 @@ mod preview {
 #[cfg(test)]
 mod picker_folder_tests {
     use super::*;
+
+    #[test]
+    fn a_picked_template_asks_for_its_stylesheet_and_a_scan() {
+        let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples");
+        // every example panel has its stylesheet beside it
+        let mut panels = 0;
+        for entry in std::fs::read_dir(&examples).unwrap() {
+            let html = entry.unwrap().path();
+            if !file_name(&html).ends_with("_panel.html") {
+                continue;
+            }
+            panels += 1;
+            assert_eq!(
+                companion_css(&html),
+                Some(html.with_extension("css")),
+                "{}",
+                html.display()
+            );
+        }
+        assert!(panels > 10);
+
+        let html = examples.join("lcars_panel.html");
+        let css = examples.join("lcars_panel.css");
+        let text = std::fs::read_to_string(&html).unwrap();
+        // nothing loaded, or another template's stylesheet: both questions
+        let both = AfterPick {
+            css: Some(css.clone()),
+            scan: true,
+        };
+        assert_eq!(after_pick(&html, None, &text), both);
+        let other = examples.join("lcd_panel.css");
+        assert_eq!(after_pick(&html, Some(&other), &text), both);
+        // its stylesheet is loaded already: only the scan
+        assert_eq!(
+            after_pick(&html, Some(&css), &text),
+            AfterPick {
+                css: None,
+                scan: true
+            }
+        );
+        // no stylesheet beside it and nothing to bind: no question at all
+        let lone = examples.join("no_such_template.html");
+        assert_eq!(after_pick(&lone, None, "<p>hello</p>"), AfterPick::default());
+        // a stylesheet is never its own companion
+        assert_eq!(companion_css(&css), None);
+    }
 
     #[test]
     fn the_picker_starts_at_the_chosen_file_else_the_examples() {

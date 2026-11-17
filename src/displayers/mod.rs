@@ -238,6 +238,7 @@ mod cyberpunk;
 mod fighter_hud;
 mod graph;
 mod indicator;
+pub mod layer_canvas;
 mod industrial;
 mod lcars_combo;
 mod material;

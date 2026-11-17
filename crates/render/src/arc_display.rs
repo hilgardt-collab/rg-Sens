@@ -315,6 +315,22 @@ fn render_continuous_arc(
     Ok(())
 }
 
+/// The value an arc draws for `value`: a segmented arc whose segments keep
+/// their own colours changes only when another segment lights, so every value
+/// on one step draws as that step (see
+/// [`segment_step`](crate::render_utils::segment_step)). A continuous arc
+/// follows the value, and so does a segmented one in progressive colour
+/// mode, whose colour is the gradient at the value.
+/// `render_arc(.., shown_value(config, v), ..)` is the picture of
+/// `render_arc(.., v, ..)`.
+pub fn shown_value(config: &ArcDisplayConfig, value: f64) -> f64 {
+    if config.segmented && config.color_mode == ColorApplicationMode::Segments {
+        crate::render_utils::segment_step(value.clamp(0.0, 1.0), config.segment_count)
+    } else {
+        value
+    }
+}
+
 /// Render segmented arc
 fn render_segmented_arc(
     cr: &cairo::Context,
@@ -669,5 +685,90 @@ fn normalize_angle_range(start: f64, end: f64) -> f64 {
         end - start
     } else {
         360.0 - start + end
+    }
+}
+
+#[cfg(test)]
+mod shown_value_tests {
+    use super::*;
+
+    fn pixels(width: i32, height: i32, draw: impl Fn(&cairo::Context)) -> Vec<u8> {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).unwrap();
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            draw(&cr);
+        }
+        surface.flush();
+        let mut out = Vec::new();
+        surface
+            .with_data(|data| out.extend_from_slice(data))
+            .unwrap();
+        out
+    }
+
+    /// Every `{key}` object of the content items of a saved panel.
+    fn saved_configs<T: serde::de::DeserializeOwned>(panel: &str, key: &str) -> Vec<T> {
+        let panel: serde_json::Value = serde_json::from_str(panel).unwrap();
+        let items = panel["displayer_config"]["frame"]["content_items"]
+            .as_object()
+            .unwrap();
+        items
+            .values()
+            .filter_map(|item| serde_json::from_value(item[key].clone()).ok())
+            .collect()
+    }
+
+    /// A segmented arc drawn with the step its value is on is the arc drawn
+    /// with the value, with and without the background overlay, and for
+    /// every arc of the saved LCARS and Material panels.
+    #[test]
+    fn a_segmented_arc_draws_its_step() {
+        let theme = ComboThemeConfig::default();
+        let values = std::collections::HashMap::new();
+        let mut configs: Vec<ArcDisplayConfig> = Vec::new();
+        for (count, overlay, background) in [(10, false, true), (24, true, true), (5, false, false)]
+        {
+            configs.push(ArcDisplayConfig {
+                segmented: true,
+                segment_count: count,
+                color_mode: ColorApplicationMode::Segments,
+                overlay_background: overlay,
+                show_background_arc: background,
+                ..Default::default()
+            });
+        }
+        configs.extend(saved_configs(
+            include_str!("../../../examples/LcarS.json"),
+            "arc_config",
+        ));
+        configs.extend(saved_configs(
+            include_str!("../../../examples/Material.json"),
+            "arc_config",
+        ));
+        let mut stepped = 0;
+        for config in &configs {
+            if shown_value(config, 0.4321) == 0.4321 {
+                continue;
+            }
+            stepped += 1;
+            for i in 0..=120 {
+                let value = i as f64 / 120.0;
+                let shown = shown_value(config, value);
+                let draw = |v: f64| {
+                    pixels(120, 120, |cr| {
+                        render_arc(cr, config, &theme, v, &values, 120.0, 120.0).unwrap()
+                    })
+                };
+                assert!(draw(value) == draw(shown), "value {value} drawn as {shown}");
+            }
+        }
+        assert!(stepped >= 3, "segmented arcs were compared ({stepped})");
+        // the colour of a progressive arc follows the value
+        let progressive = ArcDisplayConfig {
+            segmented: true,
+            color_mode: ColorApplicationMode::Progressive,
+            ..Default::default()
+        };
+        assert_eq!(shown_value(&progressive, 0.4321), 0.4321);
     }
 }

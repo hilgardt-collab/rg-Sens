@@ -33,13 +33,14 @@ impl Drop for CairoGuard<'_> {
 
 use crate::core::{register_animation, PanelTransform, ANIMATION_SNAP_THRESHOLD};
 use crate::displayers::combo_utils::{self, AnimatedValue};
+use crate::displayers::layer_canvas::{LayerKey, LayerKind, LayerSink, Rect};
 use crate::ui::arc_display::render_arc;
 use crate::ui::clock_display::{render_analog_clock_with_theme, AnalogClockConfig};
 use crate::ui::graph_display::DataPoint;
 use crate::ui::lcars_display::{
     calculate_item_layouts_with_orientation, render_content_bar, render_content_core_bars,
     render_content_graph, render_content_static, render_content_text, ContentDisplayType,
-    ContentItemConfig, SplitOrientation,
+    ContentItemConfig, ContentItemData, SplitOrientation,
 };
 use crate::ui::speedometer_display::render_speedometer_with_theme;
 use crate::ui::theme::ComboThemeConfig;
@@ -87,11 +88,16 @@ pub fn render_content_clock(
 /// Draw content items in a given area.
 /// This is the shared implementation used by all combo displayers.
 ///
+/// Each item is a layer of `sink` (see `layer_canvas`): one that reads the
+/// same inputs as on the frame before keeps its render node. `config_version`
+/// stands for the whole config in the items' keys.
+///
 /// The `draw_item_frame` closure is called for each item to draw style-specific framing.
 /// Pass `|_, _, _, _, _| {}` if no item framing is needed.
 #[allow(clippy::too_many_arguments)]
 pub fn draw_content_items_generic<F>(
-    cr: &Context,
+    sink: &mut LayerSink,
+    config_version: u64,
     x: f64,
     y: f64,
     w: f64,
@@ -101,12 +107,11 @@ pub fn draw_content_items_generic<F>(
     group_idx: usize,
     params: &ContentDrawParams,
     draw_item_frame: F,
-) -> Result<(), cairo::Error>
-where
+) where
     F: Fn(&Context, f64, f64, f64, f64),
 {
     if count == 0 || w <= 0.0 || h <= 0.0 {
-        return Ok(());
+        return;
     }
 
     // Get item orientation for this group (default to split orientation)
@@ -155,6 +160,7 @@ where
 
     // Hoisted default so per-item config lookups can borrow instead of clone
     let default_item_config = ContentItemConfig::default();
+    let empty_history = VecDeque::new();
 
     // Draw each item
     for (i, &(item_x, item_y, item_w, item_h)) in layouts.iter().enumerate() {
@@ -162,41 +168,241 @@ where
         prefix_buf.clear();
         use std::fmt::Write;
         let _ = write!(prefix_buf, "{}{}", base_prefix, i + 1);
-        let item_data = combo_utils::get_item_data(params.values, &prefix_buf);
-        let slot_values = combo_utils::get_slot_values(params.values, &prefix_buf);
+        let prefix = prefix_buf.as_str();
+        let item_data = combo_utils::get_item_data(params.values, prefix);
+        let slot_values = combo_utils::get_slot_values(params.values, prefix);
 
         // Get item config (or use default) — borrow, don't clone per frame
         let item_config = params
             .content_items
-            .get(&prefix_buf)
+            .get(prefix)
             .unwrap_or(&default_item_config);
-
-        // Draw item frame using the provided closure
-        draw_item_frame(cr, item_x, item_y, item_w, item_h);
+        let display_as = item_config.display_as;
 
         // Get animated percent (use KeyBuffer to avoid allocation)
         let animated_percent = combo_utils::with_key_buffer(|buf| {
-            let bar_key = buf.build_bar_key(&prefix_buf);
+            let bar_key = buf.build_bar_key(prefix);
             params.bar_values.get(bar_key).map(|av| av.current)
         })
         .unwrap_or_else(|| item_data.percent());
+        let animated_percent = shown_glide(item_config, animated_percent);
 
-        match item_config.display_as {
-            ContentDisplayType::Bar => {
-                render_content_bar(
+        let history = if display_as == ContentDisplayType::Graph {
+            // Use KeyBuffer to avoid allocation for graph_key lookup
+            combo_utils::with_key_buffer(|buf| {
+                let graph_key = buf.build_graph_key(prefix);
+                params.graph_history.get(graph_key)
+            })
+            .unwrap_or(&empty_history)
+        } else {
+            &empty_history
+        };
+
+        let core_values = if display_as == ContentDisplayType::CoreBars {
+            core_bar_item_values(prefix, item_config, params.values, params.core_bar_values)
+        } else {
+            Vec::new()
+        };
+
+        let rect = (item_x, item_y, item_w, item_h);
+        let key = content_item_key(
+            config_version,
+            rect,
+            display_as,
+            &slot_values,
+            animated_percent,
+            &core_values,
+            history,
+        );
+        sink.layer(
+            (LayerKind::Item, group_idx as u32, i as u32),
+            key,
+            Some(rect),
+            &|cr| {
+                // The style's frame around the item, then the item
+                draw_item_frame(cr, item_x, item_y, item_w, item_h);
+                if let Err(e) = draw_content_item(
                     cr,
-                    item_x,
-                    item_y,
-                    item_w,
-                    item_h,
-                    &item_config.bar_config,
+                    rect,
+                    prefix,
+                    item_config,
                     params.theme,
                     &item_data,
+                    &slot_values,
                     animated_percent,
-                    Some(&slot_values),
-                )?;
+                    history,
+                    &core_values,
+                ) {
+                    log::debug!("Content item {} render error: {}", prefix, e);
+                }
+                0.0
+            },
+        );
+    }
+}
+
+/// An item's glide position as the item draws it. A segmented bar or arc
+/// changes only when another segment lights, so its position is the step it
+/// is on (`shown_value` of its renderer): the picture is the same, and the
+/// item's layer key, which is made of this, stays the same over the frames
+/// of a glide that light nothing new. Without it every such frame recorded,
+/// rasterised and uploaded the item again.
+pub fn shown_glide(item_config: &ContentItemConfig, animated_percent: f64) -> f64 {
+    match item_config.display_as {
+        ContentDisplayType::Bar | ContentDisplayType::LevelBar => {
+            crate::ui::bar_display::shown_value(&item_config.bar_config, animated_percent)
+        }
+        ContentDisplayType::Arc => {
+            crate::ui::arc_display::shown_value(&item_config.arc_config, animated_percent)
+        }
+        _ => animated_percent,
+    }
+}
+
+/// The key of a content item's layer (see `layer_canvas`): everything
+/// [`draw_content_item`] reads. The config (the item's and the theme) is in
+/// `config_version`, the slot's values hold what the item data was made from,
+/// and the glide position goes in only for the types that draw it (every slot
+/// has one, and a text item must not be drawn again while it moves).
+pub fn content_item_key(
+    config_version: u64,
+    rect: Rect,
+    display_as: ContentDisplayType,
+    slot_values: &HashMap<String, Value>,
+    animated_percent: f64,
+    core_values: &[f64],
+    history: &VecDeque<DataPoint>,
+) -> u64 {
+    let mut key = LayerKey::new();
+    key.u64(config_version)
+        .rect(rect)
+        .values(slot_values)
+        .f64s(core_values)
+        .u64(history.len() as u64);
+    if matches!(
+        display_as,
+        ContentDisplayType::Bar
+            | ContentDisplayType::LevelBar
+            | ContentDisplayType::Arc
+            | ContentDisplayType::Speedometer
+    ) {
+        key.f64(animated_percent);
+    }
+    for point in history {
+        key.f64(point.timestamp).f64(point.value);
+    }
+    key.finish()
+}
+
+/// The values a core bars item shows: the animated ones if there are
+/// any (as the bars draw them, see [`shown_glide`]), otherwise the raw
+/// readings (the first frame).
+pub fn core_bar_item_values(
+    prefix: &str,
+    item_config: &ContentItemConfig,
+    values: &HashMap<String, Value>,
+    core_bar_values: &HashMap<String, Vec<AnimatedValue>>,
+) -> Vec<f64> {
+    let core_bars_config = &item_config.core_bars_config;
+    if let Some(animated) = core_bar_values.get(prefix) {
+        // as the bars draw them: segmented ones a step at a time
+        return animated
+            .iter()
+            .map(|av| crate::ui::core_bars_display::shown_value(core_bars_config, av.current))
+            .collect();
+    }
+    let capacity = core_bars_config
+        .end_core
+        .saturating_sub(core_bars_config.start_core)
+        + 1;
+    let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
+    // Use KeyBuffer to avoid format! allocation per core
+    for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
+        let value = combo_utils::with_key_buffer(|buf| {
+            let core_key = buf.build_core_key(prefix, core_idx);
+            values.get(core_key).and_then(|v| v.as_f64())
+        })
+        .unwrap_or(0.0);
+        raw_values.push(value / 100.0);
+    }
+
+    // If no specific core values found, try to find any core values
+    if raw_values.is_empty() {
+        for core_idx in 0..128 {
+            let value = combo_utils::with_key_buffer(|buf| {
+                let core_key = buf.build_core_key(prefix, core_idx);
+                values.get(core_key).and_then(|v| v.as_f64())
+            });
+            if let Some(v) = value {
+                raw_values.push(v / 100.0);
+            } else {
+                break;
             }
-            ContentDisplayType::Text => {
+        }
+    }
+    raw_values
+}
+
+/// Draw one content item in its box: the one implementation behind every
+/// combo panel. What this reads is what [`content_item_key`] covers; keep the
+/// two in step.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_content_item(
+    cr: &Context,
+    (item_x, item_y, item_w, item_h): Rect,
+    prefix: &str,
+    item_config: &ContentItemConfig,
+    theme: &ComboThemeConfig,
+    item_data: &ContentItemData,
+    slot_values: &HashMap<String, Value>,
+    animated_percent: f64,
+    history: &VecDeque<DataPoint>,
+    core_values: &[f64],
+) -> Result<(), cairo::Error> {
+    match item_config.display_as {
+        // A level bar is a bar at the item's fixed height (sized like a
+        // graph); the item page shares the bar editor
+        ContentDisplayType::Bar | ContentDisplayType::LevelBar => {
+            render_content_bar(
+                cr,
+                item_x,
+                item_y,
+                item_w,
+                item_h,
+                &item_config.bar_config,
+                theme,
+                item_data,
+                animated_percent,
+                Some(slot_values),
+            )?;
+        }
+        ContentDisplayType::Text => {
+            render_content_text(
+                cr,
+                item_x,
+                item_y,
+                item_w,
+                item_h,
+                &item_config.bar_config,
+                theme,
+                item_data,
+                Some(slot_values),
+            )?;
+        }
+        ContentDisplayType::Graph => {
+            if let Err(e) = render_content_graph(
+                cr,
+                item_x,
+                item_y,
+                item_w,
+                item_h,
+                &item_config.graph_config,
+                theme,
+                history,
+                slot_values,
+            ) {
+                log::warn!("Failed to render graph for {}: {}", prefix, e);
+                // Fall back to text display on error
                 render_content_text(
                     cr,
                     item_x,
@@ -204,169 +410,81 @@ where
                     item_w,
                     item_h,
                     &item_config.bar_config,
-                    params.theme,
-                    &item_data,
-                    Some(&slot_values),
+                    theme,
+                    item_data,
+                    Some(slot_values),
                 )?;
-            }
-            ContentDisplayType::Graph => {
-                // Use KeyBuffer to avoid allocation for graph_key lookup
-                let empty_history = VecDeque::new();
-                let history = combo_utils::with_key_buffer(|buf| {
-                    let graph_key = buf.build_graph_key(&prefix_buf);
-                    params.graph_history.get(graph_key)
-                })
-                .unwrap_or(&empty_history);
-
-                if let Err(e) = render_content_graph(
-                    cr,
-                    item_x,
-                    item_y,
-                    item_w,
-                    item_h,
-                    &item_config.graph_config,
-                    params.theme,
-                    history,
-                    &slot_values,
-                ) {
-                    log::warn!("Failed to render graph for {}: {}", prefix_buf, e);
-                    render_content_text(
-                        cr,
-                        item_x,
-                        item_y,
-                        item_w,
-                        item_h,
-                        &item_config.bar_config,
-                        params.theme,
-                        &item_data,
-                        Some(&slot_values),
-                    )?;
-                }
-            }
-            ContentDisplayType::LevelBar => {
-                // A bar at the item's fixed height (sized like a graph above);
-                // the item page shares the bar editor
-                render_content_bar(
-                    cr,
-                    item_x,
-                    item_y,
-                    item_w,
-                    item_h,
-                    &item_config.bar_config,
-                    params.theme,
-                    &item_data,
-                    animated_percent,
-                    Some(&slot_values),
-                )?;
-            }
-            ContentDisplayType::CoreBars => {
-                let core_bars_config = &item_config.core_bars_config;
-                let core_values: Vec<f64> =
-                    if let Some(animated) = params.core_bar_values.get(&prefix_buf) {
-                        animated.iter().map(|av| av.current).collect()
-                    } else {
-                        let capacity = core_bars_config
-                            .end_core
-                            .saturating_sub(core_bars_config.start_core)
-                            + 1;
-                        let mut raw_values: Vec<f64> = Vec::with_capacity(capacity);
-                        // Use KeyBuffer to avoid allocation for core_key lookups
-                        for core_idx in core_bars_config.start_core..=core_bars_config.end_core {
-                            let value = combo_utils::with_key_buffer(|buf| {
-                                let core_key = buf.build_core_key(&prefix_buf, core_idx);
-                                params.values.get(core_key).and_then(|v| v.as_f64())
-                            })
-                            .unwrap_or(0.0);
-                            raw_values.push(value / 100.0);
-                        }
-
-                        if raw_values.is_empty() {
-                            for core_idx in 0..128 {
-                                let value = combo_utils::with_key_buffer(|buf| {
-                                    let core_key = buf.build_core_key(&prefix_buf, core_idx);
-                                    params.values.get(core_key).and_then(|v| v.as_f64())
-                                });
-                                if let Some(v) = value {
-                                    raw_values.push(v / 100.0);
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-                        raw_values
-                    };
-
-                render_content_core_bars(
-                    cr,
-                    item_x,
-                    item_y,
-                    item_w,
-                    item_h,
-                    core_bars_config,
-                    params.theme,
-                    &core_values,
-                    Some(&slot_values),
-                )?;
-            }
-            ContentDisplayType::Static => {
-                render_content_static(
-                    cr,
-                    item_x,
-                    item_y,
-                    item_w,
-                    item_h,
-                    &item_config.static_config,
-                    params.theme,
-                    Some(&slot_values),
-                )?;
-            }
-            ContentDisplayType::Arc => {
-                // Use CairoGuard to ensure restore() even if render_arc panics
-                let _guard = CairoGuard::new(cr)?;
-                cr.translate(item_x, item_y);
-                render_arc(
-                    cr,
-                    &item_config.arc_config,
-                    params.theme,
-                    animated_percent,
-                    &slot_values,
-                    item_w,
-                    item_h,
-                )?;
-                // _guard drops here, calling restore()
-            }
-            ContentDisplayType::ClockAnalog => {
-                render_content_clock(
-                    cr,
-                    item_x,
-                    item_y,
-                    item_w,
-                    item_h,
-                    &item_config.clock_analog_config,
-                    params.theme,
-                    &slot_values,
-                )?;
-            }
-            ContentDisplayType::Speedometer => {
-                // Use CairoGuard to ensure restore() even if render panics
-                let _guard = CairoGuard::new(cr)?;
-                cr.translate(item_x, item_y);
-                if let Err(e) = render_speedometer_with_theme(
-                    cr,
-                    &item_config.speedometer_config,
-                    animated_percent,
-                    &slot_values,
-                    item_w,
-                    item_h,
-                    params.theme,
-                ) {
-                    log::warn!("Failed to render speedometer for {}: {}", prefix_buf, e);
-                }
-                // _guard drops here, calling restore()
             }
         }
+        ContentDisplayType::CoreBars => {
+            render_content_core_bars(
+                cr,
+                item_x,
+                item_y,
+                item_w,
+                item_h,
+                &item_config.core_bars_config,
+                theme,
+                core_values,
+                Some(slot_values),
+            )?;
+        }
+        ContentDisplayType::Static => {
+            // Render static background with optional text overlay
+            render_content_static(
+                cr,
+                item_x,
+                item_y,
+                item_w,
+                item_h,
+                &item_config.static_config,
+                theme,
+                Some(slot_values),
+            )?;
+        }
+        ContentDisplayType::Arc => {
+            cr.save()?;
+            cr.translate(item_x, item_y);
+            render_arc(
+                cr,
+                &item_config.arc_config,
+                theme,
+                animated_percent,
+                slot_values,
+                item_w,
+                item_h,
+            )?;
+            cr.restore()?;
+        }
+        ContentDisplayType::ClockAnalog => {
+            render_content_clock(
+                cr,
+                item_x,
+                item_y,
+                item_w,
+                item_h,
+                &item_config.clock_analog_config,
+                theme,
+                slot_values,
+            )?;
+        }
+        ContentDisplayType::Speedometer => {
+            cr.save()?;
+            cr.translate(item_x, item_y);
+            if let Err(e) = render_speedometer_with_theme(
+                cr,
+                &item_config.speedometer_config,
+                animated_percent,
+                slot_values,
+                item_w,
+                item_h,
+                theme,
+            ) {
+                log::warn!("Failed to render speedometer for {}: {}", prefix, e);
+            }
+            cr.restore()?;
+        }
     }
-
     Ok(())
 }
 

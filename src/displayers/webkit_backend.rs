@@ -60,7 +60,18 @@ fn env_override(name: &str, default: u64) -> u64 {
         .unwrap_or(default)
 }
 
-/// Number of consecutive timer ticks a WebView must stay orphaned (no root)
+/// How often the backend looks for new values to hand to the page (ms). This
+/// is the update loop's base tick and the shortest interval the dialogs
+/// offer, so a value is shown within a tenth of a second of its panel's
+/// update and a fast item is not held back to one change a second. A tick
+/// with nothing new sends nothing.
+const DEFAULT_TICK_MS: u64 = 100;
+
+/// How often the slower chores run (ms): page reloads (an applied config, the
+/// hot-reload file checks) and the orphan count.
+const HOUSEKEEPING_MS: u64 = 1000;
+
+/// Number of consecutive housekeeping rounds a WebView must stay orphaned (no root)
 /// before its web process is terminated. Widgets can be transiently unparented
 /// (displayer swap, panel re-parenting), so terminating on the first orphan
 /// tick would permanently kill a panel that still exists.
@@ -148,7 +159,7 @@ struct WebViewState {
     last_html_modified: Option<std::time::SystemTime>,
     /// Last CSS modification time for hot-reload
     last_css_modified: Option<std::time::SystemTime>,
-    /// Consecutive ticks the WebView has been orphaned (no root)
+    /// Consecutive housekeeping rounds the WebView has been orphaned (no root)
     orphan_ticks: u32,
 }
 
@@ -339,15 +350,22 @@ impl TemplateBackend for WebKitBackend {
         // has since been fixed; it is off (0) and only the environment turns
         // it back on. A recycle throws the page away, and with it whatever
         // the page keeps itself (a template's history graphs).
-        let tick_ms = env_override("RG_SENS_WEBKIT_TICK_MS", 1000);
+        let tick_ms = env_override("RG_SENS_WEBKIT_TICK_MS", DEFAULT_TICK_MS).max(1);
+        // The chores that need no more than a look a second keep that pace,
+        // however fast values are pushed.
+        let housekeeping_every = (HOUSEKEEPING_MS / tick_ms).max(1);
+        let mut ticks: u64 = 0;
         let recycle_every =
             env_override("RG_SENS_WEBKIT_RECYCLE_EVERY", DEFAULT_RECYCLE_EVERY) as u32;
         LIVE_TIMERS.fetch_add(1, Ordering::Relaxed);
-        let tick = {
+        let mut tick = {
             let data_clone = data.clone();
             let state_clone = state.clone();
             let event_layer_clone = event_layer.clone();
             move || {
+                let housekeeping = ticks.is_multiple_of(housekeeping_every);
+                ticks = ticks.wrapping_add(1);
+
                 // Check global shutdown flag
                 if SHUTDOWN_FLAG.load(Ordering::SeqCst) {
                     log::debug!("WebKit backend timer stopping: shutdown signal received");
@@ -382,8 +400,11 @@ impl TemplateBackend for WebKitBackend {
                 };
 
                 if is_orphaned {
+                    if !housekeeping {
+                        return glib::ControlFlow::Continue;
+                    }
                     // Only terminate after the widget has stayed orphaned for
-                    // several consecutive ticks — transient reparents (displayer
+                    // several consecutive rounds (seconds) — transient reparents (displayer
                     // swap, panel drag) must not kill the web process.
                     state.orphan_ticks += 1;
                     if state.orphan_ticks < ORPHAN_GRACE_TICKS {
@@ -406,16 +427,21 @@ impl TemplateBackend for WebKitBackend {
                     return glib::ControlFlow::Continue;
                 }
 
-                // Check for config change
-                let config_changed = data_clone
-                    .try_lock()
-                    .ok()
-                    .map(|d| d.config_changed)
-                    .unwrap_or(false);
+                // Check for config change. Once a second, as the files are:
+                // Panel Properties applies while a control is dragged, and
+                // each apply would otherwise reload the page.
+                let config_changed = housekeeping
+                    && data_clone
+                        .try_lock()
+                        .ok()
+                        .map(|d| d.config_changed)
+                        .unwrap_or(false);
 
                 // Check for hot-reload
                 let mut files_changed = false;
-                if let Ok(data) = data_clone.try_lock() {
+                if !housekeeping {
+                    // the files are looked at once a second
+                } else if let Ok(data) = data_clone.try_lock() {
                     if data.config.hot_reload {
                         if !data.config.html_path.as_os_str().is_empty() {
                             if let Ok(metadata) = std::fs::metadata(&data.config.html_path) {
