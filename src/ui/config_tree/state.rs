@@ -279,6 +279,21 @@ impl State {
 
     /// Assemble the intended `PanelData` from the editors.
     pub(super) fn build_data(&self) -> PanelData {
+        // The panel may have been moved or resized on the grid while this
+        // dialog was open. The live panel is the truth: take its cells, and
+        // show the new size, before the size rows are read back.
+        let live = self.panel.blocking_read().geometry;
+        let known = self.applied.borrow().geometry;
+        if (live.width, live.height) != (known.width, known.height) {
+            if let Some(g) = self.geometry.borrow().as_ref() {
+                let was = self.loading.replace(true);
+                g.width.set_value(live.width as f64);
+                g.height.set_value(live.height as f64);
+                self.loading.set(was);
+            }
+        }
+        self.applied.borrow_mut().geometry = live;
+
         let mut data = self.applied.borrow().clone();
 
         if let Some(g) = self.geometry.borrow().as_ref() {

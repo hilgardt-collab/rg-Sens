@@ -1,7 +1,8 @@
 //! Grid layout manager for panels with advanced features
 
 use crate::config::AppConfig;
-use crate::core::{Panel, PanelData};
+use crate::core::{Panel, PanelData, PanelGeometry};
+use crate::ui::grid_resize::{self, Edges};
 use crate::ui::pango_text::pango_show_text;
 use gtk4::gdk::ModifierType;
 use gtk4::{
@@ -366,6 +367,9 @@ pub struct GridLayout {
     occupied_cells: Rc<RefCell<HashSet<(u32, u32)>>>,
     drag_preview_cells: Rc<RefCell<Vec<(u32, u32, u32, u32)>>>, // (x, y, width, height) for each panel
     is_dragging: Rc<RefCell<bool>>,
+    /// The cells of the panel being resized: they are in `occupied_cells`
+    /// and must not turn its own preview red.
+    resize_origin: Rc<RefCell<Option<PanelGeometry>>>,
     selection_box: Rc<RefCell<Option<(f64, f64, f64, f64)>>>,
     on_change: Rc<RefCell<Option<Box<dyn Fn()>>>>,
     /// Callback for borderless window drag (move/resize)
@@ -445,6 +449,7 @@ impl GridLayout {
             occupied_cells: Rc::new(RefCell::new(HashSet::new())),
             drag_preview_cells: Rc::new(RefCell::new(Vec::new())),
             is_dragging: Rc::new(RefCell::new(false)),
+            resize_origin: Rc::new(RefCell::new(None)),
             selection_box: Rc::new(RefCell::new(None)),
             on_change: Rc::new(RefCell::new(None)),
             on_borderless_drag: Rc::new(RefCell::new(None)),
@@ -806,6 +811,7 @@ impl GridLayout {
         let occupied_cells = self.occupied_cells.clone();
         let drag_preview_cells = self.drag_preview_cells.clone();
         let is_dragging = self.is_dragging.clone();
+        let resize_origin = self.resize_origin.clone();
         let selection_box = self.selection_box.clone();
         let viewport_size = self.viewport_size.clone();
 
@@ -849,6 +855,7 @@ impl GridLayout {
 
                 let occupied = occupied_cells.borrow();
                 let preview_panels = drag_preview_cells.borrow();
+                let own_cells = *resize_origin.borrow();
 
                 // Calculate available columns and rows based on actual widget size
                 let available_cols =
@@ -953,7 +960,11 @@ impl GridLayout {
                     let mut has_collision = false;
                     for dx in 0..*panel_width {
                         for dy in 0..*panel_height {
-                            if occupied.contains(&(preview_x + dx, preview_y + dy)) {
+                            let cell = (preview_x + dx, preview_y + dy);
+                            let own = own_cells
+                                .as_ref()
+                                .is_some_and(|g| grid_resize::contains(g, cell));
+                            if !own && occupied.contains(&cell) {
                                 has_collision = true;
                                 break;
                             }
@@ -982,8 +993,295 @@ impl GridLayout {
             });
     }
 
+    /// Give a panel new cells (position and size) without touching anything
+    /// else about it: what a drag of its edges ends in. Returns `false`, with
+    /// nothing changed, when the new cells would overlap another panel.
+    pub fn set_panel_geometry(&self, panel_id: &str, new: PanelGeometry) -> bool {
+        let Some((panel, frame, widget, background_area)) =
+            self.panel_states.borrow().get(panel_id).map(|state| {
+                (
+                    state.panel.clone(),
+                    state.frame.clone(),
+                    state.widget.clone(),
+                    state.background_area.clone(),
+                )
+            })
+        else {
+            return false;
+        };
+        let new = PanelGeometry {
+            width: new.width.max(1),
+            height: new.height.max(1),
+            ..new
+        };
+        // One-time user action: wait for the lock rather than skip.
+        let (old, ignore_collision) = {
+            let g = panel.blocking_read();
+            (g.geometry, g.ignore_collision)
+        };
+        if (old.x, old.y, old.width, old.height) == (new.x, new.y, new.width, new.height) {
+            return true;
+        }
+
+        if !ignore_collision {
+            let mut occupied = self.occupied_cells.borrow_mut();
+            if grid_resize::collides(&occupied, &old, &new) {
+                return false;
+            }
+            for dx in 0..old.width {
+                for dy in 0..old.height {
+                    occupied.remove(&(old.x + dx, old.y + dy));
+                }
+            }
+            for dx in 0..new.width {
+                for dy in 0..new.height {
+                    occupied.insert((new.x + dx, new.y + dy));
+                }
+            }
+        }
+
+        panel.blocking_write().geometry = new;
+
+        let cfg = *self.config.borrow();
+        let pixel_x = new.x as i32 * (cfg.cell_width + cfg.spacing);
+        let pixel_y = new.y as i32 * (cfg.cell_height + cfg.spacing);
+        let pixel_width = new.width as i32 * cfg.cell_width + (new.width as i32 - 1) * cfg.spacing;
+        let pixel_height =
+            new.height as i32 * cfg.cell_height + (new.height as i32 - 1) * cfg.spacing;
+
+        self.container.move_(&frame, pixel_x as f64, pixel_y as f64);
+        widget.set_size_request(pixel_width, pixel_height);
+        frame.set_size_request(pixel_width, pixel_height);
+        background_area.set_size_request(pixel_width, pixel_height);
+        widget.queue_resize();
+        frame.queue_resize();
+        background_area.queue_resize();
+        self.update_content_bounds();
+
+        background_area.queue_draw();
+        widget.queue_draw();
+        self.drop_zone_layer.queue_draw();
+
+        if let Some(callback) = self.on_change.borrow().as_ref() {
+            callback();
+        }
+        true
+    }
+
+    /// Resize a selected panel by dragging its edges or corners.
+    ///
+    /// One capture-phase gesture on the container serves every panel: it sees
+    /// a press before the panel's own click and move gestures and claims it
+    /// only when it lands on the edge band of a selected panel, so panels
+    /// need no wiring of their own (their widgets are built in three places).
+    /// The drag shows the drop preview; the size is applied on release.
+    fn setup_resize_interaction(&self) {
+        struct ResizeDrag {
+            id: String,
+            edges: Edges,
+            orig: PanelGeometry,
+        }
+
+        // The edge band of a selected panel under the point, the topmost
+        // panel's when several are there.
+        let handle_at = {
+            let panel_states = self.panel_states.clone();
+            let selected_panels = self.selected_panels.clone();
+            let container = self.container.clone();
+            move |x: f64, y: f64| -> Option<(String, Edges)> {
+                let selected = selected_panels.try_borrow().ok()?;
+                if selected.is_empty() {
+                    return None;
+                }
+                let states = panel_states.try_borrow().ok()?;
+                selected
+                    .iter()
+                    .filter_map(|id| {
+                        let state = states.get(id)?;
+                        let (px, py) = container.child_position(&state.frame);
+                        let rect = (
+                            px,
+                            py,
+                            state.frame.width() as f64,
+                            state.frame.height() as f64,
+                        );
+                        let edges = grid_resize::hit_edges(x, y, rect)?;
+                        let z = state.panel.try_read().map(|g| g.z_index).unwrap_or(0);
+                        Some((z, id.clone(), edges))
+                    })
+                    .max_by_key(|(z, _, _)| *z)
+                    .map(|(_, id, edges)| (id, edges))
+            }
+        };
+        let handle_at = Rc::new(handle_at);
+        let active: Rc<RefCell<Option<ResizeDrag>>> = Rc::new(RefCell::new(None));
+
+        // --- Cursor: show what a drag from here would do -----------------------
+        let motion = gtk4::EventControllerMotion::new();
+        motion.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        {
+            let handle_at = handle_at.clone();
+            let active = active.clone();
+            let container = self.container.clone();
+            // set_cursor_from_name is only called when the cursor changes
+            let shown: Rc<RefCell<Option<&'static str>>> = Rc::new(RefCell::new(None));
+            let shown_leave = shown.clone();
+            let container_leave = container.clone();
+            motion.connect_motion(move |controller, x, y| {
+                if active.borrow().is_some() {
+                    return; // keep the drag's cursor
+                }
+                let ctrl = controller
+                    .current_event_state()
+                    .contains(ModifierType::CONTROL_MASK);
+                let cursor = if ctrl {
+                    None
+                } else {
+                    handle_at(x, y).map(|(_, edges)| edges.cursor())
+                };
+                if *shown.borrow() != cursor {
+                    *shown.borrow_mut() = cursor;
+                    container.set_cursor_from_name(cursor);
+                }
+            });
+            motion.connect_leave(move |_| {
+                if shown_leave.borrow_mut().take().is_some() {
+                    container_leave.set_cursor_from_name(None);
+                }
+            });
+        }
+        self.container.add_controller(motion);
+
+        // --- The drag ------------------------------------------------------------
+        let drag = GestureDrag::new();
+        drag.set_button(1);
+        drag.set_propagation_phase(gtk4::PropagationPhase::Capture);
+
+        let pitch = {
+            let config = self.config.clone();
+            move || {
+                let c = config.borrow();
+                (
+                    (c.cell_width + c.spacing) as f64,
+                    (c.cell_height + c.spacing) as f64,
+                )
+            }
+        };
+
+        {
+            let active = active.clone();
+            let panel_states = self.panel_states.clone();
+            let is_dragging = self.is_dragging.clone();
+            let resize_origin = self.resize_origin.clone();
+            let preview = self.drag_preview_cells.clone();
+            let drop_zone = self.drop_zone_layer.clone();
+            drag.connect_drag_begin(move |gesture, x, y| {
+                *active.borrow_mut() = None;
+                // Ctrl+click toggles the selection and Ctrl+drag copies
+                // (or moves a borderless window); leave those alone.
+                if gesture
+                    .current_event_state()
+                    .contains(ModifierType::CONTROL_MASK)
+                {
+                    return;
+                }
+                let Some((id, edges)) = handle_at(x, y) else {
+                    return;
+                };
+                let Some(panel) = panel_states.borrow().get(&id).map(|s| s.panel.clone()) else {
+                    return;
+                };
+                let (orig, ignore_collision) = {
+                    let g = panel.blocking_read();
+                    (g.geometry, g.ignore_collision)
+                };
+                // From here the press is ours: the panel's click and move
+                // gestures and the box selection never see it.
+                gesture.set_state(gtk4::EventSequenceState::Claimed);
+
+                *resize_origin.borrow_mut() = (!ignore_collision).then_some(orig);
+                *preview.borrow_mut() = vec![(orig.x, orig.y, orig.width, orig.height)];
+                *is_dragging.borrow_mut() = true;
+                *active.borrow_mut() = Some(ResizeDrag { id, edges, orig });
+                drop_zone.queue_draw();
+            });
+        }
+
+        {
+            let active = active.clone();
+            let preview = self.drag_preview_cells.clone();
+            let drop_zone = self.drop_zone_layer.clone();
+            let pitch = pitch.clone();
+            drag.connect_drag_update(move |_, offset_x, offset_y| {
+                let active = active.borrow();
+                let Some(drag) = active.as_ref() else {
+                    return;
+                };
+                let g = grid_resize::resized(drag.orig, drag.edges, (offset_x, offset_y), pitch());
+                let rects = vec![(g.x, g.y, g.width, g.height)];
+                let mut preview = preview.borrow_mut();
+                if *preview != rects {
+                    *preview = rects;
+                    drop(preview);
+                    drop_zone.queue_draw();
+                }
+            });
+        }
+
+        // Ends the drag's display whether it was released or cancelled.
+        let finish = {
+            let active = active.clone();
+            let is_dragging = self.is_dragging.clone();
+            let resize_origin = self.resize_origin.clone();
+            let preview = self.drag_preview_cells.clone();
+            let drop_zone = self.drop_zone_layer.clone();
+            move || -> Option<ResizeDrag> {
+                let drag = active.borrow_mut().take()?;
+                *is_dragging.borrow_mut() = false;
+                *resize_origin.borrow_mut() = None;
+                preview.borrow_mut().clear();
+                drop_zone.queue_draw();
+                Some(drag)
+            }
+        };
+
+        {
+            let finish = finish.clone();
+            drag.connect_drag_end(move |_, offset_x, offset_y| {
+                let Some(drag) = finish() else {
+                    return;
+                };
+                let new = grid_resize::resized(drag.orig, drag.edges, (offset_x, offset_y), pitch());
+                // The grid is reached the way the dialogs reach it; a new
+                // size that overlaps another panel is simply not taken (the
+                // preview was red).
+                let Some(grid) = grid_weak().and_then(|weak| weak.upgrade()) else {
+                    log::warn!("Resize of panel {} dropped: no grid", drag.id);
+                    return;
+                };
+                // Bound first: the `Ref` must not outlive `grid`.
+                let borrowed = grid.try_borrow();
+                match borrowed {
+                    Ok(grid) => {
+                        if !grid.set_panel_geometry(&drag.id, new) {
+                            log::info!("Resize of panel {} not applied: overlap", drag.id);
+                        }
+                    }
+                    Err(_) => log::warn!("Resize of panel {} dropped: grid busy", drag.id),
+                }
+            });
+        }
+        drag.connect_cancel(move |_, _| {
+            finish();
+        });
+
+        self.container.add_controller(drag);
+    }
+
     /// Setup container interaction for box selection and deselection
     fn setup_container_interaction(&self) {
+        self.setup_resize_interaction();
+
         // Click on empty space to deselect all
         let click_gesture = GestureClick::new();
         click_gesture.set_button(1);
