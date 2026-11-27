@@ -386,6 +386,7 @@ prototypes, nothing changes: the page is loaded exactly as written.
 | `data-rg-label` | The name shown in the dialog. |
 | `data-rg-sources="fan clock"` | The sources the widget is made for: offered first for those, not at all for others. A clock is offered only widgets made for it. |
 | `data-rg-default-for="memory disk"` | The sources the widget is the first choice for in a fresh layout, while it stays on offer for every source. |
+| `data-rg-stretch` | The widget may grow wider than drawn: it is scaled to fit its cells' height and then takes their whole width (a bar whose track fills a wide block). Its markup must let its width grow. |
 | `data-rg-group="poster"` | The group shell a group gets when this is its first widget (and the group's style is Automatic). |
 | `data-rg-colors="red yellow blue black"` | The colours the widget can be drawn in. `{{color}}` in its markup becomes the chosen one (usually a class name of the template). Left on Automatic, the colours take turns through the group, in the order listed. |
 | `rg-group-size` | `WxH+E`: the room one group gets and the extra height outside the groups. `rg-layouts` is recomputed from it for the number of groups. |
@@ -426,6 +427,10 @@ temperature, the template's first general widget kind at medium (2 x 2), and
 the other items its second kind as 2 x 1 blocks, which stack beside it; an
 item whose source has a widget made for it gets that widget. So declare the
 showpiece (a dial) first and the bar second, and draw them for those boxes.
+
+Groups share the room by their size weights (the group board on the Content
+page, drawn in the panel's shape with the page's columns): each spans a number of the grid's rows in proportion to its weight, so
+the template's grid needs equal rows (`grid-auto-rows: minmax(0, 1fr)`).
 
 Every item's Widget list ends with "Not shown": a sensor that only feeds
 something outside the groups (a footer's uptime) is drawn in no group, which
@@ -578,7 +583,10 @@ artwork follows the box is worth copying:
 | A picture in a frame | an SVG with a `viewBox` and `preserveAspectRatio="xMidYMax meet"`, whose sky and ground rectangles run far past the viewBox: the picture is never cropped and the frame is filled around it | Brutalist (the opening) |
 | Rails with evenly spaced beads | CSS backgrounds, the beads with `background-repeat: space` | Filigree |
 | Strips down the sides | an SVG per side, `height="100%"`, `preserveAspectRatio="xMinYMin slice"` (cut off, not squeezed), the right one mirrored | Art Deco, Art Nouveau, Gothic, Mughal Peacock |
-| Corner pieces | an SVG per corner, placed by CSS | Art Deco, Gothic, Filigree |
+| Generated over the real box | the page's script scatters or tiles it from a seeded generator once it knows the box's size, and again on `resize` / `rg-layout` | Memphis (confetti), Porcelain (bamboo slats) |
+| One drawing per group | each group is an SVG with a `viewBox` in the design's own units, growing from a zero flex basis with `min-height: 0` (an SVG's aspect ratio is otherwise its minimum height) | Memphis, Porcelain, Hi-Fi |
+| Plates that stretch | the plate is HTML (colour, rim, a baked crinkle texture), its screws pinned to the corners, the instruments one SVG on it | Aircraft Cockpit |
+| Corner pieces | an SVG per corner, placed by CSS; one drawing `<use>`d four times and mirrored with `scaleX(-1)` / `scaleY(-1)` fits any box | Art Deco, Art Nouveau, Gothic, Filigree |
 | A rim or inlay | a CSS border | Art Nouveau, Leather & Wood |
 | A frame with notches | drawn by the script on the `rg-layout` event | Warrior |
 | Wood grain | one SVG stretched to the box (`preserveAspectRatio="none"`) | Leather & Wood |
@@ -614,7 +622,8 @@ whose look comes from the filter (a fill colour from the stylesheet is
 carried over), and keep them the first drawn content of their `<svg>`: the
 bitmap is put where the first marked element was. Small filtered shapes
 inside a card are not worth marking. Opened in a browser, the attribute does
-nothing. The Japandi, Gothic, Western, Filigree and Brutalist examples use it.
+nothing. The Japandi, Gothic, Western, Filigree, Brutalist, Memphis, Cockpit and
+Porcelain examples use it.
 
 ### Memory Usage
 
@@ -711,8 +720,15 @@ CSS Template panels are enabled by default; start rg-Sens with
   [Western](../examples/western_panel.html),
   [Japandi](../examples/japandi_panel.html),
   [Glass & Gumdrop](../examples/gumdrop_panel.html),
-  [Filigree](../examples/filigree_panel.html) and
-  [Brutalist](../examples/brutalist_panel.html) panel examples - full 480x1920
+  [Filigree](../examples/filigree_panel.html),
+  [Brutalist](../examples/brutalist_panel.html),
+  [Hi-Fi](../examples/hifi_panel.html),
+  [Atomic](../examples/atomic_panel.html),
+  [Blueprint](../examples/blueprint_panel.html),
+  [Nixie](../examples/nixie_panel.html),
+  [Memphis](../examples/memphis_panel.html),
+  [Aircraft Cockpit](../examples/cockpit_panel.html) and
+  [Blue & White Porcelain](../examples/porcelain_panel.html) panel examples - full 480x1920
   panels sharing one placeholder mapping: gauges, fan meters, bars, sections
   that hide when unmapped; setup steps are in the comment at the top of each.
   They load their fonts from `examples/fonts/` (SIL Open Font License; Special

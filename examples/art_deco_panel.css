@@ -15,6 +15,9 @@
   --rg-fit: fill;
   /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
   --rg-columns: 0;
+  /* The stepped ornaments top and bottom: 1 shows them, 0 hides them and
+     gives their room to the groups. */
+  --ziggurat: 1;
   --accent: #D4AF37;
   --mid: var(--accent);
   --hi: color-mix(in srgb, var(--accent), white 68%);
@@ -120,3 +123,6 @@ html, body { margin: 0; background: var(--bg); }
 .ad-reading .ad-cap { max-width: 100%; font-size: 11px; }
 .ad-reading .ad-val { font-size: 27px; }
 .ad-reading .ad-unit { font-family: Limelight, serif; font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+
+/* The ziggurats, while the option is on. */
+.ad-zig { opacity: var(--ziggurat, 1); }

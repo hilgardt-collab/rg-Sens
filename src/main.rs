@@ -701,14 +701,23 @@ fn build_ui(app: &Application) {
 
     // For non-Cairo renderers on Wayland, the GL frame clock can stall permanently
     // in fullscreen on multi-GPU setups (e.g. NVIDIA primary + AMD iGPU output).
-    // Set opacity < 1.0 — tells the compositor the surface isn't fully opaque,
-    // forcing compositing over direct scanout (which fails cross-GPU).
-    if let Ok(renderer) = std::env::var("GSK_RENDERER") {
-        if renderer != "cairo" {
-            window.set_opacity(0.99);
-
-            info!("Non-Cairo renderer active: set opacity 0.99 for compositing compatibility");
-        }
+    // Opacity < 1.0 tells the compositor the surface isn't fully opaque, forcing
+    // compositing over direct scanout (which fails cross-GPU). Direct scanout only
+    // happens in fullscreen, so only a fullscreen window gets it: a windowed one
+    // stays fully opaque (at 0.99 the desktop showed through it).
+    if std::env::var("GSK_RENDERER").is_ok_and(|r| r != "cairo") {
+        let follow = |window: &gtk4::ApplicationWindow| {
+            let opacity = if window.is_fullscreen() { 0.99 } else { 1.0 };
+            if window.opacity() != opacity {
+                window.set_opacity(opacity);
+                info!(
+                    "Non-Cairo renderer: window opacity {opacity} (fullscreen: {})",
+                    window.is_fullscreen()
+                );
+            }
+        };
+        follow(&window);
+        window.connect_fullscreened_notify(follow);
     }
 
     if should_fullscreen {

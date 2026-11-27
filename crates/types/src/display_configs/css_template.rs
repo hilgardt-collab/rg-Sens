@@ -164,6 +164,10 @@ pub struct CssLayoutConfig {
     pub widgets: std::collections::BTreeMap<String, CssWidgetChoice>,
     #[serde(default)]
     pub item_counts: Vec<u32>,
+    /// Each group's size weight: a cache of the source's `groups[]`, like
+    /// `item_counts`. Empty while every group weighs the same.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub weights: Vec<f64>,
 }
 
 impl CssLayoutConfig {
@@ -186,8 +190,29 @@ impl CssLayoutConfig {
         self.item_counts = item_counts;
     }
 
+    /// Adopt the source's group weights; equal weights are not written.
+    pub fn sync_weights(&mut self, weights: Vec<f64>) {
+        if !self.custom && self.is_default() {
+            return;
+        }
+        let even = weights.windows(2).all(|w| (w[0] - w[1]).abs() < 1e-9);
+        self.weights = if even { Vec::new() } else { weights };
+    }
+
+    /// A group's weight, 1 when the weights are all the same.
+    pub fn weight(&self, group: usize) -> f64 {
+        self.weights
+            .get(group)
+            .copied()
+            .filter(|w| *w > 0.0)
+            .unwrap_or(1.0)
+    }
+
     pub fn swap_groups(&mut self, a: usize, b: usize) {
         use crate::combo::reorder::remap_group_swap;
+        if a < self.weights.len() && b < self.weights.len() {
+            self.weights.swap(a, b);
+        }
         if a < self.groups.len() && b < self.groups.len() {
             self.groups.swap(a, b);
         }
@@ -254,6 +279,25 @@ pub fn parse_slot(slot: &str) -> Option<(usize, usize)> {
 mod layout_tests {
     use super::*;
 
+    #[test]
+    fn weights_are_cached_only_when_they_differ() {
+        let mut config = CssLayoutConfig {
+            custom: true,
+            ..Default::default()
+        };
+        config.sync_weights(vec![1.0, 1.0]);
+        assert!(config.weights.is_empty());
+        assert_eq!(config.weight(1), 1.0);
+        config.sync_weights(vec![1.0, 2.5]);
+        assert_eq!(config.weight(1), 2.5);
+        config.swap_groups(0, 1);
+        assert_eq!(config.weights, vec![2.5, 1.0]);
+        // an untouched layout stays unwritten
+        let mut untouched = CssLayoutConfig::default();
+        untouched.sync_weights(vec![1.0, 3.0]);
+        assert!(untouched.is_default());
+    }
+
     fn layout() -> CssLayoutConfig {
         let widget = |kind: &str| CssWidgetChoice {
             kind: kind.to_string(),
@@ -278,6 +322,7 @@ mod layout_tests {
             ]
             .into(),
             item_counts: vec![1, 2],
+            weights: Vec::new(),
         }
     }
 

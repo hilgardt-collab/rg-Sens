@@ -60,7 +60,7 @@
 <link rel="stylesheet" href="art_deco_panel.css">
 </head>
 <body>
-<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background-color: var(--bg); background-image: repeating-linear-gradient(90deg, var(--pin) 0px, var(--pin) 1px, transparent 1px, transparent 12px); font-family: 'Josefin Sans', sans-serif; color: var(--text); padding: 108px 38px 104px; display: flex; flex-direction: column; gap: 10px">
+<div class="panel" style="width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden; background-color: var(--bg); background-image: repeating-linear-gradient(90deg, var(--pin) 0px, var(--pin) 1px, transparent 1px, transparent 12px); font-family: 'Josefin Sans', sans-serif; color: var(--text); padding: calc(30px + 78px * var(--ziggurat, 1)) 38px calc(30px + 74px * var(--ziggurat, 1)); display: flex; flex-direction: column; gap: 10px">
 
   <!-- shared gold gradients -->
   <svg aria-hidden="true" width="0" height="0" style="position: absolute; top: 0; left: 0">
@@ -633,7 +633,7 @@
   </svg>
 
   <!-- ===== ZIGGURAT (top, hanging): overlaid trapeziums on one baseline ===== -->
-  <div aria-hidden="true" style="position: absolute; top: 12px; left: 50%; margin-left: -160px; width: 320px; height: 90px; transform: scaleY(-1)">
+  <div class="ad-zig" aria-hidden="true" style="position: absolute; top: 12px; left: 50%; margin-left: -160px; width: 320px; height: 90px; transform: scaleY(-1)">
     
       <div style="position: absolute; bottom: 0; left: 0px; width: 320px; height: 26px; filter: drop-shadow(2px 0 0 var(--bg)) drop-shadow(-2px 0 0 var(--bg)) drop-shadow(0 -2px 0 var(--bg))">
         <div style="width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(100deg, var(--dk) 0%, var(--lt) 22%, var(--hi) 38%, var(--mid) 58%, var(--dk) 82%, var(--lt) 100%); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%)"></div>
@@ -660,7 +660,7 @@
   </div>
 
   <!-- ===== ZIGGURAT (bottom, standing) ===== -->
-  <div aria-hidden="true" style="position: absolute; bottom: 12px; left: 50%; margin-left: -160px; width: 320px; height: 90px">
+  <div class="ad-zig" aria-hidden="true" style="position: absolute; bottom: 12px; left: 50%; margin-left: -160px; width: 320px; height: 90px">
     
       <div style="position: absolute; bottom: 0; left: 0px; width: 320px; height: 26px; filter: drop-shadow(2px 0 0 var(--bg)) drop-shadow(-2px 0 0 var(--bg)) drop-shadow(0 -2px 0 var(--bg))">
         <div style="width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(100deg, var(--dk) 0%, var(--lt) 22%, var(--hi) 38%, var(--mid) 58%, var(--dk) 82%, var(--lt) 100%); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%)"></div>
@@ -1278,13 +1278,13 @@
       </div>
     </div>
 </template>
-<template data-rg-widget="bar" data-rg-label="Bar" data-rg-size="small" data-rg-width="130" data-rg-height="58">
+<template data-rg-widget="bar" data-rg-label="Bar" data-rg-stretch data-rg-size="small" data-rg-width="130" data-rg-height="58">
   <div class="ad-bar ad-compact" data-need="{{value}}"><span class="ad-cap">{{{{caption}}}}</span><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span><div class="ad-track"><div data-bar="{{value}}" data-max="{{max}}" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 2px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 2px; background: var(--bg)"></div></div></div>
 </template>
-<template data-rg-widget="bar" data-rg-label="Bar" data-rg-size="medium" data-rg-width="200" data-rg-height="44">
+<template data-rg-widget="bar" data-rg-label="Bar" data-rg-stretch data-rg-size="medium" data-rg-width="200" data-rg-height="44">
   <div class="ad-bar" data-need="{{value}}"><div class="ad-top"><span class="ad-cap">{{{{caption}}}}</span><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span></div><div class="ad-track"><div data-bar="{{value}}" data-max="{{max}}" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 2px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 2px; background: var(--bg)"></div></div></div>
 </template>
-<template data-rg-widget="bar" data-rg-label="Bar" data-rg-size="large" data-rg-width="404" data-rg-height="30">
+<template data-rg-widget="bar" data-rg-label="Bar" data-rg-stretch data-rg-size="large" data-rg-width="404" data-rg-height="30">
   <div class="ad-bar ad-long" data-need="{{value}}"><span class="ad-cap">{{{{caption}}}}</span><div class="ad-track"><div data-bar="{{value}}" data-max="{{max}}" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 2px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 2px; background: var(--bg)"></div></div><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span></div>
 </template>
 <template data-rg-widget="fan" data-rg-label="Fan" data-rg-size="small" data-rg-sources="fan" data-rg-width="120" data-rg-height="124">
@@ -1315,6 +1315,7 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "accent", "label": "Accent", "type": "choice", "var": "--accent", "default": "#D4AF37", "choices": [{"value": "#D4AF37", "label": "Gold"}, {"value": "#C08A5B", "label": "Copper"}, {"value": "#4FB39A", "label": "Jade"}, {"value": "#C9C6BE", "label": "Silver"}]},
+    {"id": "ziggurat", "label": "Ziggurats", "type": "toggle", "var": "--ziggurat", "default": true, "help": "The stepped ornaments at the top and bottom; off gives their room to the groups"},
     {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
     {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]}
 ]

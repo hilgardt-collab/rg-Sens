@@ -384,13 +384,74 @@ impl State {
             return None;
         }
         self.ensure_display_editor();
-        let stored = self.display_editor.borrow().as_ref().and_then(|e| e.store());
+        let stored = self
+            .display_editor
+            .borrow()
+            .as_ref()
+            .and_then(|e| e.store());
         let Some(DisplayerConfig::CssTemplate(mut cfg)) = stored else {
             return None;
         };
         let combo = self.combo_source.borrow();
         let spec = Self::coerce_css_layout(&mut cfg, combo.as_ref()?)?;
         Some((cfg, spec))
+    }
+
+    /// What the group-size board draws: the panel's size in pixels, how its
+    /// groups are laid out, and their titles (a custom CSS layout's, where
+    /// it has them).
+    pub(super) fn group_board_shape(
+        self: &Rc<Self>,
+    ) -> ((f64, f64), crate::ui::group_board::Flow, Vec<String>) {
+        use crate::ui::group_board::{page_columns, Flow};
+        let (w, h) = match self.geometry.borrow().as_ref() {
+            Some(g) => (g.width.value().max(1.0), g.height.value().max(1.0)),
+            None => {
+                let g = self.applied.borrow().geometry;
+                (g.width.max(1) as f64, g.height.max(1) as f64)
+            }
+        };
+        let px = match self.grid.upgrade() {
+            Some(grid) => {
+                let c = grid.borrow().config();
+                (
+                    w * c.cell_width as f64 + (w - 1.0) * c.spacing as f64,
+                    h * c.cell_height as f64 + (h - 1.0) * c.spacing as f64,
+                )
+            }
+            None => (w, h),
+        };
+        if let Some((cfg, _)) = self.css_layout() {
+            use crate::ui::css_template_display::extract_template_options;
+            use crate::ui::css_template_layout::{page_layouts, read_template};
+            let html = read_template(&cfg).unwrap_or_default();
+            let forced = extract_template_options(&html)
+                .into_iter()
+                .find(|o| o.var.as_deref() == Some("--rg-columns"))
+                .and_then(|o| cfg.options.get(&o.id).cloned().or(Some(o.default)))
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(0);
+            let titles = if cfg.layout.custom {
+                cfg.layout.groups.iter().map(|g| g.title.clone()).collect()
+            } else {
+                Vec::new()
+            };
+            let cols = page_columns(&page_layouts(&html), forced, px);
+            return (px, Flow::Columns(cols), titles);
+        }
+        self.ensure_display_editor();
+        let stored = self
+            .display_editor
+            .borrow()
+            .as_ref()
+            .and_then(|e| e.store());
+        let flow = match stored.and_then(|d| d.group_direction()) {
+            Some(rg_sens_types::display_configs::lcars::SplitOrientation::Horizontal) => {
+                Flow::Across
+            }
+            _ => Flow::Down,
+        };
+        (px, flow, Vec::new())
     }
 
     /// Edit the CSS template's custom layout and apply it.

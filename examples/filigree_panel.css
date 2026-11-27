@@ -3,13 +3,17 @@
    and the few classes the page's script switches; the drawing itself is
    inline in the HTML. Setup notes are at the top of the HTML file. */
 
-/* Bundled fonts: Cormorant Garamond and Cinzel, both SIL Open Font License
+/* Bundled fonts: Cormorant Garamond, Cinzel and Cinzel Decorative, all SIL Open Font License
    (OFL.txt in each folder). Keep the fonts folder next to this file; without
    it the page falls back to system fonts. */
 @font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: normal;
   src: local("Cormorant Garamond"), url("fonts/cormorant-garamond/CormorantGaramond%5Bwght%5D.ttf") format("truetype"); }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: italic;
   src: local("Cormorant Garamond Italic"), url("fonts/cormorant-garamond/CormorantGaramond-Italic%5Bwght%5D.ttf") format("truetype"); }
+@font-face { font-family: "Cinzel Decorative"; font-weight: 400; font-style: normal;
+  src: local("Cinzel Decorative"), url("fonts/cinzel-decorative/CinzelDecorative-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Cinzel Decorative"; font-weight: 700; font-style: normal;
+  src: local("Cinzel Decorative Bold"), url("fonts/cinzel-decorative/CinzelDecorative-Bold.ttf") format("truetype"); }
 @font-face { font-family: "Cinzel"; font-weight: 400 900; font-style: normal;
   src: local("Cinzel"), url("fonts/cinzel/Cinzel%5Bwght%5D.ttf") format("truetype"); }
 
@@ -144,3 +148,19 @@ html, body { margin: 0; background: var(--velvet-3); }
 [data-state].hot { color: var(--hot) !important; }
 /* A fevered dial's lit cells pulse. */
 .fevered [data-cell].lit { animation: fg-pulse 1.6s ease-in-out infinite; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A generated group fills its cell (the cards above keep their drawn
+   sizes) with a fine metal rim instead of the wire frame; each jewel is
+   scaled to the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > .fg-sec, .groups > .fg-bare { width: auto; justify-self: stretch; align-self: stretch; min-width: 0; min-height: 0; overflow: hidden; }
+.fg-sec { display: flex; flex-direction: column; padding-top: 40px !important; }
+/* the gilt frame, drawn by the page's script to the card's size */
+.fg-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
+  filter: drop-shadow(1px 1.6px 1.2px rgba(0,0,0,0.7)); }
+.fg-sec > .rg-items, .fg-bare > .rg-items { flex: 1; min-height: 0; align-self: stretch; }
+.fg-bare { position: relative; display: flex; }
+.fg-clock { position: relative; width: 408px; height: 336px; }
+.rg-fit > div { box-sizing: border-box; }
+.fg-cut { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

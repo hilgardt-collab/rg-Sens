@@ -1019,11 +1019,77 @@ pub fn generate_update_script() -> &'static str {
     // be shown small, medium or large.
     (function () {
         if (!document.querySelector('.rg-item > .rg-fit')) return;
+        // Weighted groups (data-rg-span) take a number of the grid's rows
+        // each, and a span of K rows holds K - 1 row gaps: eight groups
+        // spanning 32 rows lost 31 gaps of height instead of 7. The grid's
+        // row gap is taken out and each group keeps one gap below it
+        // instead, but a group that ends the grid.
+        function weigh() {
+            var groups = document.querySelectorAll('[data-rg-span]');
+            if (!groups.length) return;
+            var grid = groups[0].parentNode;
+            if (grid.dataset.rgGap === undefined) {
+                grid.dataset.rgGap = String(parseFloat(getComputedStyle(grid).rowGap) || 0);
+                grid.style.rowGap = '0px';
+            }
+            var g = +grid.dataset.rgGap;
+            if (!(g > 0)) return;
+            var inner = grid.clientHeight - (parseFloat(getComputedStyle(grid).paddingBottom) || 0);
+            Array.prototype.forEach.call(groups, function (el) {
+                if (el.style.marginBottom !== g + 'px') el.style.marginBottom = g + 'px';
+            });
+            Array.prototype.forEach.call(groups, function (el) {
+                // offsetTop counts from the grid when the grid is positioned
+                var last = el.offsetParent === grid && el.offsetTop + el.offsetHeight + g >= inner - 0.5;
+                if (last) el.style.marginBottom = '0px';
+            });
+        }
+        // A cell holds every drawing of its widget's kind (the chosen one
+        // shown, the rest invisible (data-rg-off), each with its drawn size in data-rg-w /
+        // data-rg-h): the one that covers most of the cell once scaled in is
+        // shown. The one already shown is kept unless another is clearly
+        // better, so the choice does not flicker between two near equals.
+        function choose(cell, cw, ch) {
+            var alts = cell.querySelectorAll(':scope > .rg-fit');
+            if (alts.length < 2) return alts[0];
+            var best = null, bestFill = -1, shown = null;
+            Array.prototype.forEach.call(alts, function (el) {
+                var w = +el.dataset.rgW, h = +el.dataset.rgH;
+                if (!(w > 0 && h > 0)) return;
+                var k = Math.min(cw / w, ch / h);
+                var wide = el.hasAttribute('data-rg-stretch') ? Math.max(w, cw / k) : w;
+                var fill = wide * h * k * k / (cw * ch);
+                if (!el.hasAttribute('data-rg-off')) { shown = el; fill *= 1.08; }
+                if (fill > bestFill) { bestFill = fill; best = el; }
+            });
+            if (best && best !== shown) {
+                if (shown) shown.setAttribute('data-rg-off', '');
+                best.removeAttribute('data-rg-off');
+            }
+            return best || alts[0];
+        }
         function fit() {
-            Array.prototype.forEach.call(document.querySelectorAll('.rg-item > .rg-fit'), function (el) {
-                var cell = el.parentNode, w = el.offsetWidth, h = el.offsetHeight;
-                if (!(w > 0 && h > 0 && cell.clientWidth > 0 && cell.clientHeight > 0)) return;
-                var t = 'translate(-50%,-50%) scale(' + Math.min(cell.clientWidth / w, cell.clientHeight / h).toFixed(4) + ')';
+            weigh();
+            Array.prototype.forEach.call(document.querySelectorAll('.rg-item'), function (cell) {
+                // the room inside the cell's padding (which keeps widgets apart)
+                var pad = getComputedStyle(cell);
+                var cw = cell.clientWidth - (parseFloat(pad.paddingLeft) || 0) - (parseFloat(pad.paddingRight) || 0);
+                var ch = cell.clientHeight - (parseFloat(pad.paddingTop) || 0) - (parseFloat(pad.paddingBottom) || 0);
+                if (!(cw > 0 && ch > 0)) return;
+                var el = choose(cell, cw, ch);
+                if (!el) return;
+                // A box that may stretch (data-rg-stretch) keeps its drawn
+                // width as the least it takes, and widens to fill the cell.
+                var stretch = el.hasAttribute('data-rg-stretch');
+                if (stretch && !el.dataset.rgW) el.dataset.rgW = String(el.offsetWidth);
+                var w = +el.dataset.rgW || el.offsetWidth, h = +el.dataset.rgH || el.offsetHeight;
+                if (!(w > 0 && h > 0)) return;
+                var k = Math.min(cw / w, ch / h);
+                if (stretch) {
+                    var wide = Math.max(w, cw / k).toFixed(1) + 'px';
+                    if (el.style.width !== wide) el.style.width = wide;
+                }
+                var t = 'translate(-50%,-50%) scale(' + k.toFixed(4) + ')';
                 if (el.style.transform !== t) el.style.transform = t;
             });
         }

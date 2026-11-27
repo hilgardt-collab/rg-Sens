@@ -35,6 +35,7 @@ pub mod custom_color_picker;
 mod gradient_editor;
 mod grid_layout;
 mod grid_resize;
+pub(crate) mod group_board;
 mod position_grid_widget;
 pub(crate) mod sensor_picker;
 mod shared_font_dialog;

@@ -122,7 +122,7 @@
   <!--rg-groups 0-1 4-71-->
   <section class="hall">
     <!-- deep-set opening onto a concrete megastructure -->
-    <div style="position: relative; flex: 1; min-height: 250px; overflow: hidden; background: var(--sky-2); box-shadow: inset 12px 12px 18px rgba(0,0,0,0.55), inset -2px -2px 0 rgba(255,255,255,0.3)">
+    <div class="br-opening" style="position: relative; flex: 1; min-height: 250px; overflow: hidden; background: var(--sky-2); box-shadow: inset 12px 12px 18px rgba(0,0,0,0.55), inset -2px -2px 0 rgba(255,255,255,0.3)">
       <svg role="img" aria-label="Concrete megastructure" width="100%" height="100%" viewBox="0 0 432 250" preserveAspectRatio="xMidYMax meet" style="position: absolute; top: 0; left: 0">
         <rect x="-2000" y="-2000" width="4432" height="2250" fill="url(#br-sky)"></rect>
         <ellipse cx="90" cy="40" rx="70" ry="10" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="330" cy="70" rx="90" ry="12" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="200" cy="18" rx="60" ry="7" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="400" cy="30" rx="40" ry="6" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse>
@@ -470,7 +470,7 @@
 <template data-rg-group="hall" data-rg-label="Opening">
   <section class="hall br-hall">
     <!-- deep-set opening onto a concrete megastructure -->
-    <div style="position: relative; flex: 1.2 1 0; min-height: 60px; overflow: hidden; background: var(--sky-2); box-shadow: inset 12px 12px 18px rgba(0,0,0,0.55), inset -2px -2px 0 rgba(255,255,255,0.3)">
+    <div class="br-opening" style="position: relative; flex: 1.2 1 0; min-height: 60px; overflow: hidden; background: var(--sky-2); box-shadow: inset 12px 12px 18px rgba(0,0,0,0.55), inset -2px -2px 0 rgba(255,255,255,0.3)">
       <svg role="img" aria-label="Concrete megastructure" width="100%" height="100%" viewBox="0 0 432 250" preserveAspectRatio="xMidYMax meet" style="position: absolute; top: 0; left: 0">
         <rect x="-2000" y="-2000" width="4432" height="2250" fill="url(#br-sky)"></rect>
         <ellipse cx="90" cy="40" rx="70" ry="10" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="330" cy="70" rx="90" ry="12" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="200" cy="18" rx="60" ry="7" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse><ellipse cx="400" cy="30" rx="40" ry="6" fill="#FFFFFF" opacity="0.5" filter="url(#br-blur2)"></ellipse>
@@ -644,6 +644,7 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "finish", "label": "Finish", "type": "choice", "var": "--finish", "default": "raw", "choices": [{"value": "raw", "label": "Raw Concrete"}, {"value": "night", "label": "Night"}, {"value": "corten", "label": "Corten"}]},
+    {"id": "tower", "label": "Tower view", "type": "toggle", "var": "--tower", "default": true, "help": "The opening onto the concrete towers above the clock; off gives its room to the groups"},
     {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
     {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
     {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
@@ -747,6 +748,11 @@
   var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   // The finish is a keyword; the stylesheet holds each one's colours.
   root.setAttribute('data-finish', (css.getPropertyValue('--finish') || 'raw').trim() || 'raw');
+  // The tower view is optional: without it the clock slab stands alone.
+  if (cssNum('--tower', 1) === 0) {
+    Array.prototype.forEach.call(document.querySelectorAll('.br-opening'), function (el) { el.hidden = true; });
+    root.setAttribute('data-tower', 'off');
+  }
   // A steady pseudo-random share: the same windows are dark on every load.
   function chance(i, percent) { return (i * 7919 + 13) * 31 % 100 < percent; }
   // The megastructure's windows: the design's own for Raw Concrete, else the

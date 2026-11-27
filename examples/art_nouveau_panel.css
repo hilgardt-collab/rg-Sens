@@ -17,6 +17,9 @@
   --rg-fit: fill;
   /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
   --rg-columns: 0;
+  /* The whiplash ornaments in the corners: 1 shows them, 0 hides them and
+     gives their room to the groups. */
+  --corners: 1;
   --metal: #C9A24A;
   --foliage: #8FAE8B;
   --m-hi: color-mix(in srgb, var(--metal), white 62%);
@@ -27,15 +30,16 @@
   --l-lt: color-mix(in srgb, var(--foliage), white 35%);
   --l-mid: var(--foliage);
   --l-dk: color-mix(in srgb, var(--foliage), black 45%);
-  --bg: #101915;
-  --panel: #18241F;
-  --halo: #14201B;
+  /* The ground takes its tint from the foliage. */
+  --bg: color-mix(in srgb, var(--foliage) 11%, #050505);
+  --panel: color-mix(in srgb, var(--foliage) 16%, #050505);
+  --halo: color-mix(in srgb, var(--foliage) 12%, #050505);
   --cream: #EFE6CF;
   --label: #B7AC8C;
   --rose: #C46B7C;
-  --track: #22302A;
-  --unlit: #3E5048;
-  --leading: #0B1310;
+  --track: color-mix(in srgb, var(--foliage) 23%, #050505);
+  --unlit: color-mix(in srgb, var(--foliage) 42%, #050505);
+  --leading: color-mix(in srgb, var(--foliage) 4%, #050505);
   --warn: #E0893A;
   --hot: #D9536B;
 }
@@ -59,18 +63,22 @@ html, body { margin: 0; background: var(--bg); }
 .net:not([hidden]) ~ .net:not([hidden]) { padding-left: 16px; border-left: 1px solid var(--l-dk); }
 
 /* Artwork that follows the box: the rim with its inner hairline, a vine
-   down each side (cut off where the box ends) and an arch at the middle of
-   the top and of the bottom. */
-.rim, .vine, .arch { position: absolute; pointer-events: none; }
+   down each side (repeated to any length) and an ornament in each
+   corner, mirrored, so any shape of box gets the same frame. */
+.rim, .vine, .corner { position: absolute; pointer-events: none; }
 .rim { top: 10px; right: 10px; bottom: 10px; left: 10px; border: 1.6px solid var(--m-mid); border-radius: 24px; }
 .rim::after { content: ""; position: absolute; top: 4px; right: 4px; bottom: 4px; left: 4px;
   border: 0.8px solid color-mix(in srgb, var(--l-mid) 55%, transparent); border-radius: 19px; }
-.vine { top: 0; max-height: 1920px; }
+/* The vines run the whole height, from corner ornament to corner ornament
+   (or rim to rim without them): a repeated stretch of vine, any length. */
+.vine { top: calc(16px + 118px * var(--corners, 1)); height: calc(100% - 32px - 236px * var(--corners, 1)); }
 .vine.l { left: 0; }
 .vine.r { right: 0; transform: scaleX(-1); }
-.arch { left: 50%; margin-left: -240px; }
-.arch.t { top: 0; }
-.arch.b { bottom: 0; transform: scaleY(-1); }
+.corner { opacity: var(--corners, 1); }
+.corner.tl { top: 0; left: 0; }
+.corner.tr { top: 0; right: 0; transform: scaleX(-1); }
+.corner.bl { bottom: 0; left: 0; transform: scaleY(-1); }
+.corner.br { bottom: 0; right: 0; transform: scale(-1, -1); }
 
 /* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
    box in --rg-w / --rg-h) whose rows share the height left over. A group is

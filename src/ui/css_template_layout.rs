@@ -115,6 +115,10 @@ pub struct WidgetProto {
     /// The colours it can be drawn in (`data-rg-colors`): what `{{color}}`
     /// in its markup may become, usually class names of the template.
     pub colors: Vec<String>,
+    /// `data-rg-stretch`: the drawing may grow wider than drawn to fill a
+    /// wide block (a bar whose track takes the extra width) rather than only
+    /// being scaled whole.
+    pub stretch: bool,
     html: String,
 }
 
@@ -249,7 +253,9 @@ impl LayoutSpec {
                     Some((nw, nh)) if nw > 0 && nh > 0 => {
                         let (nw, nh) = (nw as f64, nh as f64);
                         let k = (bw / nw).min(bh / nh);
-                        nw * nh * k * k / (bw * bh)
+                        // a stretching drawing takes the block's whole width
+                        let wide = if w.stretch { bw / k } else { nw };
+                        wide * nh * k * k / (bw * bh)
                     }
                     _ => 0.5,
                 };
@@ -468,6 +474,32 @@ fn index_list(text: &str) -> Vec<u32> {
 }
 
 /// Read a template's prototypes (see the module documentation).
+/// The arrangements a page lists (`<meta name="rg-layouts">`, else its
+/// `rg-design-size`): the size the design needs with 1, 2, ... columns.
+pub fn page_layouts(html: &str) -> Vec<(u32, u32)> {
+    let meta = |name: &str| -> Option<String> {
+        let at = html.find(&format!(r#"<meta name="{name}" content=""#))?;
+        let rest = &html[at..];
+        let start = rest.find(r#"content=""#)? + r#"content=""#.len();
+        let end = rest[start..].find('"')?;
+        Some(rest[start..start + end].to_string())
+    };
+    let sizes = |text: String| -> Vec<(u32, u32)> {
+        text.split_whitespace()
+            .filter_map(|t| {
+                let (w, h) = t.split_once('x')?;
+                Some((w.parse().ok()?, h.parse().ok()?))
+            })
+            .collect()
+    };
+    let listed = meta("rg-layouts").map(sizes).unwrap_or_default();
+    if listed.is_empty() {
+        meta("rg-design-size").map(sizes).unwrap_or_default()
+    } else {
+        listed
+    }
+}
+
 pub fn layout_spec(html: &str) -> LayoutSpec {
     let mut spec = LayoutSpec::default();
     for cap in TEMPLATE_TAG.captures_iter(html) {
@@ -505,6 +537,9 @@ pub fn layout_spec(html: &str) -> LayoutSpec {
                     .split_whitespace()
                     .map(str::to_string)
                     .collect(),
+                stretch: cap[1]
+                    .split_whitespace()
+                    .any(|t| t == "data-rg-stretch" || t.starts_with("data-rg-stretch=")),
                 html: body,
             });
         } else if let Some(id) = a.get("group").filter(|k| !k.is_empty()) {
@@ -545,13 +580,38 @@ fn escape(text: &str) -> String {
 /// each widget centred in the cells it spans and scaled to them by the
 /// bridge script. The widget is out of flow, so the cells are sized by the
 /// group alone, never by what they hold.
+/// Widgets are kept apart by each cell's padding, not by a gap between the
+/// cells: a block spanning N cells would hold N - 1 gaps, which in a short
+/// group added up to more than its height.
 /// `:where()` keeps them at zero specificity, so anything a template says
 /// about these classes wins.
 const LAYOUT_CSS: &str = "<style>\
-:where(.rg-items){display:grid;gap:8px;flex:1;min-width:0;min-height:0}\
-:where(.rg-item){min-width:0;min-height:0;overflow:hidden;position:relative}\
+:where(.rg-items){display:grid;gap:0;flex:1;min-width:0;min-height:0}\
+:where(.rg-item){min-width:0;min-height:0;overflow:hidden;position:relative;box-sizing:border-box;padding:4px}\
 :where(.rg-fit){position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);transform-origin:center}\
+.rg-fit[data-rg-off]{visibility:hidden!important}\
 </style>";
+
+/// `html` with `css` added to the style of its first element.
+fn with_style(html: &str, css: &str) -> String {
+    let Some(open) = html.find('<') else {
+        return html.to_string();
+    };
+    let Some(end) = html[open..].find('>').map(|e| open + e) else {
+        return html.to_string();
+    };
+    let tag = &html[open..end];
+    match tag.find(r#"style=""#) {
+        Some(at) => {
+            let at = open + at + r#"style=""#.len();
+            format!("{}{css}; {}", &html[..at], &html[at..])
+        }
+        None => {
+            let close = if tag.ends_with('/') { end - 1 } else { end };
+            format!(r#"{} style="{css}"{}"#, &html[..close], &html[close..])
+        }
+    }
+}
 
 /// Where a group's widgets sit on its grid.
 #[derive(Debug, Clone, PartialEq)]
@@ -692,53 +752,79 @@ pub fn expand_layout(html: &str, layout: &CssLayoutConfig) -> Option<Expanded> {
         }
         let mut items = String::new();
         for (at, (slot, proto, choice)) in drawn.iter().enumerate() {
-            // Its own colour, else the template's colours in turn.
-            let color = choice
-                .map(|c| c.color.as_str())
-                .filter(|c| proto.colors.iter().any(|p| p == c))
-                .or_else(|| {
-                    (!proto.colors.is_empty())
-                        .then(|| proto.colors[at % proto.colors.len()].as_str())
-                })
-                .unwrap_or("");
+            // Every drawing of its kind goes in the cell, the chosen one
+            // first and the rest hidden: the bridge shows the one that fills
+            // the cell best at the size the page really gives it (a group's
+            // weight can make its cells far flatter or taller than the
+            // design's own group size suggests). They share placeholders.
+            let mut alternatives: Vec<&WidgetProto> = vec![*proto];
+            alternatives.extend(
+                spec.widgets
+                    .iter()
+                    .filter(|w| w.kind == proto.kind && !std::ptr::eq(*w, *proto)),
+            );
             // One placeholder per (field, format) the widget reads.
             let mut taken: HashMap<(String, Option<String>), u32> = HashMap::new();
-            let body = TOKEN.replace_all(&proto.html, |caps: &regex::Captures| {
-                let field = &caps[1];
-                if field == "slot" {
-                    return slot.clone();
-                }
-                if field == "color" {
-                    return color.to_string();
-                }
-                let format = caps.get(2).map(|m| format!("{{:{}}}", m.as_str()));
-                let index = *taken
-                    .entry((field.to_string(), format.clone()))
-                    .or_insert_with(|| {
-                        let index = next;
-                        next += 1;
-                        mappings.push(PlaceholderMapping {
-                            index,
-                            slot_prefix: slot.clone(),
-                            field: field.to_string(),
-                            format,
+            let mut boxes = String::new();
+            for (n, alt) in alternatives.iter().enumerate() {
+                // Its own colour, else the template's colours in turn.
+                let color = choice
+                    .map(|c| c.color.as_str())
+                    .filter(|c| alt.colors.iter().any(|p| p == c))
+                    .or_else(|| {
+                        (!alt.colors.is_empty()).then(|| alt.colors[at % alt.colors.len()].as_str())
+                    })
+                    .unwrap_or("");
+                let body = TOKEN.replace_all(&alt.html, |caps: &regex::Captures| {
+                    let field = &caps[1];
+                    if field == "slot" {
+                        return slot.clone();
+                    }
+                    if field == "color" {
+                        return color.to_string();
+                    }
+                    let format = caps.get(2).map(|m| format!("{{:{}}}", m.as_str()));
+                    let index = *taken
+                        .entry((field.to_string(), format.clone()))
+                        .or_insert_with(|| {
+                            let index = next;
+                            next += 1;
+                            mappings.push(PlaceholderMapping {
+                                index,
+                                slot_prefix: slot.clone(),
+                                field: field.to_string(),
+                                format,
+                            });
+                            index
                         });
-                        index
-                    });
-                index.to_string()
-            });
+                    index.to_string()
+                });
+                let mut attrs = alt
+                    .natural
+                    .map(|(w, h)| {
+                        format!(
+                            r#" style="width:{w}px;height:{h}px" data-rg-w="{w}" data-rg-h="{h}""#
+                        )
+                    })
+                    .unwrap_or_default();
+                if alt.stretch {
+                    attrs.push_str(" data-rg-stretch");
+                }
+                // Hidden by visibility, not display: still laid out, so a
+                // template script can measure it as it would any drawing.
+                if n > 0 {
+                    attrs.push_str(" data-rg-off");
+                }
+                boxes.push_str(&format!(r#"<div class="rg-fit"{attrs}>{body}</div>"#));
+            }
             let (col, row, wide, high) = placement.cells[at];
             // The size its block stands for; a shaped block has none, so
             // it is named after the drawing it uses.
             let size = size_for(wide)
                 .filter(|_| wide == high)
                 .unwrap_or(&proto.size);
-            let natural = proto
-                .natural
-                .map(|(w, h)| format!(r#" style="width:{w}px;height:{h}px""#))
-                .unwrap_or_default();
             items.push_str(&format!(
-                r#"<div class="rg-item rg-size-{size} rg-widget-{kind}" data-rg-slot="{slot}" style="grid-column:{c}/span {wide};grid-row:{r}/span {high}"><div class="rg-fit"{natural}>{body}</div></div>"#,
+                r#"<div class="rg-item rg-size-{size} rg-widget-{kind}" data-rg-slot="{slot}" style="grid-column:{c}/span {wide};grid-row:{r}/span {high}">{boxes}</div>"#,
                 kind = proto.kind,
                 c = col + 1,
                 r = row + 1,
@@ -759,7 +845,19 @@ pub fn expand_layout(html: &str, layout: &CssLayoutConfig) -> Option<Expanded> {
         } else {
             group.title.clone()
         };
-        let shell = ITEMS_MARK.replace(&proto.html, regex::NoExpand(&container));
+        let mut shell = ITEMS_MARK
+            .replace(&proto.html, regex::NoExpand(&container))
+            .into_owned();
+        // Groups share the height by their weights: each spans a number of
+        // the grid's equal rows in proportion to its weight.
+        if !layout.weights.is_empty() {
+            let span = (layout.weight(g) * 4.0).round().max(1.0) as u32;
+            shell = with_style(&shell, &format!("grid-row: span {span}"));
+            // the bridge evens out the row gaps of groups that span rows
+            if let Some(at) = shell.find(" style=\"") {
+                shell.insert_str(at, &format!(r#" data-rg-span="{span}""#));
+            }
+        }
         // `{{index}}` counts the groups that are drawn, from 1; `{{parity}}`
         // is `odd` or `even`, for designs whose groups alternate.
         groups_html.push_str(
@@ -858,6 +956,7 @@ mod tests {
             ]
             .into(),
             item_counts: vec![1, 3],
+            weights: Vec::new(),
         }
     }
 
@@ -974,6 +1073,45 @@ mod tests {
         assert!(!out.html.contains(r#"data-rg-slot="group2_2""#));
     }
 
+    /// The page as first shown: each cell's other drawings (hidden until
+    /// the bridge finds that one fits its cell better) left out.
+    fn shown(html: &str) -> String {
+        let mut out = String::new();
+        let mut rest = html;
+        while let Some(at) = rest.find(r#"<div class="rg-fit""#) {
+            let tag_end = at + rest[at..].find('>').unwrap();
+            out.push_str(&rest[..at]);
+            if !rest[at..tag_end].contains(" data-rg-off") {
+                out.push_str(&rest[at..=tag_end]);
+                rest = &rest[tag_end + 1..];
+                continue;
+            }
+            // skip to the matching </div>
+            let mut depth = 0usize;
+            let mut i = at;
+            loop {
+                let open = rest[i..].find("<div").map(|o| i + o);
+                let close = i + rest[i..].find("</div>").unwrap();
+                match open {
+                    Some(o) if o < close => {
+                        depth += 1;
+                        i = o + 4;
+                    }
+                    _ => {
+                        depth -= 1;
+                        i = close + 6;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+            rest = &rest[i..];
+        }
+        out.push_str(rest);
+        out
+    }
+
     #[test]
     fn colours_take_turns_unless_one_is_chosen() {
         let mut l = layout();
@@ -985,7 +1123,8 @@ mod tests {
         l.widgets.get_mut("group2_3").unwrap().color = "blue".to_string();
         l.widgets.get_mut("group2_4").unwrap().color = "green".to_string(); // not offered
         let out = expand_layout(PAGE, &l).expect("expands");
-        let built = &out.html[..out.html.find("<template").unwrap()];
+        let built = shown(&out.html[..out.html.find("<template").unwrap()]);
+        let built = built.as_str();
         let classes: Vec<&str> = built
             .match_indices(r#"<i class=""#)
             .map(|(at, m)| &built[at + m.len()..at + m.len() + 4])
@@ -1116,7 +1255,7 @@ mod tests {
             layout.widgets.insert(format!("group1_{i}"), bar);
         }
         let out = expand_layout(bauhaus, &layout).unwrap();
-        let built = &out.html[..out.html.find("<template").unwrap()];
+        let built = shown(&out.html[..out.html.find("<template").unwrap()]);
         assert_eq!(built.matches(r#"<div class="stat" data-need"#).count(), 4);
         assert!(!built.contains("stat stacked"));
     }
@@ -1165,6 +1304,41 @@ mod tests {
         );
         assert_eq!(spec.default_widget("cpu", "Usage", 1).kind, "bar");
         assert!(spec.kinds_for("cpu").iter().any(|(k, _)| k == "vessel"));
+    }
+
+    #[test]
+    fn groups_take_their_weight_and_bars_may_stretch() {
+        let page = PAGE.replace(
+            r#"<template data-rg-widget="bar" data-rg-size="small""#,
+            r#"<template data-rg-widget="bar" data-rg-stretch data-rg-size="small""#,
+        );
+        let mut layout = CssLayoutConfig {
+            custom: true,
+            item_counts: vec![1, 1],
+            ..Default::default()
+        };
+        for slot in ["group1_1", "group2_1"] {
+            layout
+                .widgets
+                .insert(slot.to_string(), choice("bar", "small"));
+        }
+        // equal weights: nothing written
+        let out = expand_layout(&page, &layout).unwrap();
+        assert!(!out.html.contains("grid-row: span"));
+        assert!(out.html.contains(r#"<div class="rg-fit" data-rg-stretch>"#));
+        layout.sync_weights(vec![1.0, 2.5]);
+        let out = expand_layout(&page, &layout).unwrap();
+        assert!(out
+            .html
+            .contains(r#"<section data-rg-span="4" style="grid-row: span 4">"#));
+        assert!(out
+            .html
+            .contains(r#"<section data-rg-span="10" style="grid-row: span 10">"#));
+        assert_eq!(
+            with_style(r#"<a style="x:1">"#, "y:2"),
+            r#"<a style="y:2; x:1">"#
+        );
+        assert_eq!(with_style("<br/>", "y:2"), r#"<br style="y:2"/>"#);
     }
 
     #[test]
@@ -1282,6 +1456,7 @@ mod tests {
     #[test]
     fn example_panels_with_prototypes_build_a_scanned_layout() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
+        let braced = Regex::new(r#"="\{\{\{\{[^"]*\}\}\}\}""#).unwrap();
         let mut checked = 0;
         for entry in std::fs::read_dir(dir).unwrap().flatten() {
             let path = entry.path();
@@ -1329,7 +1504,6 @@ mod tests {
             }
             // `{{{{value}}}}` is text in braces ("{1012}"): right for a text
             // placeholder, never for an attribute the script reads as an id
-            let braced = Regex::new(r#"="\{\{\{\{[^"]*\}\}\}\}""#).unwrap();
             for w in &spec.widgets {
                 assert!(
                     !braced.is_match(&w.html),

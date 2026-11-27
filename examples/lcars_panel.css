@@ -13,7 +13,7 @@
      its frames take (0 chooses by the panel's shape). */
   --rg-fit: fill;
   --rg-columns: 0;
-  /* Scheme: classic, cool or alert. */
+  /* Scheme: classic, cool, gold or alert. */
   --scheme: classic;
   /* 1 switches to the alert scheme while any temperature is at 85 or more. */
   --auto-alert: 1;
@@ -25,6 +25,17 @@
   --f1: #FF9900; --f2: #CC99CC; --f3: #9999FF;
   --c2: #FF9966; --c3: #9999CC; --c4: #99CCFF; --c5: #CC6699;
   --tan: #FFCC99; --red: #FF5555;
+
+  /* A group's frame that runs hot flashes in these: red, or purple under
+     the alert scheme, where red would not stand out. */
+  --al-f1: #DD3333; --al-f2: #CC5555; --al-f3: #AA3344;
+  --al-c2: #FF7766; --al-c3: #CC8888; --al-c4: #FF9988; --al-c5: #BB4466;
+  --al-tan: #FFD0C8; --al-red: #FF3333;
+}
+:root[data-scheme="gold"] {
+  --f1: #FFAA33; --f2: #7788BB; --f3: #CC8844;
+  --c2: #FFCC66; --c3: #8899BB; --c4: #BBCCEE; --c5: #DD9955;
+  --tan: #FFE2B0; --red: #FF5544;
 }
 :root[data-scheme="cool"] {
   --f1: #5599FF; --f2: #88AAEE; --f3: #6677CC;
@@ -35,6 +46,9 @@
   --f1: #DD3333; --f2: #CC5555; --f3: #AA3344;
   --c2: #FF7766; --c3: #CC8888; --c4: #FF9988; --c5: #BB4466;
   --tan: #FFD0C8; --red: #FF3333;
+  --al-f1: #9955FF; --al-f2: #BB77EE; --al-f3: #7744CC;
+  --al-c2: #CC99FF; --al-c3: #9988CC; --al-c4: #DDAAFF; --al-c5: #AA44CC;
+  --al-tan: #EAD8FF; --al-red: #D070FF;
 }
 html, body { margin: 0; background: #000; }
 [hidden] { display: none !important; }
@@ -84,6 +98,14 @@ html, body { margin: 0; background: #000; }
 .rail.low .fillet > div { border-radius: 0 0 0 28px; }
 /* Alert scheme: the first frame's elbows and bars pulse. */
 :root[data-scheme="alert"] .frame.a .pulse { animation: lc-alert 1.2s ease-in-out infinite; }
+/* In a custom layout the frame holding a reading at 85 or more takes the
+   alert colours on its own (the page's script marks it hot) and pulses. */
+.panel .frame.hot {
+  --f: var(--al-f1); --f1: var(--al-f1); --f2: var(--al-f2); --f3: var(--al-f3);
+  --c2: var(--al-c2); --c3: var(--al-c3); --c4: var(--al-c4); --c5: var(--al-c5);
+  --tan: var(--al-tan); --red: var(--al-red);
+}
+.frame.hot > .elbow, .frame.hot > .rail > .fillet, .frame.hot > .rail .bar > div { animation: lc-alert 1.2s ease-in-out infinite; }
 
 .side { display: flex; flex-direction: column; gap: 5px; padding: 5px 0; }
 .side > div { position: relative; min-height: 34px; animation: lc-scan 7s ease-in-out infinite; }
@@ -121,7 +143,11 @@ html, body { margin: 0; background: #000; }
 .thermal > .big { display: flex; flex-direction: column; flex: none; }
 .thermal .name { font-size: 15px; font-weight: 600; color: var(--f1); max-width: 150px; overflow: hidden; white-space: nowrap; }
 .thermal .big > div { display: flex; align-items: flex-start; }
-.temp { font-size: 92px; font-weight: 600; line-height: .85; color: var(--tan); }
+/* The reading keeps room for its widest value, so the bar beside it keeps
+   its width as the value changes: three digits, or two and a decimal. */
+.temp { font-size: 92px; font-weight: 600; line-height: .85; color: var(--tan); display: inline-block;
+  min-width: 2.9ch; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.temp[data-places="1"] { min-width: 3.4ch; }
 .thermal.critical .temp { color: var(--red); }
 .deg { font-size: 26px; font-weight: 600; color: var(--f1); margin-left: 3px; }
 .thermal > .scale { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
@@ -190,3 +216,74 @@ html, body { margin: 0; background: #000; }
 .chart .up { fill: var(--f1); }
 .sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 16px; background: rgba(255,255,255,0.14); animation: lc-sweep 4s linear infinite; }
 .still .sweep { display: none; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. Each group is a frame of its own (every second one in the second
+   frame colour) and the frames share the box as a grid; each readout is
+   scaled to the cells it is given. */
+.panel:has(.rg-items) { display: grid; grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); }
+.panel:has(.rg-items) > .frame { width: auto; min-height: 0; grid-template-rows: minmax(28px, 56px) minmax(0, 1fr) minmax(28px, 56px); }
+/* a short frame squeezes its elbows and its side blocks rather than spill
+   into the next */
+.panel:has(.rg-items) > .frame > .side { min-height: 0; overflow: hidden; }
+.panel:has(.rg-items) > .frame > .side > div { min-height: 0; }
+/* a short frame (the page's script marks it) has slim elbows: the rails
+   still fit, and its readouts get the height back */
+.panel:has(.rg-items) > .frame.slim { grid-template-rows: 30px minmax(0, 1fr) 30px; }
+.frame.slim .elbow { border-radius: 30px 0 0 0; }
+.frame.slim .elbow.low { border-radius: 0 0 0 30px; }
+.frame.slim .lc-gen > .rg-items { top: 6px; bottom: 6px; }
+.frame.even { --f: var(--f2); }
+/* The readouts' grid is pinned to the content box, so its height is always
+   definite: as a flex item its rows resolved to nothing in a squeezed frame
+   and the readouts kept their old scale. */
+.content.lc-gen { position: relative; overflow: hidden; }
+.lc-gen > .rg-items { position: absolute; top: 14px; right: 0; bottom: 14px; left: 18px; }
+.rg-fit > div { box-sizing: border-box; }
+.lc-pool { display: flex; align-items: flex-end; gap: 14px; width: 100%; height: 100%; }
+.lc-pool > .readout { flex: 1; min-width: 0; }
+.rg-fit .pill { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- custom layouts: a segment row and a slat meter in three shapes
+   each, so a block of any shape gets one that fills it (a tile, two lines,
+   one line; a tile, an upright meter, a wide one). The reading has a fixed
+   width, so the segments keep the rest. */
+.lc-row .pill { width: 112px; }
+.lc-row .segs { flex: 1; min-width: 24px; }
+.lc-row .v { flex: none; width: 82px; overflow: hidden; }
+.lc-tile, .lc-bar2 { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.lc-tile { gap: 6px; }
+.lc-tile .pill, .lc-bar2 .pill { width: auto; min-width: 0; border-radius: 14px; justify-content: flex-start; padding: 0 0 2px 12px; }
+.lc-tile .v, .lc-bar2 .v { text-align: right; font-weight: 600; line-height: 1; color: var(--tan); white-space: nowrap; overflow: hidden; }
+.lc-tile .v { flex: 1; display: flex; align-items: center; justify-content: flex-end; font-size: 42px; }
+.lc-tile .u, .lc-bar2 .u { font-size: 18px; color: var(--f1); }
+.lc-tile .segs { flex: none; height: 16px; }
+.lc-bar2 { gap: 8px; }
+.lc-bar2 .top { display: flex; align-items: center; gap: 10px; height: 28px; }
+.lc-bar2 .top .pill { flex: 1; }
+.lc-bar2 .v { flex: none; font-size: 30px; }
+.lc-bar2 .bot { display: flex; align-items: center; gap: 6px; height: 24px; }
+.lc-bar2 .segs { flex: 1; height: 24px; }
+.lc-bar2 .end { width: 14px; height: 24px; border-radius: 0 12px 12px 0; background: var(--p); }
+
+.lc-slat { display: flex; gap: 14px; width: 100%; height: 100%; }
+.lc-slat .slats { flex: none; width: 46px; height: 100%; }
+.lc-slat .slats i { flex: 1; height: auto; }
+.lc-slat .slats.h { flex-direction: row; gap: 3px; width: auto; }
+.lc-slat .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; gap: 3px; }
+.lc-slat .nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 18px; font-weight: 600; color: var(--p); white-space: nowrap; }
+.lc-slat .amt { font-size: 40px; font-weight: 600; line-height: 1; color: var(--tan); white-space: nowrap; }
+.lc-slat .of { font-size: 18px; color: var(--f1); }
+.lc-slat .pc { font-size: 16px; color: var(--c3); }
+.lc-slat.tile { flex-direction: column; gap: 8px; }
+.lc-slat.tile .amt { font-size: 36px; }
+.lc-slat.tile .slats.h { height: 26px; }
+.lc-slat.wide { align-items: center; }
+.lc-slat.wide .txt { flex: none; width: 150px; align-items: flex-start; justify-content: center; }
+.lc-slat.wide .amt { font-size: 32px; }
+.lc-slat.wide .slats.h { flex: 1; height: 56px; }
+
+/* The clock as a custom layout widget: equal-width digits, so its size
+   does not follow the time, and a gap that keeps the date clear of it. */
+.rg-fit .time { gap: 16px; height: 100%; }
+.rg-fit .clock { font-variant-numeric: tabular-nums; white-space: nowrap; }

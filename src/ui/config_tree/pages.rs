@@ -638,25 +638,368 @@ impl State {
              An item whose Source page sets its own update interval keeps it; the \
              panel polls at the fastest interval any item asks for.",
         ));
+        page.append(&heading("Group sizes"));
+        page.append(&self.group_weight_board());
         page
+    }
+
+    /// The groups as blocks on the panel's own shape, laid out as the panel
+    /// lays them out (a frame's stack, a CSS page's columns), each spanning
+    /// cells by its size weight: drag a block's far edge across the cells
+    /// to make it bigger or smaller, drag a block onto another to swap the
+    /// two groups.
+    fn group_weight_board(self: &Rc<Self>) -> GtkBox {
+        use crate::ui::group_board::{arrange, span_of, weight_of, Board, Flow, MAX_SPAN};
+        use std::cell::Cell;
+        const PAD: f64 = 6.0;
+        /// The least room it takes; it grows into whatever the page has.
+        const MIN_HEIGHT: i32 = 260;
+        /// How near the far edge, in pixels, a press resizes instead of moves.
+        const EDGE: f64 = 8.0;
+        #[derive(Clone, Copy, PartialEq)]
+        enum Drag {
+            Idle,
+            /// `per_cell`: pixels a cell had when the drag began.
+            Resize {
+                group: usize,
+                from: u32,
+                per_cell: f64,
+                span: u32,
+            },
+            Move {
+                group: usize,
+                to: usize,
+            },
+        }
+        struct Shape {
+            px: (f64, f64),
+            flow: Flow,
+            titles: Vec<String>,
+        }
+        let shape = Rc::new(RefCell::new(Shape {
+            px: (1.0, 1.0),
+            flow: Flow::Down,
+            titles: Vec::new(),
+        }));
+        let refresh = {
+            let (weak, shape) = (Rc::downgrade(self), shape.clone());
+            Rc::new(move || {
+                let Some(s) = weak.upgrade() else { return };
+                let (px, flow, titles) = s.group_board_shape();
+                *shape.borrow_mut() = Shape { px, flow, titles };
+            })
+        };
+        let drag = Rc::new(Cell::new(Drag::Idle));
+        // (spans, item counts) as the source has them, the drag's span in
+        // place of the source's while one is on.
+        let groups = {
+            let (weak, drag) = (Rc::downgrade(self), drag.clone());
+            Rc::new(move || -> (Vec<u32>, Vec<u32>) {
+                let Some(s) = weak.upgrade() else {
+                    return (Vec::new(), Vec::new());
+                };
+                let cs = s.combo_source.borrow();
+                let Some(cs) = cs.as_ref() else {
+                    return (Vec::new(), Vec::new());
+                };
+                let mut spans: Vec<u32> =
+                    cs.groups.iter().map(|g| span_of(g.size_weight)).collect();
+                if let Drag::Resize { group, span, .. } = drag.get() {
+                    if let Some(at) = spans.get_mut(group) {
+                        *at = span;
+                    }
+                }
+                (spans, cs.groups.iter().map(|g| g.item_count).collect())
+            })
+        };
+        // The panel's rectangle on the area, and the board in it.
+        let frame_of = {
+            let shape = shape.clone();
+            move |width: f64, height: f64| -> (f64, f64, f64, f64) {
+                let (pw, ph) = shape.borrow().px;
+                let (aw, ah) = (width - 2.0 * PAD, height - 2.0 * PAD);
+                let k = (aw / pw).min(ah / ph);
+                let (w, h) = (pw * k, ph * k);
+                ((width - w) / 2.0, (height - h) / 2.0, w, h)
+            }
+        };
+        let frame_of = Rc::new(frame_of);
+        // A block's rectangle in pixels.
+        fn rect(board: &Board, frame: (f64, f64, f64, f64), i: usize) -> (f64, f64, f64, f64) {
+            let (fx, fy, fw, fh) = frame;
+            let (cw, ch) = (fw / board.cols as f64, fh / board.rows as f64);
+            let b = board.blocks[i];
+            (
+                fx + b.col as f64 * cw,
+                fy + b.row as f64 * ch,
+                b.wide as f64 * cw,
+                b.high as f64 * ch,
+            )
+        }
+        let board_now = {
+            let (shape, groups) = (shape.clone(), groups.clone());
+            Rc::new(move || arrange(&groups().0, shape.borrow().flow))
+        };
+
+        let area = gtk4::DrawingArea::new();
+        area.set_content_height(MIN_HEIGHT);
+        area.set_hexpand(true);
+        area.set_vexpand(true);
+        {
+            let (shape, groups, drag, frame_of, board_now) = (
+                shape.clone(),
+                groups.clone(),
+                drag.clone(),
+                frame_of.clone(),
+                board_now.clone(),
+            );
+            area.set_draw_func(move |area, cr, width, height| {
+                let (spans, counts) = groups();
+                if spans.is_empty() {
+                    return;
+                }
+                let board = board_now();
+                let frame = frame_of(width as f64, height as f64);
+                let fg = area.color();
+                let (r, g, b) = (fg.red() as f64, fg.green() as f64, fg.blue() as f64);
+                // the panel and its cells
+                let (fx, fy, fw, fh) = frame;
+                cr.rectangle(fx + 0.5, fy + 0.5, fw - 1.0, fh - 1.0);
+                cr.set_source_rgba(r, g, b, 0.05);
+                cr.fill_preserve().ok();
+                cr.set_source_rgba(r, g, b, 0.35);
+                cr.set_line_width(1.0);
+                cr.stroke().ok();
+                cr.set_source_rgba(r, g, b, 0.1);
+                let (cw, ch) = (fw / board.cols as f64, fh / board.rows as f64);
+                if cw >= 4.0 {
+                    for c in 1..board.cols {
+                        cr.move_to((fx + c as f64 * cw).round() + 0.5, fy);
+                        cr.line_to((fx + c as f64 * cw).round() + 0.5, fy + fh);
+                    }
+                }
+                if ch >= 4.0 {
+                    for row in 1..board.rows {
+                        cr.move_to(fx, (fy + row as f64 * ch).round() + 0.5);
+                        cr.line_to(fx + fw, (fy + row as f64 * ch).round() + 0.5);
+                    }
+                }
+                cr.stroke().ok();
+
+                let layout = pangocairo::functions::create_layout(cr);
+                let mut font = pango::FontDescription::new();
+                font.set_size(8 * pango::SCALE);
+                layout.set_font_description(Some(&font));
+                layout.set_ellipsize(pango::EllipsizeMode::End);
+                let (active, target) = match drag.get() {
+                    Drag::Move { group, to } => (Some(group), Some(to)),
+                    Drag::Resize { group, .. } => (Some(group), None),
+                    Drag::Idle => (None, None),
+                };
+                let shape = shape.borrow();
+                for (i, span) in spans.iter().enumerate().take(board.blocks.len()) {
+                    let (x, y, w, h) = rect(&board, frame, i);
+                    let (x, y, w, h) = (x + 2.0, y + 2.0, (w - 4.0).max(1.0), (h - 4.0).max(1.0));
+                    let lifted = active == Some(i);
+                    let aimed = target == Some(i) && active != Some(i);
+                    cr.save().ok();
+                    cr.rectangle(x, y, w, h);
+                    cr.set_source_rgba(r, g, b, if lifted || aimed { 0.25 } else { 0.1 });
+                    cr.fill_preserve().ok();
+                    cr.set_source_rgba(r, g, b, if lifted || aimed { 0.95 } else { 0.5 });
+                    cr.set_line_width(if lifted || aimed { 2.0 } else { 1.0 });
+                    cr.stroke().ok();
+                    // the edge that resizes
+                    cr.set_source_rgba(r, g, b, 0.6);
+                    if shape.flow == Flow::Across {
+                        cr.rectangle(x + w - 3.0, y + h / 2.0 - 8.0, 2.0, 16.0);
+                    } else {
+                        cr.rectangle(x + w / 2.0 - 8.0, y + h - 3.0, 16.0, 2.0);
+                    }
+                    cr.fill().ok();
+                    cr.rectangle(x, y, w, h);
+                    cr.clip();
+                    let title = shape
+                        .titles
+                        .get(i)
+                        .filter(|t| !t.is_empty())
+                        .cloned()
+                        .unwrap_or_else(|| format!("Group {}", i + 1));
+                    layout.set_width(((w - 8.0).max(1.0) * pango::SCALE as f64) as i32);
+                    cr.set_source_rgba(r, g, b, 0.95);
+                    layout.set_text(&title);
+                    cr.move_to(x + 4.0, y + 2.0);
+                    pangocairo::functions::show_layout(cr, &layout);
+                    if h > 28.0 {
+                        let n = counts.get(i).copied().unwrap_or(0);
+                        cr.set_source_rgba(r, g, b, 0.6);
+                        layout.set_text(&format!(
+                            "×{} · {n} item{}",
+                            weight_of(*span),
+                            if n == 1 { "" } else { "s" }
+                        ));
+                        cr.move_to(x + 4.0, y + 15.0);
+                        pangocairo::functions::show_layout(cr, &layout);
+                    }
+                    cr.restore().ok();
+                }
+            });
+        }
+
+        let gesture = gtk4::GestureDrag::new();
+        {
+            let (shape, drag, frame_of, board_now, refresh) = (
+                shape.clone(),
+                drag.clone(),
+                frame_of.clone(),
+                board_now.clone(),
+                refresh.clone(),
+            );
+            let weak_area = area.downgrade();
+            gesture.connect_drag_begin(move |_, px, py| {
+                let Some(area) = weak_area.upgrade() else {
+                    return;
+                };
+                refresh();
+                drag.set(Drag::Idle);
+                let board = board_now();
+                let frame = frame_of(area.width() as f64, area.height() as f64);
+                let across = shape.borrow().flow == Flow::Across;
+                for i in 0..board.blocks.len() {
+                    let (x, y, w, h) = rect(&board, frame, i);
+                    if px < x || px > x + w || py < y || py > y + h + EDGE / 2.0 {
+                        continue;
+                    }
+                    let b = board.blocks[i];
+                    let near = if across {
+                        x + w - px <= EDGE
+                    } else {
+                        y + h - py <= EDGE
+                    };
+                    drag.set(if near {
+                        let (from, per_cell) = if across {
+                            (b.wide, w / b.wide as f64)
+                        } else {
+                            (b.high, h / b.high as f64)
+                        };
+                        Drag::Resize {
+                            group: i,
+                            from,
+                            per_cell,
+                            span: from,
+                        }
+                    } else {
+                        Drag::Move { group: i, to: i }
+                    });
+                    break;
+                }
+                area.queue_draw();
+            });
+        }
+        {
+            let (shape, drag, frame_of, board_now) = (
+                shape.clone(),
+                drag.clone(),
+                frame_of.clone(),
+                board_now.clone(),
+            );
+            let weak_area = area.downgrade();
+            gesture.connect_drag_update(move |gesture, dx, dy| {
+                let (Some(area), Some((sx, sy))) = (weak_area.upgrade(), gesture.start_point())
+                else {
+                    return;
+                };
+                match drag.get() {
+                    Drag::Resize {
+                        group,
+                        from,
+                        per_cell,
+                        ..
+                    } => {
+                        let delta = if shape.borrow().flow == Flow::Across {
+                            dx
+                        } else {
+                            dy
+                        };
+                        let span = (from as f64 + (delta / per_cell.max(1.0)).round())
+                            .clamp(1.0, MAX_SPAN as f64) as u32;
+                        drag.set(Drag::Resize {
+                            group,
+                            from,
+                            per_cell,
+                            span,
+                        });
+                    }
+                    Drag::Move { group, .. } => {
+                        let (x, y) = (sx + dx, sy + dy);
+                        let board = board_now();
+                        let frame = frame_of(area.width() as f64, area.height() as f64);
+                        let to = (0..board.blocks.len())
+                            .find(|&i| {
+                                let (bx, by, bw, bh) = rect(&board, frame, i);
+                                x >= bx && x < bx + bw && y >= by && y < by + bh
+                            })
+                            .unwrap_or(group);
+                        drag.set(Drag::Move { group, to });
+                    }
+                    Drag::Idle => return,
+                }
+                area.queue_draw();
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            let weak_area = area.downgrade();
+            gesture.connect_drag_end(move |_, _, _| {
+                let was = drag.replace(Drag::Idle);
+                let (Some(s), Some(area)) = (weak.upgrade(), weak_area.upgrade()) else {
+                    return;
+                };
+                match was {
+                    Drag::Resize {
+                        group, from, span, ..
+                    } if span != from => {
+                        s.set_group_weight(group, weight_of(span));
+                    }
+                    Drag::Move { group, to } if to != group => {
+                        s.reorder(ComboReorder::Group { a: group, b: to });
+                    }
+                    _ => {}
+                }
+                area.queue_draw();
+            });
+        }
+        area.add_controller(gesture);
+        // The panel's size, the groups and their titles may change while the
+        // page is hidden.
+        area.connect_map(move |area| {
+            refresh();
+            area.queue_draw();
+        });
+
+        let board = GtkBox::new(Orientation::Vertical, 4);
+        board.append(&area);
+        board.append(&hint(
+            "The panel, with each group as a block laid out as the panel lays them \
+             out. Drag the marked edge of a group across the cells to give it more \
+             or less room (each cell is a quarter of a size weight); drag a group \
+             onto another to swap them.",
+        ));
+        board
     }
 
     fn build_group_page(self: &Rc<Self>, group: usize) -> GtkBox {
         let page = page_box();
         page.append(&heading(&format!("Group {}", group + 1)));
-        let (count, weight, total) = self
+        let (count, total) = self
             .combo_source
             .borrow()
             .as_ref()
             .map(|cs| {
                 let g = cs.groups.get(group);
-                (
-                    g.map(|g| g.item_count).unwrap_or(1),
-                    g.map(|g| g.size_weight).unwrap_or(1.0),
-                    cs.groups.len(),
-                )
+                (g.map(|g| g.item_count).unwrap_or(1), cs.groups.len())
             })
-            .unwrap_or((1, 1.0, 1));
+            .unwrap_or((1, 1));
         let count_spin = spin_row(&page, "Items:", 1.0, 16.0, 1.0, count as f64);
         {
             let weak = Rc::downgrade(self);
@@ -717,21 +1060,6 @@ impl State {
                     }
                 });
             }
-        }
-        let weight_spin = spin_row(&page, "Size weight:", 0.1, 10.0, 0.1, weight);
-        weight_spin.set_digits(1);
-        weight_spin.set_tooltip_text(Some(
-            "Share of the content area this group gets, relative to the other groups",
-        ));
-        {
-            let weak = Rc::downgrade(self);
-            weight_spin.connect_value_changed(move |spin| {
-                if let Some(s) = weak.upgrade() {
-                    if !s.loading.get() {
-                        s.set_group_weight(group, spin.value());
-                    }
-                }
-            });
         }
         let order = GtkBox::new(Orientation::Horizontal, 6);
         order.append(&Label::new(Some("Order:")));

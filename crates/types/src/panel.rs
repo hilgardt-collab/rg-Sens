@@ -468,6 +468,25 @@ impl DisplayerConfig {
     /// the single owner of group count, item counts and size weights. The
     /// frame copies are a rendering cache written here. Standalone
     /// displayers are untouched.
+    /// The direction a themed combo frame lays its groups out in
+    /// (`Vertical`: stacked top to bottom). `None` for any other displayer.
+    pub fn group_direction(&self) -> Option<crate::display_configs::lcars::SplitOrientation> {
+        use crate::combo::LayoutFrameConfig;
+        match self {
+            DisplayerConfig::Lcars(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::Cyberpunk(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::Material(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::Industrial(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::RetroTerminal(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::FighterHud(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::Synthwave(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::ArtDeco(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::ArtNouveau(cfg) => Some(cfg.frame.split_orientation()),
+            DisplayerConfig::Steampunk(cfg) => Some(cfg.frame.split_orientation()),
+            _ => None,
+        }
+    }
+
     pub fn sync_group_structure(&mut self, groups: &[crate::source_configs::GroupConfig]) {
         macro_rules! sync {
             ($cfg:expr) => {{
@@ -488,9 +507,12 @@ impl DisplayerConfig {
             DisplayerConfig::ArtDeco(cfg) => sync!(cfg),
             DisplayerConfig::ArtNouveau(cfg) => sync!(cfg),
             DisplayerConfig::Steampunk(cfg) => sync!(cfg),
-            DisplayerConfig::CssTemplate(cfg) => cfg
-                .layout
-                .sync(groups.iter().map(|g| g.item_count as u32).collect()),
+            DisplayerConfig::CssTemplate(cfg) => {
+                cfg.layout
+                    .sync(groups.iter().map(|g| g.item_count).collect());
+                cfg.layout
+                    .sync_weights(groups.iter().map(|g| g.size_weight).collect());
+            }
             _ => {}
         }
     }
