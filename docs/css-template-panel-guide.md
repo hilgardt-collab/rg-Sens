@@ -733,4 +733,3 @@ CSS Template panels are enabled by default; start rg-Sens with
   They load their fonts from `examples/fonts/` (SIL Open Font License; Special
   Elite is Apache 2.0), so copy that folder along with a template. The
   animated panels step their motion from one script timer: see "Animating on a budget" above
-- [CSS Template Example](../examples/css_template_example.html) - Basic template structure

@@ -408,6 +408,9 @@ pub struct ApplyOutcome {
     pub source_recreated: bool,
 }
 
+/// How long the grid may go without input before the selection is cleared.
+const AUTO_DESELECT_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
+
 impl GridLayout {
     /// Create a new grid layout with access to app configuration for global theme
     pub fn new(config: GridConfig, app_config: Rc<RefCell<AppConfig>>) -> Self {
@@ -460,7 +463,57 @@ impl GridLayout {
 
         grid_layout.setup_drop_zone_drawing();
         grid_layout.setup_container_interaction();
+        grid_layout.setup_auto_deselect();
         grid_layout
+    }
+
+    /// Clear the selection once the grid has had no input for
+    /// [`AUTO_DESELECT_AFTER`]: a capture-phase controller notes the time of
+    /// every pointer, scroll and button event on the grid, and a once-a-second
+    /// check (which returns at once while nothing is selected) clears the
+    /// selected panels' highlight. A drag in progress keeps the selection.
+    fn setup_auto_deselect(&self) {
+        use std::time::Instant;
+        let last_input = Rc::new(std::cell::Cell::new(Instant::now()));
+
+        let watch = gtk4::EventControllerLegacy::new();
+        watch.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        {
+            let last_input = last_input.clone();
+            watch.connect_event(move |_, _| {
+                last_input.set(Instant::now());
+                gtk4::glib::Propagation::Proceed
+            });
+        }
+        self.container.add_controller(watch);
+
+        let selected_panels = Rc::downgrade(&self.selected_panels);
+        let panel_states = Rc::downgrade(&self.panel_states);
+        let is_dragging = Rc::downgrade(&self.is_dragging);
+        gtk4::glib::timeout_add_seconds_local(1, move || {
+            let (Some(selected), Some(states), Some(dragging)) = (
+                selected_panels.upgrade(),
+                panel_states.upgrade(),
+                is_dragging.upgrade(),
+            ) else {
+                return gtk4::glib::ControlFlow::Break; // the grid is gone
+            };
+            if selected.borrow().is_empty()
+                || *dragging.borrow()
+                || last_input.get().elapsed() < AUTO_DESELECT_AFTER
+            {
+                return gtk4::glib::ControlFlow::Continue;
+            }
+            // Release the set before touching widgets (gotcha 12).
+            let ids: Vec<String> = selected.borrow_mut().drain().collect();
+            let states = states.borrow();
+            for id in ids {
+                if let Some(state) = states.get(&id) {
+                    state.frame.remove_css_class("selected");
+                }
+            }
+            gtk4::glib::ControlFlow::Continue
+        });
     }
 
     /// Store the weak self-reference (see the field doc) and publish it for
