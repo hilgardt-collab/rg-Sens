@@ -436,7 +436,7 @@ Every item's Widget list ends with "Not shown": a sensor that only feeds
 something outside the groups (a footer's uptime) is drawn in no group, which
 is also its default; a group with nothing to draw is left out.
 `examples/bauhaus_panel.html` is the worked example; every example panel
-but Steampunk (one composed picture) declares prototypes.
+declares prototypes.
 
 To look at a layout without the app:
 
@@ -572,21 +572,21 @@ What to watch:
   their width.
 - **Fixed-size drawings** (a gauge, a chart) stay their size; centre them.
 
-Every example but Steampunk works this way and declares `fill` as its default
+Every example works this way and declares `fill` as its default
 fit, with a Layout option for the column count. How each one's full-page
 artwork follows the box is worth copying:
 
 | Artwork | How it follows the box | Examples |
 |---|---|---|
-| Repeating texture | CSS background or SVG `<pattern>` | LCD, Victorian, Gothic, Mughal Peacock, Western, Japandi (daylight bands), Filigree (side stems: one 80px period, the strip's height rounded down to whole periods), Brutalist (wall boards and tie holes) |
+| Repeating texture | CSS background or SVG `<pattern>` | LCD, Victorian, Gothic, Western, Japandi (daylight bands), Filigree (side stems: one 80px period, the strip's height rounded down to whole periods), Brutalist (wall boards and tie holes) |
 | Scattered pieces | placed by percentage (glows, rain drips), or in a strip down each side margin with percentage heights (bubbles) | Glass & Gumdrop, Brutalist |
 | A picture in a frame | an SVG with a `viewBox` and `preserveAspectRatio="xMidYMax meet"`, whose sky and ground rectangles run far past the viewBox: the picture is never cropped and the frame is filled around it | Brutalist (the opening) |
 | Rails with evenly spaced beads | CSS backgrounds, the beads with `background-repeat: space` | Filigree |
-| Strips down the sides | an SVG per side, `height="100%"`, `preserveAspectRatio="xMinYMin slice"` (cut off, not squeezed), the right one mirrored | Art Deco, Art Nouveau, Gothic, Mughal Peacock |
+| Strips down the sides | an SVG per side, `height="100%"`, `preserveAspectRatio="xMinYMin slice"` (cut off, not squeezed), the right one mirrored | Art Deco, Art Nouveau, Gothic |
 | Generated over the real box | the page's script scatters or tiles it from a seeded generator once it knows the box's size, and again on `resize` / `rg-layout` | Memphis (confetti), Porcelain (bamboo slats) |
 | One drawing per group | each group is an SVG with a `viewBox` in the design's own units, growing from a zero flex basis with `min-height: 0` (an SVG's aspect ratio is otherwise its minimum height) | Memphis, Porcelain, Hi-Fi |
 | Plates that stretch | the plate is HTML (colour, rim, a baked crinkle texture), its screws pinned to the corners, the instruments one SVG on it | Aircraft Cockpit |
-| Corner pieces | an SVG per corner, placed by CSS; one drawing `<use>`d four times and mirrored with `scaleX(-1)` / `scaleY(-1)` fits any box | Art Deco, Art Nouveau, Gothic, Filigree |
+| Corner pieces | an SVG per corner, placed by CSS; one drawing `<use>`d four times and mirrored with `scaleX(-1)` / `scaleY(-1)` fits any box | Art Deco, Art Nouveau, Gothic, Filigree, Mughal Peacock (feathers in two corners, the drawing generated once by the page) |
 | A rim or inlay | a CSS border | Art Nouveau, Leather & Wood |
 | A frame with notches | drawn by the script on the `rg-layout` event | Warrior |
 | Wood grain | one SVG stretched to the box (`preserveAspectRatio="none"`) | Leather & Wood |
@@ -594,9 +594,8 @@ artwork follows the box is worth copying:
 LCARS has three frames, not six groups, so it lists one, two and three
 columns and its frames stretch. Filigree's pieces keep their size, because each
 frame is a wire drawing with a gap for its title, and sit in the middle of
-their cells; Leather & Wood's pads keep their height. Steampunk's background is one composed
-picture (plates, a pipe frame, gears and gauges at fixed spots); it lists no
-arrangements and only scales. Every example declares a `fit` option for the
+their cells; Leather & Wood's pads keep their height. Steampunk's cabinet is a grained-wood
+background in a CSS rim, its rivets a `repeat-y` background down each side. Every example declares a `fit` option for the
 Display tab.
 
 ### Noise Textures: Bake Them
@@ -660,7 +659,7 @@ the web process.
 
 **Animating on a budget:** every animated frame is repainted in the web process
 and presented by rg-Sens, so cost follows the frame rate, not the number of
-moving things. The Steampunk example as designed (gears, steam, needles at the
+moving things. The first Steampunk example (gears, steam, needles at the
 display's 60 fps) used about 0.8 of a core in rg-Sens and 1.0 in the web
 process. It ships with its CSS animations paused and stepped from one script
 timer (`document.getAnimations()`, `animation.currentTime = ...`) at
@@ -733,5 +732,5 @@ CSS Template panels are enabled by default; start rg-Sens with
   that hide when unmapped; setup steps are in the comment at the top of each.
   They load their fonts from `examples/fonts/` (SIL Open Font License; Special
   Elite is Apache 2.0), so copy that folder along with a template. The
-  Steampunk panel is the animated one: see "Animating on a budget" above
+  animated panels step their motion from one script timer: see "Animating on a budget" above
 - [CSS Template Example](../examples/css_template_example.html) - Basic template structure

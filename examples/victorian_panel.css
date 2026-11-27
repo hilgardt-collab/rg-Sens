@@ -116,6 +116,15 @@ html, body { margin: 0; background: var(--wall); }
 .bar.red i { background: repeating-linear-gradient(-45deg, var(--red) 0px, var(--red) 1.2px, transparent 1.2px, transparent 4px); }
 .bar i.none { border-right: 0; }
 .item { display: flex; flex-direction: column; gap: 4px; }
+/* A fan's row: its flywheel beside the reading and bar. */
+.item.fan { flex-direction: row; align-items: center; gap: 10px; }
+.item.fan > .wheel { flex: none; width: 46px; height: 46px; overflow: visible; }
+.fanbody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.vc-wheeltile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
+.vc-wheeltile > .wheel { width: 84px; height: 84px; overflow: visible; margin-bottom: 4px; }
+.vc-wheeltile .cap { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; font-size: 14px; }
+.vc-wheeltile b { font-size: 20px; }
+.vc-wheeltile em { font-size: 11px; }
 .note { font-style: italic; font-size: 13px; color: var(--sepia); }
 
 /* ----------------------------------------------------------------- header */

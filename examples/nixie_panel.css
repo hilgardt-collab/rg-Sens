@@ -21,6 +21,9 @@
   --rg-columns: 0;
   /* Finish: aluminium (Brushed Aluminium), black (Black Anodised) or steel. */
   --finish: aluminium;
+  /* Glow: classic (orange tubes, green magic eyes), or orange, red, green or
+     blue for the tubes, the neon lettering and the eyes alike. */
+  --glow: classic;
   /* Frames a second for everything that moves; 0 turns motion off. */
   --motion-fps: 6;
   /* Bar-graph tube full scale when a sensor has no maximum of its own.
@@ -38,26 +41,60 @@
   --bevel-lo: #7E8286;
   --ink: #1C1F22;
   --engrave: 0 1px 0 rgba(255,255,255,0.75), 0 -1px 0 rgba(0,0,0,0.2);
-  --eye-text: #0E5E2A;
+  --eye-text: color-mix(in srgb, var(--e-mid), black 55%);
   --phosphor: #5CFF8A;
   --phosphor-hot: #F2FFF4;
   --crt: #0E2A1A;
   --crt-edge: #030605;
   --brush: 1;
   --sheen: 1;
+  /* The glow, from the white-hot core out to the deep edge (tubes, neon,
+     bar-graph columns), and the magic eye's own four. */
+  --g-core: #FFF0D8; --g-pale: #FFE0B8; --g-hi: #FFB060; --g-main: #FF8A2A; --g-text: #FF9A3A; --g-deep: #FF6A10; --g-dark: #E8502A;
+  --e-core: #E8FFD8; --e-main: #7CFF9A; --e-mid: #2EC85A; --e-dark: #0A5A2A;
   /* the rack space left between two front panels in one column */
   --gap: 51.5px;
 }
 :root[data-rg-columns]:not([data-rg-columns="1"]) { --gap: 22px; }
+:root[data-glow="orange"] {
+  --g-core: #FFF0D8; --g-pale: #FFE0B8; --g-hi: #FFB060; --g-main: #FF8A2A; --g-text: #FF9A3A; --g-deep: #FF6A10; --g-dark: #E8502A; --e-core: #FFF0D8; --e-main: #FFB060; --e-mid: #FF8A2A; --e-dark: #7A2A04;
+}
+:root[data-glow="red"] {
+  --g-core: #FFE4DE; --g-pale: #FFC8C0; --g-hi: #FF7A6A; --g-main: #FF4A3A; --g-text: #FF5A4A; --g-deep: #E0200E; --g-dark: #B01008; --e-core: #FFE4DE; --e-main: #FF7A6A; --e-mid: #E0302A; --e-dark: #5A0804;
+}
+:root[data-glow="green"] {
+  --g-core: #ECFFEE; --g-pale: #C8FFD0; --g-hi: #8CFFA0; --g-main: #3EF06A; --g-text: #5CFF84; --g-deep: #10C040; --g-dark: #0A8A2A; --e-core: #E8FFD8; --e-main: #7CFF9A; --e-mid: #2EC85A; --e-dark: #0A5A2A;
+}
+:root[data-glow="blue"] {
+  --g-core: #EAF4FF; --g-pale: #C8E4FF; --g-hi: #8CC8FF; --g-main: #4AA0FF; --g-text: #6AB4FF; --g-deep: #1A6AF0; --g-dark: #0A40B0; --e-core: #EAF4FF; --e-main: #8CC8FF; --e-mid: #2A7AF0; --e-dark: #0A2A6A;
+}
+/* The drawing carries its glow colours as attributes; these follow the glow. */
+[fill="#FFF0D8"], [stroke="#FFF0D8"] { fill: var(--g-core); stroke: var(--g-core); }
+[stroke="#FFF0D8"] { fill: none; }
+[fill="#FFB060"] { fill: var(--g-hi); }
+[fill="#FF8A2A"] { fill: var(--g-main); }
+[stroke="#FF9030"] { stroke: var(--g-main); }
+[fill="#FF7A1E"] { fill: var(--g-deep); }
+[stroke="#FF5A0A"] { stroke: var(--g-deep); }
+[stroke="#D8FFC8"] { stroke: var(--e-core); }
+stop[stop-color="#FFB070"] { stop-color: var(--g-hi); }
+stop[stop-color="#FF7A20"], stop[stop-color="#FF6A10"] { stop-color: var(--g-deep); }
+stop[stop-color="#FFE0B8"] { stop-color: var(--g-pale); }
+stop[stop-color="#FF8A3A"] { stop-color: var(--g-main); }
+stop[stop-color="#E8502A"] { stop-color: var(--g-dark); }
+stop[stop-color="#E8FFD8"] { stop-color: var(--e-core); }
+stop[stop-color="#7CFF9A"] { stop-color: var(--e-main); }
+stop[stop-color="#1EB85A"] { stop-color: var(--e-mid); }
+stop[stop-color="#0A5A2A"] { stop-color: var(--e-dark); }
 :root[data-finish="black"] {
   --plate: #26282C; --bevel-hi: #55595F; --bevel-lo: #08090A; --ink: #E8E6DE;
   --engrave: 0 -1px 0 rgba(0,0,0,0.85), 0 1px 0 rgba(255,255,255,0.06);
-  --eye-text: #9CFFB4; --brush: 0.3; --sheen: 0.4;
+  --eye-text: color-mix(in srgb, var(--e-main), white 25%); --brush: 0.3; --sheen: 0.4;
 }
 :root[data-finish="steel"] {
   --plate: #8C9197; --bevel-hi: #D8DCE0; --bevel-lo: #4E5257; --ink: #121416;
   --engrave: 0 1px 0 rgba(255,255,255,0.5), 0 -1px 0 rgba(0,0,0,0.25);
-  --eye-text: #0A4A20; --phosphor: #FFB040; --phosphor-hot: #FFF6E4; --crt: #2A1A06; --crt-edge: #060402;
+  --eye-text: color-mix(in srgb, var(--e-mid), black 62%); --phosphor: #FFB040; --phosphor-hot: #FFF6E4; --crt: #2A1A06; --crt-edge: #060402;
   --brush: 0.55; --sheen: 0.8;
 }
 html, body { margin: 0; background: #121314; }
@@ -128,7 +165,7 @@ html, body { margin: 0; background: #121314; }
 
 /* A dark window in the metal, lit warm by the tubes behind it. */
 .win { position: relative; display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px; border-radius: 4px;
-  background: radial-gradient(ellipse 70% 60% at 50% 55%, rgba(255,106,16,0.16) 0%, rgba(255,106,16,0) 70%),
+  background: radial-gradient(ellipse 70% 60% at 50% 55%, color-mix(in srgb, var(--g-deep) 16%, transparent) 0%, transparent 70%),
     repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 2px),
     linear-gradient(180deg, #16120E 0%, #080605 100%);
   box-shadow: inset 0 4px 10px rgba(0,0,0,0.95), inset 0 0 0 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.18), 0 -1px 0 rgba(0,0,0,0.4); }
@@ -138,8 +175,8 @@ html, body { margin: 0; background: #121314; }
 .nixie { display: block; flex: none; }
 .lit { animation: nx-flicker 3.7s linear infinite; }
 .colon { animation: nx-pulse 2s steps(2, jump-none) infinite; }
-.neon { font-weight: 600; font-size: 16px; color: #FF9A3A; text-shadow: 0 0 6px #FF7A1E; padding-bottom: 14px; white-space: nowrap; }
-.neon.sm { font-size: 10px; letter-spacing: 0.12em; text-shadow: 0 0 5px #FF7A1E; padding-bottom: 4px; }
+.neon { font-weight: 600; font-size: 16px; color: var(--g-text); text-shadow: 0 0 6px var(--g-deep); padding-bottom: 14px; white-space: nowrap; }
+.neon.sm { font-size: 10px; letter-spacing: 0.12em; text-shadow: 0 0 5px var(--g-deep); padding-bottom: 4px; }
 .col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
 .col.wide { gap: 8px; }
 
@@ -154,7 +191,7 @@ html, body { margin: 0; background: #121314; }
 
 /* Bar-graph tubes. */
 .bt { display: block; }
-.btv { font-family: Oswald, sans-serif; font-size: 15px; line-height: 1; color: #FF9A3A; text-shadow: 0 0 6px #FF7A1E; }
+.btv { font-family: Oswald, sans-serif; font-size: 15px; line-height: 1; color: var(--g-text); text-shadow: 0 0 6px var(--g-deep); }
 .btc { font-weight: 600; font-size: 9px; letter-spacing: 0.14em; color: #D8D2C4; white-space: nowrap; }
 .breathe { transform-box: fill-box; transform-origin: 50% 100%; animation: nx-breathe 1.9s ease-in-out infinite; }
 .breathe.b2 { animation-duration: 2.27s; }
@@ -195,7 +232,7 @@ html, body { margin: 0; background: #121314; }
 .htube { position: relative; height: 14px; border-radius: 7px; background: #0C0907; overflow: hidden;
   box-shadow: inset 0 0 0 0.7px rgba(255,255,255,0.3), 0 1px 0 rgba(255,255,255,0.3), 0 -1px 0 rgba(0,0,0,0.4); }
 .htube > i { position: absolute; left: 4px; top: 4px; bottom: 4px; width: 0; border-radius: 2px;
-  background: linear-gradient(90deg, #E8502A 0%, #FF8A3A 88%, #FFE0B8 100%); box-shadow: 0 0 5px 1px rgba(255,90,10,0.85); }
+  background: linear-gradient(90deg, var(--g-dark) 0%, var(--g-main) 88%, var(--g-pale) 100%); box-shadow: 0 0 5px 1px color-mix(in srgb, var(--g-deep) 85%, transparent); }
 .htube::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: 7px;
   background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.05) 35%, rgba(255,255,255,0) 60%, rgba(255,255,255,0.12) 100%); }
 .wbar { align-items: stretch; gap: 5px; }

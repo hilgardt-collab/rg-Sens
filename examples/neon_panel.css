@@ -215,8 +215,8 @@ header { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .fan .pct { font-size: 11px; color: var(--a); white-space: nowrap; }
 .fan .ring { fill: none; stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 4px var(--a)); }
 .rotor { transform-box: view-box; transform-origin: 38px 38px; }
-.blade-a { fill: var(--a); opacity: .9; }
-.blade-b { fill: var(--b); opacity: .9; }
+/* Seven swept blades in the fan's one colour, each edged a little lighter. */
+.blade { fill: var(--a); fill-opacity: .78; stroke: color-mix(in srgb, var(--a), white 45%); stroke-width: .9; stroke-linejoin: round; }
 
 /* ---- memory ---- */
 .pool { display: flex; flex-direction: column; gap: 7px; }

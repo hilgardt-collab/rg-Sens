@@ -495,6 +495,7 @@
 <script type="application/json" id="rg-template-options">
 [
     {"id": "finish", "label": "Finish", "type": "choice", "var": "--finish", "default": "aluminium", "choices": [{"value": "aluminium", "label": "Brushed Aluminium"}, {"value": "black", "label": "Black Anodised"}, {"value": "steel", "label": "Brushed Steel"}]},
+    {"id": "glow", "label": "Glow colour", "type": "choice", "var": "--glow", "default": "classic", "help": "The colour of the tubes, the neon lettering and the magic eyes", "choices": [{"value": "classic", "label": "Classic (orange tubes, green eyes)"}, {"value": "orange", "label": "Orange"}, {"value": "red", "label": "Red"}, {"value": "green", "label": "Green"}, {"value": "blue", "label": "Blue"}]},
     {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
     {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
     {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
@@ -596,6 +597,7 @@
   var NET_MAX = cssNum('--net-max', 0);
   // The finish is a keyword; the stylesheet holds each one's colours.
   root.setAttribute('data-finish', (css.getPropertyValue('--finish') || 'aluminium').trim() || 'aluminium');
+  root.setAttribute('data-glow', (css.getPropertyValue('--glow') || 'classic').trim() || 'classic');
 
   function num(v) {
     if (v === undefined || v === null) return NaN;

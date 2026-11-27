@@ -1,7 +1,7 @@
 /* Mughal Peacock Sensor Panel: stylesheet for mughal_peacock_panel.html (rg-Sens CSS Template displayer).
-   Palette, fonts and the few classes the page's script switches; the
-   drawing itself is inline in the HTML. Setup notes are at the top of the
-   HTML file. */
+   Palette, fonts, the cards and the classes the page's script switches. The
+   feathers are drawn by the page: one feather eye and one whole feather in
+   its defs, reused everywhere. Setup notes are at the top of the HTML file. */
 
 /* Bundled fonts: Rozha One and Mukta, both SIL Open Font License (OFL.txt in
    each folder). Keep the fonts folder next to this file; without it the page
@@ -19,28 +19,24 @@
   --rg-fit: fill;
   /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
   --rg-columns: 0;
-  /* Palette: wall (centre, middle, edge), jali lines, card frame and its
-     deep shade, marble panel and its vein, ink, secondary text, gold, footer
-     text. The peacock colours and the architecture's marble are the same in
-     every palette.
-       Peacock        #12586A #0B3A4A #062430  frame #0D3A47 #082A34  gold #C9A23E   (default)
-       Red Sandstone  #9A4436 #7A2E22 #5A1E16  frame #8E3A2C #6A2A20  gold #D9B455
-       White Marble   #F3EEE3 #E6DECD #D4C9B2  frame #EFE7D5 #D8CDB5  gold #B8862B */
-  --wall-1: #12586A;
-  --wall-2: #0B3A4A;
-  --wall-3: #062430;
-  --jali: rgba(110,210,220,0.16);
-  --frame: #0D3A47;
-  --deep: #082A34;
-  --panel: #F6EEDC;
-  --vein: rgba(120,110,95,0.06);
-  --ink: #1E2A2E;
-  --sub: #4F6168;
-  --gold: #C9A23E;
-  --foot: #F4EBD8;
+  /* Palette (Midnight; Jade and Ivory are options): the ground from centre
+     to edge, the glass cards and their gold hairline, text, gold, the faint
+     barbs of a bar's unlit length, the quills and the unit colour. The
+     feathers' own colours are the same in every palette. */
+  --bg-1: #133A44;
+  --bg-2: #08222A;
+  --bg-3: #030C10;
+  --card: rgba(4,18,22,0.62);
+  --line: rgba(214,178,94,0.45);
+  --ink: #F1E8D4;
+  --sub: #93ABA6;
+  --gold: #D6B25E;
+  --barb-dim: rgba(200,220,210,0.16);
+  --quill: #D9CBA2;
+  --unit: #49C4C8;
   /* Frames a second for everything that moves; 0 turns motion off. */
   --motion-fps: 6;
-  /* Chain full scale when a sensor has no maximum of its own. Clocks are in
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
      GHz (a sensor that reports MHz is shown and scaled in GHz). */
   --cpu-clock-max: 5.5;
   --cpu-power-max: 125;
@@ -48,69 +44,125 @@
   --gpu-power-max: 300;
   --fan-max: 2400;
 
-  --blue: #1F5FAE;
-  --emerald: #1E8A6A;
-  --teal: #1FA0B0;
-  --warm: #D98A1E;
-  --hot: #C0392B;
+  --warm: #E0962A;
+  --hot: #D2463A;
 }
-html, body { margin: 0; background: var(--wall-2); }
+html, body { margin: 0; background: var(--bg-3); }
 [hidden] { display: none !important; }
 .rg-placeholder { transition: none; }
 
-/* The drawing's shapes carry their colour as an attribute; these follow the palette. */
-[fill="#0D3A47"] { fill: var(--frame); }
-[fill="#082A34"] { fill: var(--deep); }
-[fill="#F6EEDC"] { fill: var(--panel); }
-[fill="#4F6168"] { fill: var(--sub); }
+/* The tail's rims carry their colour as an attribute; gold follows the palette. */
 [fill="#C9A23E"] { fill: var(--gold); }
 [stroke="#C9A23E"] { stroke: var(--gold); }
-[stroke="#1E2A2E"] { stroke: var(--ink); }
-.jali { stroke: var(--jali); }
+[fill="#4F6168"] { fill: var(--sub); }
 
-@keyframes mg-shimmer { 0%,100% { opacity: 1; } 50% { opacity: .72; } }
+@keyframes pf-shimmer { 0%,100% { opacity: 1; } 50% { opacity: .74; } }
 /* The script steps every animation at --motion-fps; nothing runs free. */
 * { animation-play-state: paused !important; }
 .still * { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 
-/* Gauge feathers: faint until the reading reaches them, then lit and
-   shimmering, each at its own pace (--d) and offset (--o). */
-.feather { opacity: 0.16; }
-.feather.lit { opacity: 1; animation: mg-shimmer var(--d) ease-in-out var(--o) infinite; }
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns. */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
+  background: radial-gradient(ellipse 95% 55% at 50% 28%, var(--bg-1) 0%, var(--bg-2) 58%, var(--bg-3) 100%);
+  font-family: Mukta, sans-serif; font-variant-numeric: lining-nums; color: var(--ink);
+  padding: 18px 22px 16px; display: flex; flex-direction: column; gap: 12px; }
+.pf-defs { position: absolute; width: 0; height: 0; }
+/* Long feathers sweeping in from two corners, behind the glass. */
+.pf-corner { position: absolute; z-index: 0; width: 330px; height: 460px; pointer-events: none; opacity: 0.5; }
+.pf-corner.bl { left: -40px; bottom: -40px; }
+.pf-corner.tr { right: -40px; top: -40px; transform: rotate(180deg); }
+
+.pf-head { position: relative; z-index: 1; flex: none; display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-weight: 700; font-size: 13px; letter-spacing: 0.42em; color: var(--gold); padding-left: 0.42em; }
+.pf-head svg { flex: none; width: 70px; height: 22px; overflow: visible; }
+
+/* The groups: a grid of --rg-cols columns whose rows share the height left
+   over, so every card stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 12px 24px; align-content: stretch; }
+.pf-card { position: relative; min-width: 0; min-height: 0; box-sizing: border-box; border-radius: 18px; background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 28px rgba(0,0,0,0.45);
+  padding: 12px 18px 14px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.pf-title { margin: 0; flex: none; display: flex; align-items: center; gap: 8px; min-width: 0;
+  font-family: "Rozha One", serif; font-weight: 400; font-size: 22px; line-height: 1.1; color: var(--gold); letter-spacing: 0.03em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-ico { flex: none; width: 15px; height: 20px; overflow: visible; }
+.pf-body { flex: 1; min-height: 0; display: flex; align-items: center; gap: 14px; }
+.pf-body.mirror { flex-direction: row-reverse; }
+.pf-list { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+
+/* A reading: caption and value over a feather bar. */
+.pf-stat { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pf-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.pf-lab { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2em; color: var(--sub); }
+.pf-val { flex: none; white-space: nowrap; font-family: "Rozha One", serif; font-size: 24px; line-height: 1; color: var(--ink); }
+.pf-u { font-family: Mukta, sans-serif; font-size: 12px; font-weight: 600; color: var(--unit); }
+.pf-of { font-family: Mukta, sans-serif; font-size: 12px; font-weight: 600; color: var(--sub); }
+
+/* A feather bar: a feather lying on its side, its barbs lit from the quill
+   end up to the reading, its eye brightening as the bar fills. Drawn by the
+   page's script to the bar's own width. */
+.pf-fbar { display: block; width: 100%; height: 20px; overflow: visible; }
+.pf-fbar .dim { fill: none; stroke: var(--barb-dim); stroke-width: 0.7; }
+.pf-fbar .lit { fill: none; stroke: url(#pf-iris); stroke-width: 0.85; }
+.pf-fbar .rachis { stroke: var(--quill); stroke-width: 1.1; stroke-linecap: round; fill: none; }
+
+/* The peacock's tail: faint feathers until the reading reaches them, then
+   lit and shimmering, each at its own pace (--d) and offset (--o). */
+.pf-gauge { flex: none; position: relative; width: 190px; display: flex; flex-direction: column; align-items: center; }
+.pf-gauge > div { position: relative; width: 190px; height: 160px; }
+.pf-gauge svg { position: absolute; top: 0; left: 0; overflow: visible; }
+.pf-mid { position: absolute; left: 0; right: 0; top: 86px; display: flex; flex-direction: column; align-items: center; }
+.pf-temp { font-family: "Rozha One", serif; font-size: 42px; line-height: 0.9; color: var(--ink); }
+.pf-cap { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: var(--sub); }
+.pf-state { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: #3FB98A; }
+/* In the default cards the tail is drawn larger than its 190 x 160 design. */
+.pf-body > .pf-gauge, .pf-body > .pf-gauge > div { width: 236px; }
+.pf-body > .pf-gauge > div { height: 199px; }
+.pf-body > .pf-gauge svg { width: 236px; height: 199px; }
+.pf-body > .pf-gauge .pf-mid { top: 106px; }
+.pf-body > .pf-gauge .pf-temp { font-size: 50px; }
+.feather { opacity: 0.18; }
+.feather.lit { opacity: 1; animation: pf-shimmer var(--d) ease-in-out var(--o) infinite; }
 [data-state].warm { color: var(--warm) !important; }
 [data-state].hot { color: var(--hot) !important; }
 
-/* Lozenge chains: one <i> per lozenge, written by the script; blue and teal
-   in turn up to the value, the last lit one gold. */
-[data-chain] i { width: 7px; height: 7px; transform: rotate(45deg); flex: none; background: rgba(30,42,46,0.12); }
-[data-chain] i.on { background: var(--blue); }
-[data-chain] i.on:nth-child(even) { background: var(--teal); }
-[data-chain] i.on.tip { background: var(--gold); }
+/* Fans: a wheel of feather eyes turning with the RPM. */
+.pf-fan { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pf-fan > svg { flex: none; width: 44px; height: 44px; overflow: visible; }
+.pf-fan > .pf-stat { flex: 1; }
+.pf-wheel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.pf-wheel > svg { width: 84px; height: 84px; overflow: visible; margin-bottom: 4px; }
+.pf-wheel .pf-lab { max-width: 100%; }
 
-/* The uptime's figures are set in the display face. */
-[data-uptime] b { font-family: "Rozha One", serif; font-weight: 400; font-size: 20px; letter-spacing: 0; }
+/* Network: the two speeds over a stitched chart of the last minute. */
+.pf-net { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.pf-net .pf-row { justify-content: space-around; }
+.pf-speed { display: flex; flex-direction: column; align-items: center; }
+.pf-chart { display: block; width: 100%; height: auto; }
+.pf-chart .frame { fill: rgba(255,255,255,0.03); stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 3; }
+.pf-chart .area { fill: rgba(73,196,200,0.14); }
+.pf-chart .down { fill: none; stroke: #49C4C8; stroke-width: 2; stroke-dasharray: 6 3; stroke-linejoin: round; }
+.pf-chart .up { fill: none; stroke: #8CCB5A; stroke-width: 1.6; stroke-dasharray: 2 3; stroke-linejoin: round; }
 
-/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
-   box in --rg-w / --rg-h) whose rows share the height left over, so every
-   card stretches to its cell. */
-.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
-  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 10px 30px; align-content: stretch; }
-.groups > .gate { width: 420px; justify-self: center; align-self: center; }
-.groups > section { display: flex; flex-direction: column; min-width: 0; }
-.groups > section > div:last-child { flex: 1; }
-/* Minarets and vines keep to the two sides, cut off where the box ends. */
-.edge { position: absolute; top: 0; z-index: 0; pointer-events: none; max-height: 1920px; }
-.edge.l { left: 0; }
-.edge.r { right: 0; transform: scaleX(-1); }
+.pf-time { font-family: "Rozha One", serif; font-size: 88px; line-height: 0.95; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pf-date { font-size: 14px; font-weight: 600; letter-spacing: 0.2em; color: var(--sub); text-transform: uppercase; white-space: nowrap; }
+.pf-clock { flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding-left: 8px; }
+.pf-clockcard > svg { position: absolute; right: -30px; top: -26px; width: 200px; height: 290px; pointer-events: none; opacity: 0.9; }
+
+.pf-foot { position: relative; z-index: 1; flex: none; display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.06em; color: var(--sub); }
+.pf-foot svg { flex: none; width: 60px; height: 20px; overflow: visible; }
+[data-uptime] b { font-family: "Rozha One", serif; font-weight: 400; font-size: 20px; letter-spacing: 0; color: var(--ink); }
 
 /* ---- custom layouts: groups built from the templates at the end of the
-   page. A group is an arched panel with its title; each piece is scaled to
-   the cells it is given. */
+   page. A group is a glass card with its title; each piece is scaled to the
+   cells it is given. */
 .groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
-.groups > section:has(.rg-items) { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.mg-panel { flex: 1; min-height: 0; }
-.mg-panel > .rg-items { flex: 1; min-height: 0; align-self: stretch; }
-.mg-gate { width: 100%; }
-.rg-fit > div { box-sizing: border-box; }
-.mg-cut { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-card > .rg-items { flex: 1; min-height: 0; }
+.rg-fit > div { box-sizing: border-box; width: 100%; height: 100%; }
+.rg-fit .pf-stat, .rg-fit .pf-fan { justify-content: center; }
