@@ -1,0 +1,128 @@
+/* Aircraft Cockpit Sensor Panel: stylesheet for cockpit_panel.html (rg-Sens
+   CSS Template displayer). Panel finishes, fonts, the instrument plates and
+   the classes the drawings take their colours from. The instruments are
+   drawn by the page's script. Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: B612 and B612 Mono, both SIL Open Font License (OFL.txt in
+   each folder), designed for cockpit displays. Keep the fonts folder next to
+   this file; without it the page falls back to system fonts. */
+@font-face { font-family: "B612"; font-weight: 400; font-style: normal;
+  src: local("B612"), url("fonts/b612/B612-Regular.ttf") format("truetype"); }
+@font-face { font-family: "B612"; font-weight: 700; font-style: normal;
+  src: local("B612 Bold"), url("fonts/b612/B612-Bold.ttf") format("truetype"); }
+@font-face { font-family: "B612 Mono"; font-weight: 700; font-style: normal;
+  src: local("B612 Mono Bold"), url("fonts/b612-mono/B612Mono-Bold.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Panel finish: grey, black or olive. */
+  --finish: grey;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 10;
+  /* Narrow-gauge full scale when a sensor has no maximum of its own. Clocks
+     are in GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Rev counter full scale, rpm. */
+  --fan-max: 3000;
+  /* Network display full scale in the network sensors' unit; 0 follows the
+     peak of the last minute. */
+  --net-max: 16;
+
+  /* Classic Grey */
+  --panel: #4A4F55;
+  --hi: #8A9096;
+  --lo: #1E2124;
+  --recess: #0C0D0E;
+  --mark: #F2F0EA;
+  --needle: #F4F2EC;
+  --second: #FF7A1A;
+  --amber: #FFB23A;
+  --line-1: #5CFF8A;
+  --line-2: #5AD8FF;
+}
+:root[data-finish="black"] {
+  --panel: #1F2022; --hi: #4A4D52; --lo: #050506; --recess: #050505; --mark: #EDEBE4;
+  --needle: #F4F2EC; --second: #FF6A10; --amber: #FF9F2A; --line-1: #5CFF8A; --line-2: #5AD8FF;
+}
+:root[data-finish="olive"] {
+  --panel: #454A36; --hi: #7A8160; --lo: #1E2116; --recess: #0B0C08; --mark: #ECE3C4;
+  --needle: #DDF5A8; --second: #E8B030; --amber: #FFB23A; --line-1: #9CFF6A; --line-2: #F2D46A;
+}
+html, body { margin: 0; background: var(--recess); }
+[hidden] { display: none !important; }
+
+/* What the drawings take from the finish. Operating ranges are the same for
+   every finish. */
+.f-mark { fill: var(--mark); }      .s-mark { stroke: var(--mark); }
+.f-needle { fill: var(--needle); }
+.f-second { fill: var(--second); }
+.f-amber { fill: var(--amber); }    .s-amber { stroke: var(--amber); }
+.f-line1 { fill: var(--line-1); }   .s-line1 { stroke: var(--line-1); }
+.f-line2 { fill: var(--line-2); }   .s-line2 { stroke: var(--line-2); }
+.s-green { stroke: #2FBF4A; }       .f-green { fill: #2FBF4A; }
+.s-yellow { stroke: #F2C230; }      .f-yellow { fill: #F2C230; }
+.s-red { stroke: #E0302A; }         .f-red { fill: #E0302A; }
+.over .f-amber, .f-amber.over { fill: #FF5A4A; }
+svg text { font-family: B612, "Arial Narrow", sans-serif; font-weight: 700; }
+svg text.mono { font-family: "B612 Mono", monospace; }
+.engraved { filter: drop-shadow(0 -0.6px 0 rgba(0,0,0,0.6)) drop-shadow(0 0.7px 0 rgba(255,255,255,0.18)); }
+
+@keyframes ck-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.ck-pulse { animation: ck-pulse 1.6s ease-in-out infinite; }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns. */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
+  background: var(--recess); color: var(--mark); font-family: B612, "Arial Narrow", sans-serif;
+  padding: 10px 8px; display: flex; flex-direction: column; gap: 8px; }
+.defs { position: absolute; width: 0; height: 0; }
+
+/* An instrument plate: wrinkle paint over the finish colour, a bevelled
+   edge, a slotted screw in each corner. It stretches to its cell; the
+   instruments on it are one drawing that keeps its proportions. */
+.plate { position: relative; min-width: 0; min-height: 0; border-radius: 6px; background: var(--panel); overflow: hidden;
+  box-shadow: 2px 5px 8px rgba(0,0,0,0.8), inset 1px 1px 0 var(--hi), inset -1px -1px 0 var(--lo); display: flex; flex-direction: column; }
+.plate > .crinkle { position: absolute; top: 0; left: 0; width: 100%; height: 100%; mix-blend-mode: overlay; opacity: 0.55; pointer-events: none; }
+.plate::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; border-radius: 6px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0) 40%, rgba(0,0,0,0.18) 100%); }
+.plate > .screw { position: absolute; width: 12px; height: 12px; z-index: 2; }
+.screw.tl { top: 5px; left: 5px; } .screw.tr { top: 5px; right: 5px; }
+.screw.bl { bottom: 5px; left: 5px; } .screw.br { bottom: 5px; right: 5px; }
+.plate > svg.face { position: relative; z-index: 1; flex: 1 1 0; width: 100%; height: auto; min-height: 0; }
+.plate.mfd { border-radius: 10px; background: #2A2C2F; margin: 0 8px; }
+.plate.mfd > .crinkle { opacity: 0.4; }
+.plate.mfd::after { border-radius: 10px; }
+.plate.mfd > .screw { display: none; }
+
+.strip, .foot { flex: none; }
+.strip { height: 82px; }
+.foot { height: 114px; }
+.groups { position: relative; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 8px; align-content: stretch; }
+.g-clock { min-height: 292px; }
+.g-temp { min-height: 400px; }
+.g-fans { min-height: 236px; }
+.g-store { min-height: 288px; }
+.g-mfd { min-height: 420px; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A group is a plate with an engraved title over its instruments;
+   each instrument is scaled to the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups:has(.rg-items) > .plate { min-height: 0; }
+.ck-title { position: relative; z-index: 1; flex: none; padding: 14px 24px 0; font-weight: 700; font-size: 10px; letter-spacing: 2.4px;
+  color: var(--mark); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  filter: drop-shadow(0 -0.6px 0 rgba(0,0,0,0.6)) drop-shadow(0 0.7px 0 rgba(255,255,255,0.18)); }
+.plate > .rg-items { position: relative; z-index: 1; flex: 1; min-height: 0; margin: 8px 18px 16px; }
+.rg-fit > svg { display: block; width: 100%; height: 100%; overflow: visible; }

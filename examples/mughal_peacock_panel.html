@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1920 960x1025 1440x750 2880x475">
+<meta name="rg-group-size" content="480x270+250">
 <title>Mughal Peacock Sensor Panel</title>
 <!--
   Mughal Peacock sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -138,6 +139,7 @@
   </svg>
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+<!--rg-groups 0-71 90-->
   <div class="gate">
   <!-- ===== SKYLINE: dome, chhatris, parapet ===== -->
   <div style="position: relative; z-index: 1; height: 128px; margin-bottom: -2px">
@@ -230,7 +232,7 @@
       </div>
       <div style="background: linear-gradient(115deg, rgba(120,110,95,0) 40%, var(--vein) 42%, rgba(120,110,95,0) 45%), var(--panel); border: 1.6px solid var(--gold); border-top: none; padding: 2px 8px 14px; display: flex; flex-direction: column; align-items: center">
         <span style="font-family: 'Rozha One', serif; font-size: 90px; line-height: 1; color: var(--ink)" data-clock="0">--:--</span>
-        <span style="font-size: 16px; font-weight: 600; letter-spacing: 0.06em; color: var(--sub); white-space: nowrap" data-date>&nbsp;</span>
+        <span style="font-size: 16px; font-weight: 600; letter-spacing: 0.06em; color: var(--sub); white-space: nowrap" data-date="1 2 3 90">&nbsp;</span>
       </div>
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 6px 0">
         <svg aria-hidden="true" width="24" height="100" viewBox="-12 -16 24 100"><g transform="translate(0 0)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g transform="translate(0 34)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g transform="translate(0 68)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g></svg>
@@ -460,7 +462,7 @@
         <span data-need="65" style="font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--sub)">DOWN <span style="font-family: 'Rozha One', serif; font-size: 23px; letter-spacing: 0; color: #1F5FAE" data-num="65" data-places="1">--</span> <span style="letter-spacing: 0.05em" data-unit="66" data-default="MB/s">MB/s</span></span>
         <span data-need="69" style="font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--sub)">UP <span style="font-family: 'Rozha One', serif; font-size: 23px; letter-spacing: 0; color: #1E8A6A" data-num="69" data-places="1">--</span> <span style="letter-spacing: 0.05em" data-unit="70" data-default="MB/s">MB/s</span></span>
       </div>
-      <svg data-chart role="img" aria-label="Network traffic over the last minute" width="364" height="100" viewBox="0 0 364 100">
+      <svg data-chart data-down="65" data-up="69" role="img" aria-label="Network traffic over the last minute" width="364" height="100" viewBox="0 0 364 100">
         <rect x="1" y="1" width="362" height="98" fill="none" stroke="#C9A23E" stroke-width="1.3" stroke-dasharray="4 3" stroke-linecap="round"></rect>
         <path data-area d="" fill="#1F5FAE" opacity="0.12"></path>
         <path data-line="down" d="" fill="none" stroke="#1F5FAE" stroke-width="2.4" stroke-dasharray="6 4" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -469,6 +471,7 @@
       <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; letter-spacing: 0.2em; color: var(--sub)"><span>A MINUTE AGO</span><span>NOW</span></div>
     </div>
   </section>
+<!--/rg-groups-->
   </div>
   <!-- ===== FOOTER: facing peacocks ===== -->
   <footer style="position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 4px">
@@ -500,6 +503,189 @@
   </footer>
 </div>
 
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): one group style and the pieces the groups
+     are built from, cut from the panels above. -->
+<template data-rg-group="arch" data-rg-label="Arched panel">
+  <section data-section style="position: relative; z-index: 1; background: var(--frame); padding: 7px; box-shadow: 0 6px 14px rgba(0,0,0,0.45), inset 0 0 0 1.5px var(--gold)">
+    <div aria-hidden="true" style="position: absolute; top: 3px; left: 3px; right: 3px; bottom: 3px; border: 1px dotted var(--gold); pointer-events: none"></div>
+    <div style="position: relative; height: 56px">
+      <svg aria-hidden="true" width="406" height="56" viewBox="0 0 406 56" style="position: absolute; top: 0; left: 0"><path d="M1 56 V34.7 A18.2 18.2 0 0 1 29.1 25.8 A19.4 19.4 0 0 1 59.4 18.3 A20.5 20.5 0 0 1 91.9 12.2 A21.8 21.8 0 0 1 126.7 7.4 A23.1 23.1 0 0 1 163.7 4.0 A24.4 24.4 0 0 1 203.0 2.0 A24.4 24.4 0 0 1 242.3 4.0 A23.1 23.1 0 0 1 279.3 7.4 A21.8 21.8 0 0 1 314.1 12.2 A20.5 20.5 0 0 1 346.6 18.3 A19.4 19.4 0 0 1 376.9 25.8 A18.2 18.2 0 0 1 405.0 34.7 V56 Z" fill="#F6EEDC" stroke="#C9A23E" stroke-width="1.6"></path><path d="M7 56 V34.7 A17.4 17.4 0 0 1 34.2 27.7 A18.6 18.6 0 0 1 63.6 21.7 A19.8 19.8 0 0 1 95.2 16.7 A21.1 21.1 0 0 1 129.0 12.7 A22.4 22.4 0 0 1 164.9 9.9 A23.7 23.7 0 0 1 203.0 8.0 A23.7 23.7 0 0 1 241.1 9.9 A22.4 22.4 0 0 1 277.0 12.7 A21.1 21.1 0 0 1 310.8 16.7 A19.8 19.8 0 0 1 342.4 21.7 A18.6 18.6 0 0 1 371.8 27.7 A17.4 17.4 0 0 1 399.0 34.7 V56" fill="none" stroke="#1E2A2E" stroke-width="0.7" opacity="0.4"></path><g transform="translate(24 17) rotate(-40) scale(0.85)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g transform="translate(382 17) rotate(40) scale(0.85)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g></svg>
+      <h2 style="position: absolute; left: 0; right: 0; bottom: 4px; margin: 0; text-align: center; font-family: 'Rozha One', serif; font-weight: 400; font-size: 23px; line-height: 1; color: #1F5FAE">{{title}}</h2>
+    </div>
+    <div class="mg-panel" style="background: linear-gradient(115deg, rgba(120,110,95,0) 40%, var(--vein) 42%, rgba(120,110,95,0) 45%), var(--panel); border: 1.6px solid var(--gold); border-top: none; padding: 4px 16px 14px; display: flex; align-items: center; gap: 12px"><!--rg-items--></div>
+  </section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Gateway clock" data-rg-size="large" data-rg-sources="clock" data-rg-width="430" data-rg-height="330">
+  <div class="mg-gate" data-need="{{time}}">
+  <div class="gate">
+  <!-- ===== SKYLINE: dome, chhatris, parapet ===== -->
+  <div style="position: relative; z-index: 1; height: 128px; margin-bottom: -2px">
+    <svg aria-hidden="true" width="420" height="128" viewBox="0 0 420 128" style="position: absolute; top: 0; left: 0; overflow: visible">
+      <!-- parapet with kangura merlons -->
+      <rect x="0" y="100" width="420" height="28" fill="#0D3A47" stroke="#C9A23E" stroke-width="1.2"></rect>
+      <path d="M0 100 V94 C0 90 3 88 7 86 C11 88 14 90 14 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M14 100 V94 C14 90 17 88 21 86 C25 88 28 90 28 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M28 100 V94 C28 90 31 88 35 86 C39 88 42 90 42 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M42 100 V94 C42 90 45 88 49 86 C53 88 56 90 56 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M56 100 V94 C56 90 59 88 63 86 C67 88 70 90 70 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M70 100 V94 C70 90 73 88 77 86 C81 88 84 90 84 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M84 100 V94 C84 90 87 88 91 86 C95 88 98 90 98 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M98 100 V94 C98 90 101 88 105 86 C109 88 112 90 112 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M112 100 V94 C112 90 115 88 119 86 C123 88 126 90 126 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M126 100 V94 C126 90 129 88 133 86 C137 88 140 90 140 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M140 100 V94 C140 90 143 88 147 86 C151 88 154 90 154 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M266 100 V94 C266 90 269 88 273 86 C277 88 280 90 280 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M280 100 V94 C280 90 283 88 287 86 C291 88 294 90 294 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M294 100 V94 C294 90 297 88 301 86 C305 88 308 90 308 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M308 100 V94 C308 90 311 88 315 86 C319 88 322 90 322 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M322 100 V94 C322 90 325 88 329 86 C333 88 336 90 336 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M336 100 V94 C336 90 339 88 343 86 C347 88 350 90 350 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M350 100 V94 C350 90 353 88 357 86 C361 88 364 90 364 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M364 100 V94 C364 90 367 88 371 86 C375 88 378 90 378 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M378 100 V94 C378 90 381 88 385 86 C389 88 392 90 392 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M392 100 V94 C392 90 395 88 399 86 C403 88 406 90 406 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path><path d="M406 100 V94 C406 90 409 88 413 86 C417 88 420 90 420 94 V100 Z" fill="#0D3A47" stroke="#C9A23E" stroke-width="1"></path>
+      <path d="M12 124 V112 A7 7 0 0 1 26 112 V124 Z" fill="#082A34" stroke="#C9A23E" stroke-width="0.8"></path><path d="M40 124 V112 A7 7 0 0 1 54 112 V124 Z" fill="#082A34" stroke="#C9A23E" stroke-width="0.8"></path><path d="M110 124 V112 A7 7 0 0 1 124 112 V124 Z" fill="#082A34" stroke="#C9A23E" stroke-width="0.8"></path><path d="M290 124 V112 A7 7 0 0 1 304 112 V124 Z" fill="#082A34" stroke="#C9A23E" stroke-width="0.8"></path><path d="M360 124 V112 A7 7 0 0 1 374 112 V124 Z" fill="#082A34" stroke="#C9A23E" stroke-width="0.8"></path><path d="M388 124 V112 A7 7 0 0 1 402 112 V124 Z" fill="#082A34" stroke="#C9A23E" stroke-width="0.8"></path>
+      <!-- chhatris -->
+        <g transform="translate(70 0)">
+          <rect x="-28" y="66" width="56" height="5" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></rect>
+          <rect x="-22" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <rect x="-8" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <rect x="4" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <rect x="18" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <path d="M-18 71 A6 6 0 0 1 -8 71 M4 71 A6 6 0 0 1 14 71" fill="none" stroke="#C9A23E" stroke-width="0.8"></path>
+          <path d="M0 30 C0 36 -22 44 -22 58 C-22 63 -18 66 -15 66 H15 C18 66 22 63 22 58 C22 44 0 36 0 30 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="1"></path>
+          <path d="M0 30 V18" stroke="#C9A23E" stroke-width="1.4"></path>
+          <circle cx="0" cy="23" r="2.2" fill="#C9A23E"></circle>
+          <circle cx="0" cy="16" r="1.5" fill="#C9A23E"></circle>
+        </g>
+        <g transform="translate(350 0)">
+          <rect x="-28" y="66" width="56" height="5" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></rect>
+          <rect x="-22" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <rect x="-8" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <rect x="4" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <rect x="18" y="71" width="4" height="29" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.6"></rect>
+          <path d="M-18 71 A6 6 0 0 1 -8 71 M4 71 A6 6 0 0 1 14 71" fill="none" stroke="#C9A23E" stroke-width="0.8"></path>
+          <path d="M0 30 C0 36 -22 44 -22 58 C-22 63 -18 66 -15 66 H15 C18 66 22 63 22 58 C22 44 0 36 0 30 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="1"></path>
+          <path d="M0 30 V18" stroke="#C9A23E" stroke-width="1.4"></path>
+          <circle cx="0" cy="23" r="2.2" fill="#C9A23E"></circle>
+          <circle cx="0" cy="16" r="1.5" fill="#C9A23E"></circle>
+        </g>
+      <!-- main drum and dome -->
+      <rect x="160" y="80" width="100" height="20" fill="#F4EBD8" stroke="#C9A23E" stroke-width="1"></rect>
+      <path d="M172 100 V90 A6 6 0 0 1 184 90 V100 M204 100 V90 A6 6 0 0 1 216 90 V100 M236 100 V90 A6 6 0 0 1 248 90 V100" fill="#082A34" stroke="#C9A23E" stroke-width="0.8"></path>
+      <path d="M210 8 C210 20 156 36 154 66 C153 76 162 80 168 80 H252 C258 80 267 76 266 66 C264 36 210 20 210 8 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="1.4"></path>
+      <path d="M210 8 C200 30 192 50 192 80 M210 8 C220 30 228 50 228 80 M210 8 V80" fill="none" stroke="#C9A23E" stroke-width="0.6" opacity="0.7"></path>
+      <path d="M160 80 C160 72 166 70 166.25 70 C166.5 70 172.5 72 172.5 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M172.5 80 C172.5 72 178.5 70 178.75 70 C179 70 185 72 185 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M185 80 C185 72 191 70 191.25 70 C191.5 70 197.5 72 197.5 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M197.5 80 C197.5 72 203.5 70 203.75 70 C204 70 210 72 210 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M210 80 C210 72 216 70 216.25 70 C216.5 70 222.5 72 222.5 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M222.5 80 C222.5 72 228.5 70 228.75 70 C229 70 235 72 235 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M235 80 C235 72 241 70 241.25 70 C241.5 70 247.5 72 247.5 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M247.5 80 C247.5 72 253.5 70 253.75 70 C254 70 260 72 260 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path><path d="M260 80 C260 72 266 70 266.25 70 C266.5 70 272.5 72 272.5 80 Z" fill="#F4EBD8" stroke="#C9A23E" stroke-width="0.8"></path>
+      <path d="M210 8 V-12" stroke="#C9A23E" stroke-width="1.8"></path>
+      <circle cx="210" cy="-1" r="3.4" fill="#C9A23E"></circle>
+      <circle cx="210" cy="-8" r="2.4" fill="#C9A23E"></circle>
+      <path d="M208 -12 L210 -18 L212 -12 Z" fill="#C9A23E"></path>
+    </svg>
+  </div>
+  <!-- ===== HEADER: pishtaq gateway with peacocks ===== -->
+  <section style="position: relative; z-index: 1; background: var(--frame); padding: 7px; box-shadow: 0 6px 14px rgba(0,0,0,0.45), inset 0 0 0 1.5px var(--gold)">
+    <div aria-hidden="true" style="position: absolute; top: 3px; left: 3px; right: 3px; bottom: 3px; border: 1px dotted var(--gold); pointer-events: none"></div>
+    <div style="position: relative; height: 96px">
+      <svg aria-hidden="true" width="406" height="96" viewBox="0 0 406 96" style="position: absolute; top: 0; left: 0">
+        <path d="M70 96 V59.5 A13.2 13.2 0 0 1 85.7 45.2 A12.9 12.9 0 0 1 102.6 33.0 A12.8 12.8 0 0 1 120.5 22.7 A12.8 12.8 0 0 1 139.5 14.5 A13.0 13.0 0 0 1 159.6 8.3 A13.4 13.4 0 0 1 180.7 4.2 A13.9 13.9 0 0 1 203.0 2.0 A13.9 13.9 0 0 1 225.3 4.2 A13.4 13.4 0 0 1 246.4 8.3 A13.0 13.0 0 0 1 266.5 14.5 A12.8 12.8 0 0 1 285.5 22.7 A12.8 12.8 0 0 1 303.4 33.0 A12.9 12.9 0 0 1 320.3 45.2 A13.2 13.2 0 0 1 336.0 59.5 V96 Z" fill="#F6EEDC" stroke="#C9A23E" stroke-width="1.6"></path>
+        <path d="M76 96 V59.5 A12.2 12.2 0 0 1 91.0 46.8 A12.0 12.0 0 0 1 107.1 35.9 A12.0 12.0 0 0 1 124.2 26.8 A12.1 12.1 0 0 1 142.4 19.4 A12.4 12.4 0 0 1 161.5 13.8 A12.8 12.8 0 0 1 181.7 10.0 A13.2 13.2 0 0 1 203.0 8.0 A13.2 13.2 0 0 1 224.3 10.0 A12.8 12.8 0 0 1 244.5 13.8 A12.4 12.4 0 0 1 263.6 19.4 A12.1 12.1 0 0 1 281.8 26.8 A12.0 12.0 0 0 1 298.9 35.9 A12.0 12.0 0 0 1 315.0 46.8 A12.2 12.2 0 0 1 330.0 59.5 V96" fill="none" stroke="#1E2A2E" stroke-width="0.7" opacity="0.4"></path>
+          <g transform="translate(28 36) scale(0.66)">
+            <path d="M24 22 C10 18 -10 22 -36 36 C-14 36 8 35 26 30 Z" fill="#1E8A6A" stroke="#C9A23E" stroke-width="0.8"></path>
+            <g transform="translate(-26 32) rotate(-80) scale(0.42)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g>
+            <g transform="translate(-12 29) rotate(-80) scale(0.42)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g>
+            <g transform="translate(3 27) rotate(-80) scale(0.42)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g>
+            <path d="M30 31 C21 31 17 25 21 19 C25 14 34 14 38 18 C41 21 40 27 36 30 Z" fill="#1F5FAE" stroke="#C9A23E" stroke-width="0.8"></path>
+            <path d="M34 22 C38 16 41 9 43 4 C44 1 48 1 49 3 L54 4.5 L49 6 C47 8 45 13 41 23 Z" fill="#1F5FAE" stroke="#C9A23E" stroke-width="0.8"></path>
+            <circle cx="46.5" cy="3.4" r="0.9" fill="#FFFFFF"></circle>
+            <path d="M45 1.5 L43 -5 M46.5 1 L46.5 -6 M48 1.5 L50 -5" stroke="#C9A23E" stroke-width="0.7"></path>
+            <circle cx="43" cy="-5.5" r="1.2" fill="#1FA0B0"></circle>
+            <circle cx="46.5" cy="-6.5" r="1.2" fill="#1FA0B0"></circle>
+            <circle cx="50" cy="-5.5" r="1.2" fill="#1FA0B0"></circle>
+            <path d="M28 31 L26 40 M33 31 L34 40" stroke="#C9A23E" stroke-width="1"></path>
+          </g>
+          <g transform="translate(378 36) scale(-0.66 0.66)">
+            <path d="M24 22 C10 18 -10 22 -36 36 C-14 36 8 35 26 30 Z" fill="#1E8A6A" stroke="#C9A23E" stroke-width="0.8"></path>
+            <g transform="translate(-26 32) rotate(-80) scale(0.42)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g>
+            <g transform="translate(-12 29) rotate(-80) scale(0.42)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g>
+            <g transform="translate(3 27) rotate(-80) scale(0.42)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g>
+            <path d="M30 31 C21 31 17 25 21 19 C25 14 34 14 38 18 C41 21 40 27 36 30 Z" fill="#1F5FAE" stroke="#C9A23E" stroke-width="0.8"></path>
+            <path d="M34 22 C38 16 41 9 43 4 C44 1 48 1 49 3 L54 4.5 L49 6 C47 8 45 13 41 23 Z" fill="#1F5FAE" stroke="#C9A23E" stroke-width="0.8"></path>
+            <circle cx="46.5" cy="3.4" r="0.9" fill="#FFFFFF"></circle>
+            <path d="M45 1.5 L43 -5 M46.5 1 L46.5 -6 M48 1.5 L50 -5" stroke="#C9A23E" stroke-width="0.7"></path>
+            <circle cx="43" cy="-5.5" r="1.2" fill="#1FA0B0"></circle>
+            <circle cx="46.5" cy="-6.5" r="1.2" fill="#1FA0B0"></circle>
+            <circle cx="50" cy="-5.5" r="1.2" fill="#1FA0B0"></circle>
+            <path d="M28 31 L26 40 M33 31 L34 40" stroke="#C9A23E" stroke-width="1"></path>
+          </g>
+        <path d="M203 6 C199 0 201 -6 203 -9 C205 -6 207 0 203 6 Z" fill="#C9A23E"></path>
+      </svg>
+      <div style="position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center">
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.34em; padding-left: 0.34em; color: #1F5FAE; white-space: nowrap">SYSTEM SENSORS</span>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 70px">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 6px 0">
+        <svg aria-hidden="true" width="24" height="100" viewBox="-12 -16 24 100"><g transform="translate(0 0)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g transform="translate(0 34)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g transform="translate(0 68)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g></svg>
+      </div>
+      <div style="background: linear-gradient(115deg, rgba(120,110,95,0) 40%, var(--vein) 42%, rgba(120,110,95,0) 45%), var(--panel); border: 1.6px solid var(--gold); border-top: none; padding: 2px 8px 14px; display: flex; flex-direction: column; align-items: center">
+        <span style="font-family: 'Rozha One', serif; font-size: 90px; line-height: 1; color: var(--ink)" data-clock="{{time}}">--:--</span>
+        <span style="font-size: 16px; font-weight: 600; letter-spacing: 0.06em; color: var(--sub); white-space: nowrap" data-date="{{day_name}} {{day:.0}} {{month_name}} {{year}}">&nbsp;</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 6px 0">
+        <svg aria-hidden="true" width="24" height="100" viewBox="-12 -16 24 100"><g transform="translate(0 0)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g transform="translate(0 34)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g transform="translate(0 68)" style="animation: mg-shimmer 3.2s ease-in-out infinite"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g></svg>
+      </div>
+    </div>
+  </section>
+  </div>
+  </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Peacock tail" data-rg-size="large" data-rg-width="190" data-rg-height="184">
+      <div data-need="{{value}}" style="display: flex; flex-direction: column; align-items: center; flex: none">
+        <div style="position: relative; width: 190px; height: 160px">
+          <svg data-gauge="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" role="img" aria-label="Package temperature gauge" width="190" height="160" viewBox="0 0 200 168" style="position: absolute; top: 0; left: 0">
+            <path d="M48 146 A52 52 0 0 1 152 146" fill="none" stroke="#C9A23E" stroke-width="1"></path>
+            <line x1="46.8" y1="136.6" x2="25.2" y2="132.8" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="49.3" y1="127.5" x2="28.6" y2="120.0" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="53.2" y1="119.0" x2="34.2" y2="108.0" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="58.6" y1="111.3" x2="41.8" y2="97.1" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="65.3" y1="104.6" x2="51.1" y2="87.8" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="73.0" y1="99.2" x2="62.0" y2="80.2" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="81.5" y1="95.3" x2="74.0" y2="74.6" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="90.6" y1="92.8" x2="86.8" y2="71.2" stroke="#C9A23E" stroke-width="1" opacity="0.9"></line><line x1="100.0" y1="92.0" x2="100.0" y2="70.0" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="109.4" y1="92.8" x2="113.2" y2="71.2" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="118.5" y1="95.3" x2="126.0" y2="74.6" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="127.0" y1="99.2" x2="138.0" y2="80.2" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="134.7" y1="104.6" x2="148.9" y2="87.8" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="141.4" y1="111.3" x2="158.2" y2="97.1" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="146.8" y1="119.0" x2="165.8" y2="108.0" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="150.7" y1="127.5" x2="171.4" y2="120.0" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line><line x1="153.2" y1="136.6" x2="174.8" y2="132.8" stroke="#C9A23E" stroke-width="1" opacity="0.25"></line>
+            <g class="feather" transform="translate(15.3 131.1) rotate(280.0) scale(0.82)" style="--d: 2.40s; --o: 0.00s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(19.2 116.6) rotate(290.0) scale(0.82)" style="--d: 2.77s; --o: 0.13s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(25.5 103.0) rotate(300.0) scale(0.82)" style="--d: 3.14s; --o: 0.26s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(34.1 90.7) rotate(310.0) scale(0.82)" style="--d: 3.51s; --o: 0.39s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(44.7 80.1) rotate(320.0) scale(0.82)" style="--d: 3.88s; --o: 0.52s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(57.0 71.5) rotate(330.0) scale(0.82)" style="--d: 2.40s; --o: 0.65s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(70.6 65.2) rotate(340.0) scale(0.82)" style="--d: 2.77s; --o: 0.78s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(85.1 61.3) rotate(350.0) scale(0.82)" style="--d: 3.14s; --o: 0.91s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(100.0 60.0) rotate(360.0) scale(0.82)" style="--d: 3.51s; --o: 1.04s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(114.9 61.3) rotate(370.0) scale(0.82)" style="--d: 3.88s; --o: 1.17s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(129.4 65.2) rotate(380.0) scale(0.82)" style="--d: 2.40s; --o: 1.30s"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(143.0 71.5) rotate(390.0) scale(0.82)" style="--d: 2.77s; --o: 1.43s"><ellipse rx="9" ry="12" fill="#D98A1E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(155.3 80.1) rotate(400.0) scale(0.82)" style="--d: 3.14s; --o: 1.56s"><ellipse rx="9" ry="12" fill="#D98A1E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(165.9 90.7) rotate(410.0) scale(0.82)" style="--d: 3.51s; --o: 1.69s"><ellipse rx="9" ry="12" fill="#C0392B"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(174.5 103.0) rotate(420.0) scale(0.82)" style="--d: 3.88s; --o: 1.82s"><ellipse rx="9" ry="12" fill="#C0392B"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(180.8 116.6) rotate(430.0) scale(0.82)" style="--d: 2.40s; --o: 1.95s"><ellipse rx="9" ry="12" fill="#C0392B"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g><g class="feather" transform="translate(184.7 131.1) rotate(440.0) scale(0.82)" style="--d: 2.77s; --o: 2.08s"><ellipse rx="9" ry="12" fill="#C0392B"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse><ellipse cy="2.3" rx="1.7" ry="2.5" fill="#0A1A3A"></ellipse></g>
+            <text x="22" y="164" text-anchor="middle" font-family="Mukta, sans-serif" font-weight="600" font-size="11" fill="#4F6168">20</text>
+            <text x="178" y="164" text-anchor="middle" font-family="Mukta, sans-serif" font-weight="600" font-size="11" fill="#4F6168">100</text>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 86px; display: flex; flex-direction: column; align-items: center">
+            <span style="font-family: 'Rozha One', serif; font-size: 44px; line-height: 0.9; color: var(--ink)"><span data-num="{{value}}" data-unit-of="{{unit}}" data-places="1">--</span></span>
+            <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: var(--sub)" data-cap="{{caption}}" data-default="" class="mg-cut"></span>
+          </div>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: #1E8A6A" data-state="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}">COMFORTABLE</span>
+      </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Lozenge chain" data-rg-size="small" data-rg-width="180" data-rg-height="56">
+          <div data-need="{{value}}" style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.22em; color: var(--sub)" data-cap="{{caption}}" data-default="" class="mg-cut"></span>
+            <span style="font-family: 'Rozha One', serif; font-size: 28px; line-height: 1; color: var(--ink)"><span data-num="{{value}}" data-unit-of="{{unit}}" data-places="0">--</span><span style="font-family: Mukta, sans-serif; font-size: 13px; font-weight: 600; color: #1F5FAE"> <span data-unit="{{unit}}" data-default="%">%</span></span></span>
+            <div data-chain="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-count="12" style="display: flex; gap: 3px; align-items: center; height: 10px">
+            </div>
+          </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Lozenge chain" data-rg-size="large" data-rg-width="380" data-rg-height="56">
+          <div data-need="{{value}}" style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.22em; color: var(--sub)" data-cap="{{caption}}" data-default="" class="mg-cut"></span>
+            <span style="font-family: 'Rozha One', serif; font-size: 28px; line-height: 1; color: var(--ink)"><span data-num="{{value}}" data-unit-of="{{unit}}" data-places="0">--</span><span style="font-family: Mukta, sans-serif; font-size: 13px; font-weight: 600; color: #1F5FAE"> <span data-unit="{{unit}}" data-default="%">%</span></span></span>
+            <div data-chain="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-count="12" style="display: flex; gap: 3px; align-items: center; height: 10px">
+            </div>
+          </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Fan rosette" data-rg-size="small" data-rg-sources="fan" data-rg-width="190" data-rg-height="60">
+        <div data-need="{{value}}" style="display: flex; align-items: center; gap: 10px">
+          <svg aria-hidden="true" width="36" height="36" viewBox="-18 -18 36 36" style="flex: none">
+            <circle r="17" fill="none" stroke="#C9A23E" stroke-width="1"></circle>
+            <g data-rotor="{{value}}">
+              <g transform="rotate(0) translate(0 -9) scale(0.55)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g><g transform="rotate(60) translate(0 -9) scale(0.55)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g><g transform="rotate(120) translate(0 -9) scale(0.55)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g><g transform="rotate(180) translate(0 -9) scale(0.55)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g><g transform="rotate(240) translate(0 -9) scale(0.55)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g><g transform="rotate(300) translate(0 -9) scale(0.55)"><ellipse rx="9" ry="12" fill="#C9A23E"></ellipse><ellipse cy="1" rx="7" ry="9.6" fill="#1E8A6A"></ellipse><ellipse cy="1.5" rx="5" ry="7" fill="#1FA0B0"></ellipse><ellipse cy="2" rx="3.3" ry="4.6" fill="#1F5FAE"></ellipse></g>
+            </g>
+            <circle r="3" fill="#C9A23E"></circle>
+          </svg>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+            <div style="display: flex; align-items: baseline; justify-content: space-between">
+              <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--sub)" data-cap="{{caption}}" data-default="FAN">FAN</span>
+              <span style="white-space: nowrap; flex: none; font-family: 'Rozha One', serif; font-size: 23px; line-height: 1; color: var(--ink)"><span data-num="{{value}}" data-places="0">--</span><span style="font-family: Mukta, sans-serif; font-size: 12px; font-weight: 600; color: #1F5FAE"> rpm</span></span>
+            </div>
+            <div data-chain="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="--fan-max" data-count="26" style="display: flex; gap: 3px; align-items: center; height: 10px">
+            </div>
+          </div>
+        </div>
+</template>
+<template data-rg-widget="pool" data-rg-label="Inlaid bar" data-rg-size="large" data-rg-default-for="memory disk" data-rg-width="380" data-rg-height="52">
+        <div data-need="{{value}}" style="display: flex; flex-direction: column; gap: 4px">
+          <div style="display: flex; align-items: baseline; justify-content: space-between">
+            <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--sub)" data-cap="{{caption}}" data-default="SYSTEM RAM">SYSTEM RAM</span>
+            <span style="white-space: nowrap; flex: none; font-family: 'Rozha One', serif; font-size: 21px; line-height: 1; color: var(--ink)"><span data-num="{{value}}" data-places="1">--</span><span style="font-family: Mukta, sans-serif; font-size: 13px; font-weight: 600; color: var(--sub)"> of <span data-num="{{max}}" data-places="0" data-plain>--</span> <span data-unit="{{unit}}" data-default="GB">GB</span></span></span>
+          </div>
+          <div style="position: relative; height: 14px; border: 1.2px solid var(--gold); background: rgba(30,42,46,0.05)">
+            <div data-fill="{{value}}" data-max="{{max}}" style="position: absolute; top: 2px; bottom: 2px; left: 2px; width: 0px; background-color: #1F5FAE; background-image: linear-gradient(90deg, #1F5FAE, #1FA0B0), repeating-linear-gradient(45deg, rgba(255,240,200,0.3) 0px, rgba(255,240,200,0.3) 1.5px, transparent 1.5px, transparent 7px); background-blend-mode: normal"></div>
+            <div data-fill="{{value}}" data-max="{{max}}" style="position: absolute; top: 2px; bottom: 2px; left: 2px; width: 0px; background-image: repeating-linear-gradient(45deg, rgba(255,240,200,0.3) 0px, rgba(255,240,200,0.3) 1.5px, transparent 1.5px, transparent 7px), repeating-linear-gradient(-45deg, rgba(255,240,200,0.3) 0px, rgba(255,240,200,0.3) 1.5px, transparent 1.5px, transparent 7px)"></div>
+          </div>
+        </div>
+</template>
 <script type="application/json" id="rg-template-options">
 [
     {"id": "palette", "label": "Palette", "type": "choice", "default": "peacock", "choices": [{"value": "peacock", "label": "Peacock", "set": {"--wall-1": "#12586A", "--wall-2": "#0B3A4A", "--wall-3": "#062430", "--jali": "rgba(110,210,220,0.16)", "--frame": "#0D3A47", "--deep": "#082A34", "--panel": "#F6EEDC", "--vein": "rgba(120,110,95,0.06)", "--ink": "#1E2A2E", "--sub": "#4F6168", "--gold": "#C9A23E", "--foot": "#F4EBD8"}}, {"value": "sandstone", "label": "Red Sandstone", "set": {"--wall-1": "#9A4436", "--wall-2": "#7A2E22", "--wall-3": "#5A1E16", "--jali": "rgba(255,210,180,0.16)", "--frame": "#8E3A2C", "--deep": "#6A2A20", "--panel": "#F6EEDC", "--vein": "rgba(120,110,95,0.06)", "--ink": "#2A1E1A", "--sub": "#6E5248", "--gold": "#D9B455", "--foot": "#F4EBD8"}}, {"value": "marble", "label": "White Marble", "set": {"--wall-1": "#F3EEE3", "--wall-2": "#E6DECD", "--wall-3": "#D4C9B2", "--jali": "rgba(140,120,90,0.22)", "--frame": "#EFE7D5", "--deep": "#D8CDB5", "--panel": "#FBF8F1", "--vein": "rgba(120,110,95,0)", "--ink": "#1E2A2E", "--sub": "#5A6468", "--gold": "#B8862B", "--foot": "#1E2A2E"}}]},
@@ -685,18 +871,21 @@
     var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
 
     // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
-    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
-    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
+    each('[data-clock]', function (el) {
+      var hm = /(\d{1,2}):(\d{2})/.exec(known(v[el.getAttribute('data-clock')]) ? String(v[el.getAttribute('data-clock')]) : '');
+      text(el, hm ? hm[1] + ':' + hm[2] : '--:--');
+    });
     each('[data-date]', function (el) {    // Friday · 13 November 2026
-      var day = num(v['2']), year = num(v['90']);
-      var rest = [isFinite(day) ? String(Math.round(day)) : '', known(v['3']) ? String(v['3']) : '',
+      var ids = el.getAttribute('data-date').split(' ');   // day name, day, month, year
+      var day = num(v[ids[1]]), year = num(v[ids[3]]);
+      var rest = [isFinite(day) ? String(Math.round(day)) : '', known(v[ids[2]]) ? String(v[ids[2]]) : '',
                   isFinite(year) ? String(Math.round(year)) : ''].filter(Boolean).join(' ');
-      text(el, [known(v['1']) ? String(v['1']) : '', rest].filter(Boolean).join(' · ') || ' ');
+      text(el, [known(v[ids[0]]) ? String(v[ids[0]]) : '', rest].filter(Boolean).join(' · ') || ' ');
     });
 
     each('[data-num]', function (el) {
       var id = el.getAttribute('data-num'), n = num(v[id]);
-      if (inGhz(el, v, +id + 1)) n /= 1000;
+      if (inGhz(el, v, el.getAttribute('data-unit-of') || String(+id + 1))) n /= 1000;
       var shown = fmt(n, +el.getAttribute('data-places'));
       text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
     });
@@ -727,16 +916,30 @@
     });
 
     // Gauges: the tail's feathers are lit up to the reading.
+    // A generated gauge (it has data-max) reads 0 to its sensor's maximum,
+    // warm and very hot at the same shares as 72 and 85 of 20-100 degrees.
+    function shareOf(el, id) {
+      var t = num(v[id]);
+      if (!el.hasAttribute('data-max')) return isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : NaN;
+      var max = num(v[el.getAttribute('data-max')]);
+      if (/^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { t /= 1000; max /= 1000; }
+      return isFinite(t) ? clamp01(t / (max > 0 ? max : 100)) : NaN;
+    }
     each('[data-gauge]', function (el) {
-      var t = num(v[el.getAttribute('data-gauge')]);
+      var f = shareOf(el, el.getAttribute('data-gauge'));
+      if (el.hasAttribute('data-max')) {
+        var ends = el.querySelectorAll('text'), max = num(v[el.getAttribute('data-max')]);
+        if (ends.length === 2) { text(ends[0], '0'); text(ends[1], fmt(max > 0 ? max : 100, 1)); }
+      }
       var feathers = el.querySelectorAll('.feather');
-      var lit = isFinite(t) ? Math.round(clamp01((t - T_MIN) / (T_MAX - T_MIN)) * feathers.length) : 0;
+      var lit = isFinite(f) ? Math.round(f * feathers.length) : 0;
       if (el.getAttribute('data-lit') === String(lit)) return;
       el.setAttribute('data-lit', String(lit));
       for (var i = 0; i < feathers.length; i++) flag(feathers[i], 'lit', i < lit);
     });
     each('[data-state]', function (el) {
       var t = num(v[el.getAttribute('data-state')]);
+      if (el.hasAttribute('data-max')) { var f = shareOf(el, el.getAttribute('data-state')); t = isFinite(f) ? T_MIN + f * (T_MAX - T_MIN) : NaN; }
       text(el, t >= HOT ? 'VERY HOT' : t >= WARM ? 'WARM' : 'COMFORTABLE');
       flag(el, 'hot', t >= HOT);
       flag(el, 'warm', t >= WARM && t < HOT);
@@ -763,11 +966,15 @@
       style(el, 'width', f > 0 ? 'calc(' + (f * 100).toFixed(1) + '% - 4px)' : '0px');
     });
 
-    latest.down = num(v['65']); latest.up = num(v['69']);
+    // The chart names its sensors; without one (a custom layout) nothing is sampled.
+    var chart = document.querySelector('[data-chart]');
+    latest.down = chart ? num(v[chart.getAttribute('data-down')]) : NaN;
+    latest.up = chart ? num(v[chart.getAttribute('data-up')]) : NaN;
 
     // Hide what has no data. With nothing bound at all, show the whole design.
     each('[data-need]', function (el) {
-      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+      var raw = v[el.getAttribute('data-need')];
+      hide(el, anyMapped && !isFinite(num(raw)) && !known(raw));
     });
     each('[data-section]', function (el) {
       hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);

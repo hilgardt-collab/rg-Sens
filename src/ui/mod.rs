@@ -49,6 +49,7 @@ pub mod context_menu;
 #[cfg(feature = "webkit")]
 mod css_template_config_widget; // Config widget only when webkit is available
 pub mod css_template_display; // Config types always available for serialization
+pub mod css_template_layout; // Custom layouts: groups and widgets built from prototypes
 pub mod editor_registry;
 mod global_theme_widget;
 pub mod new_panel_dialog;

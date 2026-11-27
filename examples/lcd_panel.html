@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1660 960x1030 1440x780 2880x500">
+<meta name="rg-group-size" content="480x240+220">
 <title>LCD Sensor Panel</title>
 <!--
   LCD sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait:
@@ -95,6 +96,7 @@
 
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+<!--rg-groups 0-71 74-91-->
   <section data-need="0">
     <div class="ch"><span>TIME</span><i></i><span>CH 00</span></div>
     <div class="bezel"><div class="lcd clock">
@@ -104,7 +106,7 @@
       </div>
       <div>
         <div class="ind days fx" data-days="1"><span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span><span>SU</span></div>
-        <div class="date"><span class="lg">DAY - MON</span><svg class="seg" data-date data-h="32"></svg></div>
+        <div class="date"><span class="lg">DAY - MON</span><svg class="seg" data-date="2 3" data-h="32"></svg></div>
       </div>
     </div></div>
   </section>
@@ -249,12 +251,12 @@
       </div>
       <div class="chart">
         <div><span>IN</span><span>OUT</span></div>
-        <svg class="fx" data-chart aria-hidden="true" width="360" height="146" viewBox="0 0 370 150"></svg>
+        <svg class="fx" data-chart data-down="65" data-up="69" aria-hidden="true" width="360" height="146" viewBox="0 0 370 150"></svg>
       </div>
       <div class="axis"><span>-60S</span><span>-30S</span><span>NOW</span></div>
     </div></div>
   </section>
-
+<!--/rg-groups-->
   </div>
 
   <section data-need="73">
@@ -273,6 +275,78 @@
   </section>
 </div>
 
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): one group style, a channel window, and
+     the readouts the groups are built from, drawn as the windows above. -->
+<template data-rg-group="window" data-rg-label="Channel window">
+  <section data-section><div class="ch"><span>{{title}}</span><i></i><span>CH {{index}}</span></div><div class="bezel"><div class="lcd lc-window"><!--rg-items--></div></div></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock" data-rg-size="large" data-rg-sources="clock" data-rg-width="416" data-rg-height="196">
+  <div class="clock lc-in" data-need="{{time}}">
+    <div>
+      <svg class="seg" data-clock="{{time}}" data-h="110"></svg>
+      <div class="ind fx" data-mode="{{time}}" data-alarm="{{alarm_enabled}}"><span>24H</span><span>AM</span><span>PM</span><span>ALM</span></div>
+    </div>
+    <div>
+      <div class="ind days fx" data-days="{{day_name}}"><span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span><span>SU</span></div>
+      <div class="date"><span class="lg">DAY - MON</span><svg class="seg" data-date="{{day}} {{month_name}}" data-h="32"></svg></div>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="temp" data-rg-label="Big digits" data-rg-size="large" data-rg-width="250" data-rg-height="176">
+  <div class="unit lc-in" data-need="{{value}}">
+    <div class="temp">
+      <span class="lg lc-cut" data-cap="{{caption}}" data-default=""></span>
+      <div>
+        <svg class="seg" data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-h="96" data-digits="3" data-places="0"></svg>
+        <div class="deg fx">
+          <span data-unit="{{unit}}" data-ghz data-default=""></span>
+          <svg class="warn" data-warn="{{value}}" data-max="{{max}}" aria-hidden="true" width="26" height="23" viewBox="0 0 26 23"><polygon points="13,1 25,22 1,22"></polygon><rect x="11.8" y="8" width="2.4" height="7"></rect><rect x="11.8" y="17" width="2.4" height="2.4"></rect></svg>
+        </div>
+      </div>
+    </div>
+    <div class="scale">
+      <div class="cells fx" data-temp="{{value}}" data-max="{{max}}" data-count="20"></div>
+      <div class="marks" data-marks="{{max}}"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Bar readout" data-rg-size="small" data-rg-width="200" data-rg-height="56">
+  <div class="mem lc-in lc-stack" data-need="{{value}}">
+    <span class="name lc-cut" data-cap="{{caption}}" data-default=""></span>
+    <div class="val"><svg class="seg" data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-h="26" data-digits="3" data-places="1"></svg></div>
+    <span class="of" data-unit="{{unit}}" data-ghz data-default=""></span>
+    <div class="cells fx" data-bar="{{value}}" data-max="{{max}}" data-scale="100" data-count="12"></div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Bar readout" data-rg-size="large" data-rg-width="400" data-rg-height="30">
+  <div class="mem lc-in" data-need="{{value}}">
+    <span class="name lc-cut lc-wide" data-cap="{{caption}}" data-default=""></span>
+    <div class="val"><svg class="seg" data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-h="26" data-digits="3" data-places="1"></svg></div>
+    <span class="of" data-unit="{{unit}}" data-ghz data-default=""></span>
+    <div class="cells fx" data-bar="{{value}}" data-max="{{max}}" data-scale="100" data-count="12"></div>
+  </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Fan readout" data-rg-size="small" data-rg-sources="fan" data-rg-width="200" data-rg-height="56">
+  <div class="fan lc-in lc-stack" data-fan="{{value}}" data-need="{{value}}">
+    <svg class="fx" aria-hidden="true" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12.5"></circle><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(0 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(120 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(240 14 14)"></path></g><g><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(60 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(180 14 14)"></path><path d="M14 14 L12 4 Q17 3 18 7 Z" transform="rotate(300 14 14)"></path></g><circle cx="14" cy="14" r="2.2"></circle></svg>
+    <span class="name lc-cut" data-cap="{{caption}}" data-default="FAN">FAN</span>
+    <svg class="seg" data-num="{{value}}" data-h="28" data-digits="4" data-places="0"></svg>
+    <div class="cells fx" data-bar="{{value}}" data-max="{{max}}" data-scale="--fan-max" data-count="12"></div>
+  </div>
+</template>
+<template data-rg-widget="pool" data-rg-label="Memory readout" data-rg-size="large" data-rg-default-for="memory disk" data-rg-width="400" data-rg-height="30">
+  <div class="mem lc-in" data-need="{{value}}">
+    <span class="name lc-cut" data-cap="{{caption}}" data-default="RAM">RAM</span>
+    <div class="val"><svg class="seg" data-num="{{value}}" data-h="26" data-digits="3" data-places="1"></svg></div>
+    <span class="of" data-of="{{max}}" data-unit-of="{{unit}}">&nbsp;</span>
+    <div class="cells fx" data-bar="{{value}}" data-max="{{max}}" data-scale="100" data-count="12"></div>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Readout" data-rg-size="small" data-rg-width="200" data-rg-height="30">
+  <div class="unit lc-in lc-read" data-need="{{value}}"><div class="reads"><div><span class="lg lc-cut" data-cap="{{caption}}" data-default=""></span><div><svg class="seg" data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-h="26" data-digits="3" data-places="1"></svg><span class="u" data-unit="{{unit}}" data-ghz data-default=""></span></div></div></div></div>
+</template>
 <script type="application/json" id="rg-template-options">
 [
     {"id": "backlight", "label": "Backlight", "type": "choice", "var": "--backlight", "default": "green", "choices": [{"value": "green", "label": "Classic Green"}, {"value": "blue", "label": "Blue Backlight"}, {"value": "amber", "label": "Amber"}, {"value": "red", "label": "Night Red"}]},
@@ -596,12 +670,13 @@
 
     // Clock: hours and minutes of the bound time (" 9:24" for "9:24 PM"),
     // 24H / AM / PM from its format, ALM while an alarm is set.
-    var time = known(v['0']) ? String(v['0']) : '';
-    var hm = /(\d{1,2}):(\d{2})/.exec(time);
+    function timeOf(id) { return known(v[id]) ? String(v[id]) : ''; }
     each('[data-clock]', function (el) {
+      var hm = /(\d{1,2}):(\d{2})/.exec(timeOf(el.getAttribute('data-clock')));
       draw(el, hm ? (hm[1].length < 2 ? ' ' : '') + hm[1] + ':' + hm[2] : '--:--');
     });
     each('[data-mode]', function (el) {
+      var time = timeOf(el.getAttribute('data-mode')), hm = /(\d{1,2}):(\d{2})/.exec(time);
       var am = /am/i.test(time), pm = /pm/i.test(time), alarm = String(v[el.getAttribute('data-alarm')]);
       var on = [!!hm && !am && !pm, am, pm, /^(true|1)$/i.test(alarm)];
       for (var i = 0; i < el.children.length; i++) flag(el.children[i], 'on', on[i]);
@@ -611,14 +686,16 @@
       for (var i = 0; i < el.children.length; i++) flag(el.children[i], 'on', el.children[i].textContent === day);
     });
     each('[data-date]', function (el) {   // 13-11
-      var day = num(v['2']), month = MONTHS.indexOf(String(v['3'] || '').slice(0, 3).toLowerCase()) + 1;
+      var ids = el.getAttribute('data-date').split(' ');   // the ids of day and month name
+      var day = num(v[ids[0]]), month = MONTHS.indexOf(String(v[ids[1]] || '').slice(0, 3).toLowerCase()) + 1;
       draw(el, (isFinite(day) ? two(Math.round(day)) : '--') + '-' + (month ? two(month) : '--'));
     });
 
     each('[data-num]', function (el) {
       var id = el.getAttribute('data-num'), n = num(v[id]);
       // a clock in MHz reads in GHz, like the unit printed beside it
-      if (el.hasAttribute('data-ghz') && /mhz/i.test(String(v[+id + 1] || ''))) n /= 1000;
+      var unitId = el.getAttribute('data-unit-of') || String(+id + 1);
+      if (el.hasAttribute('data-ghz') && /mhz/i.test(String(v[unitId] || ''))) n /= 1000;
       draw(el, fit(n, +el.getAttribute('data-digits'), +el.getAttribute('data-places')));
     });
     each('[data-unit]', function (el) {
@@ -636,11 +713,26 @@
     });
 
     // Temperatures: twenty blocks for 20-100 degrees and the warning triangle.
+    // A generated scale (it has data-max) reads 0 to its sensor's maximum
+    // and warns at the same share of it.
+    function share100(el, id) {
+      var t = num(v[id]);
+      if (!el.hasAttribute('data-max')) return isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : NaN;
+      var max = num(v[el.getAttribute('data-max')]);
+      return isFinite(t) ? clamp01(t / (max > 0 ? max : 100)) : NaN;
+    }
     each('[data-temp]', function (el) {
-      var t = num(v[el.getAttribute('data-temp')]);
-      light(el, isFinite(t) ? Math.round(clamp01((t - T_MIN) / (T_MAX - T_MIN)) * el.children.length) : 0);
+      var f = share100(el, el.getAttribute('data-temp'));
+      light(el, isFinite(f) ? Math.round(f * el.children.length) : 0);
     });
-    each('[data-warn]', function (el) { flag(el, 'on', num(v[el.getAttribute('data-warn')]) >= WARN); });
+    each('[data-warn]', function (el) {
+      var id = el.getAttribute('data-warn');
+      flag(el, 'on', el.hasAttribute('data-max') ? share100(el, id) >= (WARN - T_MIN) / (T_MAX - T_MIN) : num(v[id]) >= WARN);
+    });
+    each('[data-marks]', function (el) {    // a generated scale's numbers: 0 to the maximum
+      var max = num(v[el.getAttribute('data-marks')]), full = max > 0 ? max : 100;
+      for (var i = 0; i < el.children.length; i++) text(el.children[i], String(Math.round(full * i / (el.children.length - 1))));
+    });
 
     // Cores: eight cells each, as many columns as the machine has cores.
     var cores = 0;
@@ -678,13 +770,16 @@
       text(el, shown ? '/' + shown + (known(u) ? String(u).toUpperCase() : '') : ' ');
     });
 
-    latest.down = num(v['65']); latest.up = num(v['69']);
+    // The chart names its sensors; without one (a custom layout) nothing is sampled.
+    var chart = document.querySelector('[data-chart]');
+    latest.down = chart ? num(v[chart.getAttribute('data-down')]) : NaN;
+    latest.up = chart ? num(v[chart.getAttribute('data-up')]) : NaN;
 
     // Hide what has no data. With nothing bound at all, show the whole design
     // (eight cores of it).
     each('[data-need]', function (el) {
       var id = el.getAttribute('data-need');
-      var hide = anyMapped ? !(id === '0' ? hm : isFinite(num(v[id]))) : +id >= 82 && +id <= 89;
+      var hide = anyMapped ? !(isFinite(num(v[id])) || /\d:\d\d/.test(String(v[id] || ''))) : +id >= 82 && +id <= 89;
       if (el.hidden !== hide) el.hidden = hide;
     });
     each('[data-section]', function (el) {

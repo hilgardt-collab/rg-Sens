@@ -111,7 +111,7 @@ html, body { margin: 0; background: var(--bg); }
 /* ---- shared bits ---- */
 .label { font-size: 10px; font-weight: 600; letter-spacing: .24em; color: var(--muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--a); box-shadow: 0 0 8px var(--a); animation: nn-pulse 2s ease-in-out infinite; }
-.alt .dot { background: var(--b); box-shadow: 0 0 8px var(--b); }
+.alt .dot, .even .dot { background: var(--b); box-shadow: 0 0 8px var(--b); }
 .spin { transform-box: view-box; }
 .glow-a { filter: drop-shadow(0 0 4px var(--a)); }
 .glow-b { filter: drop-shadow(0 0 4px var(--b)); }
@@ -140,14 +140,14 @@ header { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .card { border-radius: 22px; padding: 1px;
   background: linear-gradient(135deg, var(--a) 0%, rgba(255,255,255,0.08) 32%, rgba(255,255,255,0.04) 68%, var(--b) 100%);
   box-shadow: 0 0 34px color-mix(in srgb, var(--a) 12%, transparent); }
-.card.alt { background: linear-gradient(225deg, var(--b) 0%, rgba(255,255,255,0.08) 32%, rgba(255,255,255,0.04) 68%, var(--a) 100%);
+.card.alt, .card.even { background: linear-gradient(225deg, var(--b) 0%, rgba(255,255,255,0.08) 32%, rgba(255,255,255,0.04) 68%, var(--a) 100%);
   box-shadow: 0 0 34px color-mix(in srgb, var(--b) 12%, transparent); }
 /* The design frosts what is behind a card (backdrop-filter: blur). The fill is
    82-90% opaque, so that is left out: it would re-blur the whole card every
    time the background moves. */
 .card-in { border-radius: 21px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
   background: linear-gradient(160deg, rgba(22,26,44,0.86) 0%, rgba(8,9,16,0.93) 100%); }
-.card.alt .card-in { background: linear-gradient(200deg, rgba(22,26,44,0.86) 0%, rgba(8,9,16,0.93) 100%); }
+.card.alt .card-in, .card.even .card-in { background: linear-gradient(200deg, rgba(22,26,44,0.86) 0%, rgba(8,9,16,0.93) 100%); }
 .card-in.roomy { gap: 12px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; }
 .card-head > div { display: flex; align-items: center; gap: 9px; }
@@ -184,17 +184,17 @@ header { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .stat > div:first-child { display: flex; align-items: baseline; justify-content: space-between; }
 .val { font-size: 20px; font-weight: 500; line-height: 1; color: var(--text); white-space: nowrap; }
 .unit { font-family: "Space Grotesk", sans-serif; font-size: 12px; font-weight: 400; color: var(--a); }
-.alt .unit { color: var(--b); }
+.alt .unit, .even .unit { color: var(--b); }
 .bar { position: relative; height: 4px; border-radius: 2px; background: var(--track); }
 .bar > i { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: 2px;
   background: linear-gradient(90deg, var(--a), var(--b)); box-shadow: 0 0 8px var(--a-60); }
-.alt .bar > i { background: linear-gradient(90deg, var(--b), var(--a)); box-shadow: 0 0 8px var(--b-60); }
+.alt .bar > i, .even .bar > i { background: linear-gradient(90deg, var(--b), var(--a)); box-shadow: 0 0 8px var(--b-60); }
 
 /* ---- graphs ---- */
 .graph { display: flex; flex-direction: column; gap: 4px; }
 .graph-head { display: flex; justify-content: space-between; font-size: 10px; font-weight: 600; letter-spacing: .22em; color: var(--muted); }
 .graph-head b { font-weight: 600; color: var(--a); }
-.alt .graph-head b { color: var(--b); }
+.alt .graph-head b, .even .graph-head b { color: var(--b); }
 .mid { stroke: rgba(255,255,255,0.06); stroke-dasharray: 2 4; }
 .line { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .line.sa { stroke: var(--a); filter: drop-shadow(0 0 4px var(--a)); }
@@ -247,3 +247,18 @@ footer .label { letter-spacing: .32em; padding-left: .32em; }
 .uptime { font-weight: 300; font-size: 22px; line-height: 1;
   background: linear-gradient(90deg, var(--a), #FFFFFF 50%, var(--b));
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A group is a glass card (every second one in the other colour) or
+   a bare header; each widget is scaled to the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > .card:has(.rg-items) { min-height: 0; }
+.card:has(.rg-items) > .card-in { min-height: 0; overflow: hidden; justify-content: flex-start; }
+.card-in > .rg-items { flex: 1; min-height: 0; }
+.groups > header.nn-bare { align-self: stretch; justify-self: stretch; display: flex; flex-direction: column; align-items: stretch; min-height: 0; }
+.card:has(.rg-items) .card-head h2 { text-transform: uppercase; }
+.rg-fit .gauge .temp { font-size: 40px; }
+.nn-bare > .rg-items { flex: 1; min-height: 0; }
+.nn-clock { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.rg-fit > .stat, .rg-fit > .pool, .rg-fit > .fan, .rg-fit > .net { width: 100%; height: 100%; box-sizing: border-box; }
+.nn-cut { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

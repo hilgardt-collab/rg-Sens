@@ -1,0 +1,122 @@
+/* Blue & White Porcelain Sensor Panel: stylesheet for porcelain_panel.html
+   (rg-Sens CSS Template displayer). Wares, fonts, the screen behind and the
+   grid of groups. The painting itself is in the HTML (shared pieces in its
+   defs) and the page's script. Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: Cormorant Garamond (numbers) and Cormorant SC (labels,
+   always in capitals), both SIL Open Font License (OFL.txt in each folder).
+   Keep the fonts folder next to this file; without it the page falls back
+   to system fonts. */
+@font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: normal;
+  src: local("Cormorant Garamond"), url("fonts/cormorant-garamond/CormorantGaramond[wght].ttf") format("truetype"); }
+@font-face { font-family: "Cormorant SC"; font-weight: 500; font-style: normal;
+  src: local("Cormorant SC Medium"), url("fonts/cormorant-sc/CormorantSC-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Cormorant SC"; font-weight: 600; font-style: normal;
+  src: local("Cormorant SC SemiBold"), url("fonts/cormorant-sc/CormorantSC-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Cormorant SC"; font-weight: 700; font-style: normal;
+  src: local("Cormorant SC Bold"), url("fonts/cormorant-sc/CormorantSC-Bold.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Ware: ming, delft or azulejo. */
+  --ware: ming;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Landscape full scales in the network sensors' unit: the mountains
+     (inbound) and the foothills (outbound); 0 follows the peak. */
+  --net-in-max: 16;
+  --net-out-max: 4;
+
+  /* Ming Cobalt */
+  --body: #F1F4F3;
+  --hi: #FFFFFF;
+  --shade: #D3DADA;
+  --edge: #A6AFB0;
+  --edge-dk: #7F888A;
+  --line: #1C3A8A;
+  --wash: #3556A6;
+  --pool: #0C1B55;
+  --hot: #9A2B22;
+  --hot-pool: #5E140F;
+  --rim: #7A5C3E;
+  --grout: #9A968C;
+}
+:root[data-ware="delft"] {
+  --body: #F3EEE1; --hi: #FFFCF3; --shade: #DBD2BE; --edge: #B4A890; --edge-dk: #94886E;
+  --line: #22448C; --wash: #4D6FB4; --pool: #122A62; --hot: #7C3256; --hot-pool: #4A1A33; --rim: #C29A6A; --grout: #A49C8A;
+}
+:root[data-ware="azulejo"] {
+  --body: #F5F3EC; --hi: #FFFFFF; --shade: #D7D9D6; --edge: #A8ACA9; --edge-dk: #868A87;
+  --line: #1A4DA3; --wash: #4C7CC8; --pool: #0B2C6E; --hot: #B07F22; --hot-pool: #6E4A10; --rim: #9A8C78; --grout: #B4AFA4;
+}
+html, body { margin: 0; background: #E4D0A6; }
+[hidden] { display: none !important; }
+
+svg text { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 700; font-variant-numeric: lining-nums tabular-nums; }
+svg text.sc { font-family: "Cormorant SC", Georgia, serif; text-transform: uppercase; }
+.paint { mix-blend-mode: multiply; }
+/* What is painted: cobalt, or the ware's hot accent once a dish runs hot. */
+.c-line { fill: var(--line); }   .s-line { stroke: var(--line); }
+.c-wash { fill: var(--wash); }   .s-wash { stroke: var(--wash); }
+.c-pool { fill: var(--pool); }   .s-pool { stroke: var(--pool); }
+.c-body { fill: var(--body); }   .s-body { stroke: var(--body); }
+.c-ink { fill: #120E0A; }
+.hot .c-wash, .hot .c-line { fill: var(--hot); }
+.hot .s-wash { stroke: var(--hot); }
+.hot .c-pool { fill: var(--hot-pool); }
+.hot .s-pool { stroke: var(--hot-pool); }
+.s-hot { stroke: var(--hot); }
+
+@keyframes pc-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+.pc-pulse { animation: pc-pulse 1.6s ease-in-out infinite; }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns. */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
+  background: #E4D0A6; padding: 14px 16px; display: flex; flex-direction: column; gap: 24px; }
+/* The split-bamboo screen, slats across whatever box the panel has. */
+.screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.light { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
+  background: radial-gradient(ellipse 80% 35% at 45% 14%, rgba(255,250,235,0.35) 0%, rgba(255,250,235,0) 70%),
+    linear-gradient(180deg, rgba(60,40,15,0) 55%, rgba(60,40,15,0.16) 100%),
+    linear-gradient(90deg, rgba(60,40,15,0.2) 0%, rgba(60,40,15,0) 10%, rgba(60,40,15,0) 90%, rgba(60,40,15,0.2) 100%); }
+.strip, .foot { position: relative; flex: none; display: flex; justify-content: center; }
+.strip > svg { width: 100%; height: 64px; overflow: visible; }
+.foot > svg { width: 100%; height: 60px; overflow: visible; }
+.groups { position: relative; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 24px 28px; align-content: stretch; }
+.groups > section { position: relative; min-width: 0; display: flex; flex-direction: column; }
+/* From a zero basis: a drawing's proportions never make a row taller than
+   its design height; a taller cell lets it grow. */
+.groups > section > svg { flex: 1 1 0; width: 100%; height: auto; min-height: 0; overflow: visible; }
+.g-clock { min-height: 384px; }
+.g-temp { min-height: 384px; }
+.g-fans { min-height: 196px; }
+.g-store { min-height: 316px; }
+.g-net { min-height: 330px; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A group is a museum label card over its pieces; each piece is
+   scaled to the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.pc-sec { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.pc-card { flex: none; align-self: flex-start; max-width: 100%; box-sizing: border-box; background: #FCFAF4; color: #120E0A;
+  box-shadow: 0 2px 3px rgba(58,40,16,0.38); border-radius: 1.5px; padding: 0 12px; line-height: 22px;
+  font-family: "Cormorant SC", Georgia, serif; font-weight: 700; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-sec > .rg-items { flex: 1; min-height: 0; }
+.rg-fit > svg { display: block; width: 100%; height: 100%; overflow: visible; }

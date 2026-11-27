@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1010 1440x740 2880x430">
+<!-- custom layouts: the room a group gets, plus the footer -->
+<meta name="rg-group-size" content="480x304+96">
+<title>Nixie Lab Sensor Panel</title>
+<!--
+  Nixie Lab sensor panel for the rg-Sens CSS Template displayer, drawn for
+  480x1920 portrait: a 1960s laboratory instrument rack. Dark steel rails
+  with square cage-nut holes, brushed-metal front panels with knurled screws
+  and engraved lettering, and every number on glowing cold-cathode tubes. A
+  sibling of the other example panels: the same placeholders 0-73 and the
+  same setup.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the fans and the three magic eyes; set them on the sensors.
+
+  Anything left unbound is hidden: a tube, an eye, a whole front panel. The
+  processor's power tube has no rg-Sens source and stays hidden unless you
+  bind a sensor to it by hand on the Bindings tab.
+
+  The tube is one component. <svg data-nixie="ID" data-tubes="2-3"> is filled
+  by the script with as many tubes as the number needs within that range
+  (a temperature over 99 gets a third tube, a network speed over 99.9 a
+  fourth); numbers are padded with zeros and a decimal point is the dot of
+  the tube before it. Each tube is drawn back to front from the definitions
+  at the top of the page: socket and envelope, a halo, the whole stack of
+  ten wire cathodes unlit, the lit cathode in three strokes, the anode mesh
+  and the glass. The cathodes are stroked paths, not font glyphs.
+
+  A pilot lamp is green, amber from 72 degrees ("WARM") and red from 85
+  ("OVER TEMP"). A magic eye's green target shows clockwise from 12 o'clock
+  through the share of its pool that is in use; the rest is shadow. A
+  counting tube has 30 cathodes and its glow steps round them with the fan.
+
+  The scope keeps the last minute (54 samples) in the page: channel 1
+  inbound, bright, with a dot on the newest sample; channel 2 outbound,
+  dimmer; one shared scale. It starts empty and survives a reload of the
+  template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of nixie_panel.css): finish
+  (Brushed Aluminium, Black Anodised, Brushed Steel with an amber scope), how
+  the design fits the panel, the layout, the frame rate, and the full scale
+  of the bar-graph tubes and of the scope.
+
+  Size: the design is drawn for 480x1920, but its six groups (the clock and
+  the five instrument panels) re-arrange to suit the panel: one column of
+  six, two of three, three of two or six side by side (the rg-layouts list
+  gives the size each needs), and the front panels then stretch to the
+  panel's exact shape. Every column is a rack bay with its own two rails.
+  The Layout option fixes the column count; the Fit option can crop,
+  letterbox or distort instead.
+
+  Custom layouts: the templates after the page are the parts for "My own
+  groups and widgets": two front panels (plain, and the console with the
+  model plate), the clock, a large and a medium tube readout with a lamp, a
+  neon bar (lying compact, lying long, or standing as a bar-graph tube), a
+  counting tube for a fan, a magic eye and a small readout.
+
+  The brushed grain is a noise filter, which is costly to redraw; every one
+  carries data-rg-bake, so rg-Sens draws each once into a bitmap.
+
+  Motion: the lit cathodes flicker faintly, the clock's colon blinks, the
+  neon columns and the eyes breathe, the scope's newest sample pulses, the
+  counting tubes step with RPM and an eye eases to a new reading, at
+  --motion-fps frames a second. 0 turns motion off, as do the panel's
+  Animation switch and the system's reduced-motion setting.
+
+  Fonts: IBM Plex Sans Condensed (engraving) and Oswald (small numbers),
+  loaded from the fonts folder next to this file; copy that folder along
+  with the template. Nothing is fetched from the network.
+-->
+
+<link rel="stylesheet" href="nixie_panel.css">
+</head>
+<body>
+<div class="panel">
+  <!-- ===== RACK: one bay of rails per column; shared definitions ===== -->
+  <div class="rack" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <svg aria-hidden="true" width="0" height="0" style="position: absolute; top: 0; left: 0; pointer-events: none">
+    <defs>
+      <filter id="nx-brushL" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.0015 0.85" numOctaves="3" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1.1 0 0 0 -0.5"></feColorMatrix></filter>
+      <filter id="nx-brushD" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.002 1.1" numOctaves="2" seed="9"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.1 0 0 0 -0.55"></feColorMatrix></filter>
+      <filter id="nx-glow" x="-60%" y="-30%" width="220%" height="160%"><feGaussianBlur in="SourceGraphic" stdDeviation="1.4" result="b1"></feGaussianBlur><feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b2"></feGaussianBlur><feMerge><feMergeNode in="b2"></feMergeNode><feMergeNode in="b2"></feMergeNode><feMergeNode in="b1"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+      <!-- the same glow for a lit cathode, over the whole tube: a narrow digit (1) would be clipped by its own box -->
+      <filter id="nx-glowD" filterUnits="userSpaceOnUse" x="-12" y="-10" width="64" height="112"><feGaussianBlur in="SourceGraphic" stdDeviation="1.4" result="b1"></feGaussianBlur><feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b2"></feGaussianBlur><feMerge><feMergeNode in="b2"></feMergeNode><feMergeNode in="b2"></feMergeNode><feMergeNode in="b1"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+      <filter id="nx-glowS" x="-300%" y="-300%" width="700%" height="700%"><feGaussianBlur in="SourceGraphic" stdDeviation="1.4" result="b1"></feGaussianBlur><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b2"></feGaussianBlur><feMerge><feMergeNode in="b2"></feMergeNode><feMergeNode in="b2"></feMergeNode><feMergeNode in="b1"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+      <filter id="nx-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"></feGaussianBlur></filter>
+      <pattern id="nx-mesh" patternUnits="userSpaceOnUse" width="5" height="8.66"><path d="M0 0 L2.5 0 L3.75 2.165 L2.5 4.33 L0 4.33 L-1.25 2.165 Z M2.5 4.33 L5 4.33 L6.25 6.5 L5 8.66 L2.5 8.66 L1.25 6.5 Z" fill="none" stroke="#B8A890" stroke-width="0.3" opacity="0.7"></path></pattern>
+      <linearGradient id="nx-tubeGlass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"></stop><stop offset="0.07" stop-color="#FFFFFF" stop-opacity="0.07"></stop><stop offset="0.3" stop-color="#FFB070" stop-opacity="0.03"></stop><stop offset="0.7" stop-color="#FFB070" stop-opacity="0.03"></stop><stop offset="0.9" stop-color="#FFFFFF" stop-opacity="0.06"></stop><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.24"></stop></linearGradient>
+      <linearGradient id="nx-socket" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3632"></stop><stop offset="0.4" stop-color="#1A1816"></stop><stop offset="1" stop-color="#050505"></stop></linearGradient>
+      <linearGradient id="nx-glass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"></stop><stop offset="0.25" stop-color="#FFFFFF" stop-opacity="0.04"></stop><stop offset="0.75" stop-color="#FFFFFF" stop-opacity="0.02"></stop><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.12"></stop></linearGradient>
+      <radialGradient id="nx-halo" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FF7A20" stop-opacity="0.5"></stop><stop offset="0.55" stop-color="#FF6A10" stop-opacity="0.16"></stop><stop offset="1" stop-color="#FF6A10" stop-opacity="0"></stop></radialGradient>
+      <linearGradient id="nx-getter" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8EAEC" stop-opacity="0.85"></stop><stop offset="1" stop-color="#6A6E74" stop-opacity="0"></stop></linearGradient>
+      <linearGradient id="nx-bar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE0B8"></stop><stop offset="0.12" stop-color="#FF8A3A"></stop><stop offset="1" stop-color="#E8502A"></stop></linearGradient>
+      <radialGradient id="nx-eye" cx="0.5" cy="0.5" r="0.5"><stop offset="0.25" stop-color="#E8FFD8"></stop><stop offset="0.5" stop-color="#7CFF9A"></stop><stop offset="0.85" stop-color="#1EB85A"></stop><stop offset="1" stop-color="#0A5A2A"></stop></radialGradient>
+      <radialGradient id="nx-crt" cx="0.5" cy="0.5" r="0.7"><stop offset="0" style="stop-color: var(--crt)"></stop><stop offset="1" style="stop-color: var(--crt-edge)"></stop></radialGradient>
+      <radialGradient id="nx-bake" cx="0.36" cy="0.3" r="0.8"><stop offset="0" stop-color="#5A5650"></stop><stop offset="0.5" stop-color="#1E1C1A"></stop><stop offset="1" stop-color="#050505"></stop></radialGradient>
+      <linearGradient id="nx-chrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"></stop><stop offset="0.3" stop-color="#B8BBC0"></stop><stop offset="0.5" stop-color="#4E5256"></stop><stop offset="0.75" stop-color="#9EA2A8"></stop><stop offset="1" stop-color="#EEF0F2"></stop></linearGradient>
+
+      <!-- THE TUBE, 40 x 92: the ten wire cathodes (stroked paths, not glyphs) ... -->
+      <path id="nx-d0" d="M20 12 C29 12 32 24 32 45 C32 66 29 78 20 78 C11 78 8 66 8 45 C8 24 11 12 20 12 Z"></path><path id="nx-d1" d="M14 21 L22 12 V78"></path><path id="nx-d2" d="M9 24 C10 15 15 12 20 12 C27 12 31 17 31 25 C31 36 21 47 9 78 H32"></path><path id="nx-d3" d="M9 18 C12 13 16 12 20 12 C27 12 30 17 30 25 C30 34 25 42 17 42 C26 42 32 49 32 59 C32 71 26 78 19 78 C14 78 10 76 8 71"></path><path id="nx-d4" d="M27 78 V12 L8 58 H33"></path><path id="nx-d5" d="M31 12 H12 L10 41 C13 38 16 36 20 36 C28 36 32 44 32 57 C32 70 27 78 19 78 C14 78 10 76 8 71"></path><path id="nx-d6" d="M29 16 C26 13 23 12 20 12 C12 12 8 26 8 48 C8 68 12 78 20 78 C28 78 32 70 32 59 C32 48 27 42 20 42 C14 42 10 46 8 52"></path><path id="nx-d7" d="M8 12 H32 L16 78"></path><path id="nx-d8" d="M20 42 C13 42 10 37 10 27 C10 17 14 12 20 12 C26 12 30 17 30 27 C30 37 27 42 20 42 C12 42 8 50 8 60 C8 72 13 78 20 78 C27 78 32 72 32 60 C32 50 28 42 20 42 Z"></path><path id="nx-d9" d="M32 38 C30 44 26 48 20 48 C13 48 8 42 8 30 C8 18 13 12 20 12 C28 12 32 22 32 42 C32 64 28 78 20 78 C17 78 13 77 11 74"></path>
+      <!-- ... the socket, the smoked envelope ... -->
+      <g id="nx-back">
+        <rect x="3" y="84" width="34" height="8" rx="2" fill="url(#nx-socket) #111"></rect>
+        <path d="M3 86 V18 Q3 3 18.5 2.2 Q20 0.4 21.5 2.2 Q37 3 37 18 V86 Z" fill="#0C0907"></path>
+      </g>
+      <!-- ... support wires, mica spacers and the whole stack unlit ... -->
+      <g id="nx-stack">
+        <path d="M6 10 V84 M34 10 V84" stroke="#5A544C" stroke-width="0.7"></path>
+        <ellipse cx="20" cy="83" rx="15" ry="2.6" fill="#B8B0A2" opacity="0.55"></ellipse>
+        <ellipse cx="20" cy="10" rx="14" ry="2.4" fill="#B8B0A2" opacity="0.4"></ellipse>
+        <path d="M20 12 C29 12 32 24 32 45 C32 66 29 78 20 78 C11 78 8 66 8 45 C8 24 11 12 20 12 Z M14 21 L22 12 V78 M9 24 C10 15 15 12 20 12 C27 12 31 17 31 25 C31 36 21 47 9 78 H32 M9 18 C12 13 16 12 20 12 C27 12 30 17 30 25 C30 34 25 42 17 42 C26 42 32 49 32 59 C32 71 26 78 19 78 C14 78 10 76 8 71 M27 78 V12 L8 58 H33 M31 12 H12 L10 41 C13 38 16 36 20 36 C28 36 32 44 32 57 C32 70 27 78 19 78 C14 78 10 76 8 71 M29 16 C26 13 23 12 20 12 C12 12 8 26 8 48 C8 68 12 78 20 78 C28 78 32 70 32 59 C32 48 27 42 20 42 C14 42 10 46 8 52 M8 12 H32 L16 78 M20 42 C13 42 10 37 10 27 C10 17 14 12 20 12 C26 12 30 17 30 27 C30 37 27 42 20 42 C12 42 8 50 8 60 C8 72 13 78 20 78 C27 78 32 72 32 60 C32 50 28 42 20 42 Z M32 38 C30 44 26 48 20 48 C13 48 8 42 8 30 C8 18 13 12 20 12 C28 12 32 22 32 42 C32 64 28 78 20 78 C17 78 13 77 11 74" fill="none" stroke="#857A6C" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.26"></path>
+      </g>
+      <!-- ... and the anode mesh, the glass, the getter flash and the highlights. -->
+      <g id="nx-front">
+        <rect x="5" y="9" width="30" height="76" fill="url(#nx-mesh) rgba(0,0,0,0)"></rect>
+        <path d="M3 86 V18 Q3 3 18.5 2.2 Q20 0.4 21.5 2.2 Q37 3 37 18 V86 Z" fill="url(#nx-tubeGlass) rgba(0,0,0,0)" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="0.7"></path>
+        <ellipse cx="20" cy="7" rx="12" ry="5" fill="url(#nx-getter) #AAA" opacity="0.8"></ellipse>
+        <path d="M7.5 82 V20 Q7.5 8 15 5.5" fill="none" stroke="#FFFFFF" stroke-width="2.2" opacity="0.5" stroke-linecap="round"></path>
+        <path d="M10.5 80 V22" fill="none" stroke="#FFFFFF" stroke-width="5" opacity="0.06" stroke-linecap="round"></path>
+        <path d="M33.5 78 V24" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.35" stroke-linecap="round"></path>
+      </g>
+
+      <!-- bar-graph tube, 40 x 150: scale and glass behind the neon column, sheen in front -->
+      <g id="nx-bt-back">
+        <path d="M2 138 H12 M2 125.4 H8 M2 112.8 H8 M2 100.2 H8 M2 87.6 H8 M2 75 H12 M2 62.4 H8 M2 49.8 H8 M2 37.2 H8 M2 24.6 H8 M2 12 H12" fill="none" stroke="#D8D2C4" stroke-width="0.8" stroke-opacity="0.7"></path>
+        <rect x="14" y="2" width="16" height="146" rx="8" fill="#0C0907"></rect>
+        <path d="M22 12 V138" stroke="#4A4440" stroke-width="0.8"></path>
+      </g>
+      <g id="nx-bt-front">
+        <rect x="14" y="2" width="16" height="146" rx="8" fill="url(#nx-glass) rgba(0,0,0,0)" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="0.7"></rect>
+        <path d="M17.5 8 V140" stroke="#FFFFFF" stroke-width="1.3" opacity="0.4" stroke-linecap="round"></path>
+        <rect x="14" y="2" width="16" height="9" rx="5" fill="url(#nx-getter) #AAA" opacity="0.7"></rect>
+      </g>
+
+      <!-- counting tube seen from the top, 92 x 92 about its centre -->
+      <g id="nx-dk-back">
+        <circle r="44" fill="url(#nx-chrome) #999"></circle>
+        <circle r="40" fill="#0A0806"></circle>
+        <circle r="31" fill="#1A1612"></circle>
+        <g fill="#8A8278"><circle cx="0" cy="-24" r="1.8"></circle><circle cx="5" cy="-23.5" r="1.3"></circle><circle cx="9.8" cy="-21.9" r="1.3"></circle><circle cx="14.1" cy="-19.4" r="1.8"></circle><circle cx="17.8" cy="-16.1" r="1.3"></circle><circle cx="20.8" cy="-12" r="1.3"></circle><circle cx="22.8" cy="-7.4" r="1.8"></circle><circle cx="23.9" cy="-2.5" r="1.3"></circle><circle cx="23.9" cy="2.5" r="1.3"></circle><circle cx="22.8" cy="7.4" r="1.8"></circle><circle cx="20.8" cy="12" r="1.3"></circle><circle cx="17.8" cy="16.1" r="1.3"></circle><circle cx="14.1" cy="19.4" r="1.8"></circle><circle cx="9.8" cy="21.9" r="1.3"></circle><circle cx="5" cy="23.5" r="1.3"></circle><circle cx="0" cy="24" r="1.8"></circle><circle cx="-5" cy="23.5" r="1.3"></circle><circle cx="-9.8" cy="21.9" r="1.3"></circle><circle cx="-14.1" cy="19.4" r="1.8"></circle><circle cx="-17.8" cy="16.1" r="1.3"></circle><circle cx="-20.8" cy="12" r="1.3"></circle><circle cx="-22.8" cy="7.4" r="1.8"></circle><circle cx="-23.9" cy="2.5" r="1.3"></circle><circle cx="-23.9" cy="-2.5" r="1.3"></circle><circle cx="-22.8" cy="-7.4" r="1.8"></circle><circle cx="-20.8" cy="-12" r="1.3"></circle><circle cx="-17.8" cy="-16.1" r="1.3"></circle><circle cx="-14.1" cy="-19.4" r="1.8"></circle><circle cx="-9.8" cy="-21.9" r="1.3"></circle><circle cx="-5" cy="-23.5" r="1.3"></circle></g>
+        <circle r="9" fill="#2A2420" stroke="#5A524A" stroke-width="0.8"></circle>
+      </g>
+      <g id="nx-dk-spot">
+        <circle cx="0" cy="-24" r="3.6" fill="#FF8A2A" filter="url(#nx-glowS)"></circle>
+        <circle cx="-5" cy="-23.5" r="2.4" fill="#FF7A1E" opacity="0.45" filter="url(#nx-glowS)"></circle>
+        <circle cx="-9.8" cy="-21.9" r="1.8" fill="#FF7A1E" opacity="0.2" filter="url(#nx-glowS)"></circle>
+      </g>
+      <g id="nx-dk-front">
+        <circle r="40" fill="url(#nx-glass) rgba(0,0,0,0)" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="0.8"></circle>
+        <ellipse cx="-14" cy="-20" rx="14" ry="7" transform="rotate(-35 -14 -20)" fill="#FFFFFF" opacity="0.22"></ellipse>
+      </g>
+
+      <!-- magic eye, 108 x 108 about its centre -->
+      <g id="nx-eye-back">
+        <circle r="52" fill="url(#nx-chrome) #999"></circle>
+        <circle r="50.5" fill="#050505"></circle>
+        <path d="M0 -44 L0 -49.5 M44 -0 L49.5 -0 M0 44 L0 49.5 M-44 0 L-49.5 0" fill="none" stroke="#D8D2C4" stroke-width="1.6" stroke-opacity="0.75"></path>
+        <path d="M14.2 -43.7 L15.3 -47.1 M27 -37.2 L29.1 -40 M37.2 -27 L40 -29.1 M43.7 -14.2 L47.1 -15.3 M43.7 14.2 L47.1 15.3 M37.2 27 L40 29.1 M27 37.2 L29.1 40 M14.2 43.7 L15.3 47.1 M-14.2 43.7 L-15.3 47.1 M-27 37.2 L-29.1 40 M-37.2 27 L-40 29.1 M-43.7 14.2 L-47.1 15.3 M-43.7 -14.2 L-47.1 -15.3 M-37.2 -27 L-40 -29.1 M-27 -37.2 L-29.1 -40 M-14.2 -43.7 L-15.3 -47.1" fill="none" stroke="#D8D2C4" stroke-width="0.8" stroke-opacity="0.75"></path>
+        <circle r="40" fill="#0A0C0A"></circle>
+      </g>
+      <g id="nx-eye-front">
+        <circle r="11" fill="#141210" stroke="#3A3630" stroke-width="1"></circle>
+        <circle r="40" fill="url(#nx-glass) rgba(0,0,0,0)" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="0.8"></circle>
+        <ellipse cx="-16" cy="-22" rx="16" ry="7" transform="rotate(-35 -16 -22)" fill="#FFFFFF" opacity="0.2"></ellipse>
+      </g>
+
+      <!-- a Bakelite knob about its centre -->
+      <g id="nx-knob">
+        <circle cx="2" r="17" fill="#000" opacity="0.45" filter="url(#nx-soft)"></circle>
+        <circle r="16" fill="url(#nx-bake) #1A1816"></circle>
+        <circle r="16" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="0.8"></circle>
+      </g>
+    </defs>
+  </svg>
+
+  <div class="groups">
+  <!--rg-groups 0-71-->
+  <!-- ===== 1: clock ===== -->
+  <header class="plate console">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h1>SYSTEM SENSORS</h1><span>MODEL NX-480</span></div>
+    <div class="body">
+      <div class="win clockwin">
+        <svg class="nixie" role="img" data-nixie="0" data-tubes="2" data-size="156x168" data-kind="hh" aria-label="Hours"></svg>
+        <svg aria-hidden="true" width="16" height="168" viewBox="0 0 16 168">
+          <rect x="3" y="44" width="10" height="20" rx="5" fill="#0E0A08" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="0.6"></rect>
+          <rect x="3" y="104" width="10" height="20" rx="5" fill="#0E0A08" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="0.6"></rect>
+          <g class="colon"><circle cx="8" cy="54" r="2.6" fill="#FF8A2A" filter="url(#nx-glowS)"></circle><circle cx="8" cy="114" r="2.6" fill="#FF8A2A" filter="url(#nx-glowS)"></circle></g>
+        </svg>
+        <svg class="nixie" role="img" data-nixie="0" data-tubes="2" data-size="156x168" data-kind="mm" aria-label="Minutes"></svg>
+      </div>
+      <div class="row">
+        <div class="lampline"><span class="lamp red"></span><span class="eng" style="font-size: 10px">POWER</span></div>
+        <span class="eng" style="font-size: 15px; letter-spacing: 0.2em" data-date="1 2 3">&nbsp;</span>
+        <svg aria-hidden="true" width="26" height="34" viewBox="0 0 26 34"><polygon points="13,20 21,24.6 21,31.4 13,36 5,31.4 5,24.6" fill="url(#nx-chrome) #999" transform="translate(0 -8)"></polygon><path d="M11 22 L9 4 Q13 1 17 4 L15 22 Z" fill="url(#nx-chrome) #BBB" stroke="#333" stroke-width="0.4"></path><ellipse cx="13" cy="4" rx="4" ry="2.4" fill="url(#nx-chrome) #DDD"></ellipse></svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== 2-3: processor and graphics units ===== -->
+  <section class="plate" data-section="cpu">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h2>PROCESSOR</h2><span>PKG TEMP · LOAD · GHZ · W</span></div>
+    <div class="body">
+      <div class="row">
+        <div class="col wide" data-need="5">
+          <div class="win">
+            <svg class="nixie" role="img" data-nixie="5" data-tubes="2-3" data-size="118x132" data-places="0" aria-label="Temperature"></svg>
+            <span class="neon" data-unit="6" data-default="°C"></span>
+          </div>
+          <div class="lampline"><span class="lamp" data-lamp="5"></span><span class="eng" data-state="5">NORMAL</span></div>
+        </div>
+        <div class="win bars" data-hide-empty>
+          <div class="col" data-need="9">
+            <svg class="bt" role="img" aria-label="LOAD" width="40" height="150" viewBox="0 0 40 150"><use href="#nx-bt-back"></use><g class="breathe b1"><rect data-bar="9" data-max="11" data-scale="100" data-unit-of="10" x="18" y="138" width="8" height="0" rx="2" fill="url(#nx-bar) #FF6A2A" filter="url(#nx-glow)"></rect></g><use href="#nx-bt-front"></use></svg>
+            <span class="btv" data-num="9" data-places="0" data-unit-of="10">--</span>
+            <span class="btc">LOAD</span>
+          </div>
+          <div class="col" data-need="13">
+            <svg class="bt" role="img" aria-label="CLOCK" width="40" height="150" viewBox="0 0 40 150"><use href="#nx-bt-back"></use><g class="breathe b2"><rect data-bar="13" data-max="15" data-scale="--cpu-clock-max" data-unit-of="14" x="18" y="138" width="8" height="0" rx="2" fill="url(#nx-bar) #FF6A2A" filter="url(#nx-glow)"></rect></g><use href="#nx-bt-front"></use></svg>
+            <span class="btv" data-num="13" data-places="2" data-unit-of="14" data-ghz>--</span>
+            <span class="btc">CLOCK</span>
+          </div>
+          <div class="col" data-need="17">
+            <svg class="bt" role="img" aria-label="POWER" width="40" height="150" viewBox="0 0 40 150"><use href="#nx-bt-back"></use><g class="breathe b3"><rect data-bar="17" data-max="19" data-scale="--cpu-power-max" data-unit-of="18" x="18" y="138" width="8" height="0" rx="2" fill="url(#nx-bar) #FF6A2A" filter="url(#nx-glow)"></rect></g><use href="#nx-bt-front"></use></svg>
+            <span class="btv" data-num="17" data-places="0" data-unit-of="18">--</span>
+            <span class="btc">POWER</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="plate" data-section="gpu">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h2>GRAPHICS</h2><span>EDGE TEMP · LOAD · GHZ · W</span></div>
+    <div class="body">
+      <div class="row rev">
+        <div class="col wide" data-need="21">
+          <div class="win">
+            <svg class="nixie" role="img" data-nixie="21" data-tubes="2-3" data-size="118x132" data-places="0" aria-label="Temperature"></svg>
+            <span class="neon" data-unit="22" data-default="°C"></span>
+          </div>
+          <div class="lampline"><span class="lamp" data-lamp="21"></span><span class="eng" data-state="21">NORMAL</span></div>
+        </div>
+        <div class="win bars" data-hide-empty>
+          <div class="col" data-need="25">
+            <svg class="bt" role="img" aria-label="LOAD" width="40" height="150" viewBox="0 0 40 150"><use href="#nx-bt-back"></use><g class="breathe b1"><rect data-bar="25" data-max="27" data-scale="100" data-unit-of="26" x="18" y="138" width="8" height="0" rx="2" fill="url(#nx-bar) #FF6A2A" filter="url(#nx-glow)"></rect></g><use href="#nx-bt-front"></use></svg>
+            <span class="btv" data-num="25" data-places="0" data-unit-of="26">--</span>
+            <span class="btc">LOAD</span>
+          </div>
+          <div class="col" data-need="29">
+            <svg class="bt" role="img" aria-label="CLOCK" width="40" height="150" viewBox="0 0 40 150"><use href="#nx-bt-back"></use><g class="breathe b2"><rect data-bar="29" data-max="31" data-scale="--gpu-clock-max" data-unit-of="30" x="18" y="138" width="8" height="0" rx="2" fill="url(#nx-bar) #FF6A2A" filter="url(#nx-glow)"></rect></g><use href="#nx-bt-front"></use></svg>
+            <span class="btv" data-num="29" data-places="2" data-unit-of="30" data-ghz>--</span>
+            <span class="btc">CLOCK</span>
+          </div>
+          <div class="col" data-need="33">
+            <svg class="bt" role="img" aria-label="POWER" width="40" height="150" viewBox="0 0 40 150"><use href="#nx-bt-back"></use><g class="breathe b3"><rect data-bar="33" data-max="35" data-scale="--gpu-power-max" data-unit-of="34" x="18" y="138" width="8" height="0" rx="2" fill="url(#nx-bar) #FF6A2A" filter="url(#nx-glow)"></rect></g><use href="#nx-bt-front"></use></svg>
+            <span class="btv" data-num="33" data-places="0" data-unit-of="34">--</span>
+            <span class="btc">POWER</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 4: counting-tube fan counters ===== -->
+  <section class="plate fans" data-section="fans">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h2>FAN COUNTERS</h2><span>DEKATRON · RPM</span></div>
+    <div class="body">
+      <div class="fanrow">
+        <div class="col" data-need="37">
+          <svg class="dk" role="img" aria-label="Fan" width="92" height="92" viewBox="-46 -46 92 92"><use href="#nx-dk-back"></use><use href="#nx-dk-spot" data-deka="37"></use><use href="#nx-dk-front"></use></svg>
+          <svg class="nixie" role="img" data-nixie="37" data-tubes="4" data-size="76x40" data-places="0" aria-label="RPM"></svg>
+          <span class="cap9" data-cap="36" data-default="FAN 1" data-upper></span>
+        </div>
+        <div class="col" data-need="41">
+          <svg class="dk" role="img" aria-label="Fan" width="92" height="92" viewBox="-46 -46 92 92"><use href="#nx-dk-back"></use><use href="#nx-dk-spot" data-deka="41"></use><use href="#nx-dk-front"></use></svg>
+          <svg class="nixie" role="img" data-nixie="41" data-tubes="4" data-size="76x40" data-places="0" aria-label="RPM"></svg>
+          <span class="cap9" data-cap="40" data-default="FAN 2" data-upper></span>
+        </div>
+        <div class="col" data-need="45">
+          <svg class="dk" role="img" aria-label="Fan" width="92" height="92" viewBox="-46 -46 92 92"><use href="#nx-dk-back"></use><use href="#nx-dk-spot" data-deka="45"></use><use href="#nx-dk-front"></use></svg>
+          <svg class="nixie" role="img" data-nixie="45" data-tubes="4" data-size="76x40" data-places="0" aria-label="RPM"></svg>
+          <span class="cap9" data-cap="44" data-default="FAN 3" data-upper></span>
+        </div>
+        <div class="col" data-need="49">
+          <svg class="dk" role="img" aria-label="Fan" width="92" height="92" viewBox="-46 -46 92 92"><use href="#nx-dk-back"></use><use href="#nx-dk-spot" data-deka="49"></use><use href="#nx-dk-front"></use></svg>
+          <svg class="nixie" role="img" data-nixie="49" data-tubes="4" data-size="76x40" data-places="0" aria-label="RPM"></svg>
+          <span class="cap9" data-cap="48" data-default="FAN 4" data-upper></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 5: magic-eye memory indicators ===== -->
+  <section class="plate" data-section="memory">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h2>MEMORY LEVEL</h2><span>TUNING INDICATORS · % FULL</span></div>
+    <div class="body">
+      <div class="eyerow">
+        <div class="col" data-need="53">
+          <svg class="eye" role="img" aria-label="Share in use" width="108" height="108" viewBox="-54 -54 108 108"><use href="#nx-eye-back"></use><g class="eyeglow"><circle r="35" fill="url(#nx-eye) #2EC85A" filter="url(#nx-glow)" opacity="0.92"></circle></g><path data-eye="53" data-max="55" fill="#060806" d=""></path><path fill="none" stroke="#D8FFC8" stroke-width="1" opacity="0.8" d=""></path><use href="#nx-eye-front"></use></svg>
+          <span class="pct"><span data-pct="53" data-max="55">--</span>%</span>
+          <span class="cap11" data-cap="52" data-default="MEMORY" data-upper></span>
+          <span class="sub"><span data-num="53" data-places="1" data-plain>--</span> / <span data-num="55" data-places="0" data-plain>--</span> <span data-unit="54" data-default="GB"></span></span>
+        </div>
+        <div class="col" data-need="57">
+          <svg class="eye" role="img" aria-label="Share in use" width="108" height="108" viewBox="-54 -54 108 108"><use href="#nx-eye-back"></use><g class="eyeglow"><circle r="35" fill="url(#nx-eye) #2EC85A" filter="url(#nx-glow)" opacity="0.92"></circle></g><path data-eye="57" data-max="59" fill="#060806" d=""></path><path fill="none" stroke="#D8FFC8" stroke-width="1" opacity="0.8" d=""></path><use href="#nx-eye-front"></use></svg>
+          <span class="pct"><span data-pct="57" data-max="59">--</span>%</span>
+          <span class="cap11" data-cap="56" data-default="VIDEO" data-upper></span>
+          <span class="sub"><span data-num="57" data-places="1" data-plain>--</span> / <span data-num="59" data-places="0" data-plain>--</span> <span data-unit="58" data-default="GB"></span></span>
+        </div>
+        <div class="col" data-need="61">
+          <svg class="eye" role="img" aria-label="Share in use" width="108" height="108" viewBox="-54 -54 108 108"><use href="#nx-eye-back"></use><g class="eyeglow"><circle r="35" fill="url(#nx-eye) #2EC85A" filter="url(#nx-glow)" opacity="0.92"></circle></g><path data-eye="61" data-max="63" fill="#060806" d=""></path><path fill="none" stroke="#D8FFC8" stroke-width="1" opacity="0.8" d=""></path><use href="#nx-eye-front"></use></svg>
+          <span class="pct"><span data-pct="61" data-max="63">--</span>%</span>
+          <span class="cap11" data-cap="60" data-default="DISK" data-upper></span>
+          <span class="sub"><span data-num="61" data-places="0" data-plain>--</span> / <span data-num="63" data-places="0" data-plain>--</span> <span data-unit="62" data-default="GB"></span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 6: oscilloscope ===== -->
+  <section class="plate" data-section="network">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h2>NETWORK SCOPE</h2><span>CH1 IN · CH2 OUT · <span data-unit="66" data-default="MB/S" data-upper style="font: inherit; letter-spacing: inherit"></span></span></div>
+    <div class="body">
+      <div class="row" style="max-width: 392px">
+        <span class="chlab" data-need="65">CH1 <svg class="nixie" role="img" data-nixie="65" data-tubes="3-4" data-size="84x40" data-places="1" aria-label="Inbound"></svg></span>
+        <span class="chlab" data-need="69">CH2 <svg class="nixie" role="img" data-nixie="69" data-tubes="2-4" data-size="56x40" data-places="1" aria-label="Outbound"></svg></span>
+      </div>
+      <svg class="scope" role="img" aria-label="Network traffic over the last minute on an oscilloscope" data-chart="65 69" width="392" height="206" viewBox="0 0 392 206">
+        <rect x="0" y="0" width="392" height="206" rx="10" fill="url(#nx-bake) #1A1816"></rect>
+        <rect x="0.5" y="0.5" width="391" height="205" rx="10" fill="none" stroke="#FFFFFF" stroke-opacity="0.12"></rect>
+        <rect x="12" y="12" width="282" height="182" rx="16" fill="#020302"></rect>
+        <rect x="16" y="16" width="274" height="174" rx="14" fill="url(#nx-crt) #0A1A12"></rect>
+        <path class="ph" d="M45 16 V190 M72 16 V190 M99 16 V190 M126 16 V190 M180 16 V190 M207 16 V190 M234 16 V190 M261 16 V190 M18 37.8 H288 M18 59.5 H288 M18 81.2 H288 M18 124.8 H288 M18 146.5 H288 M18 168.2 H288" fill="none" stroke-width="0.6" stroke-opacity="0.32"></path>
+        <path class="ph" d="M18 103 H288 M153 16 V190" fill="none" stroke-width="0.8" stroke-opacity="0.4"></path>
+        <path class="ph" d="M18 101 V105 M23.4 101 V105 M28.8 101 V105 M34.2 101 V105 M39.6 101 V105 M45 101 V105 M50.4 101 V105 M55.8 101 V105 M61.2 101 V105 M66.6 101 V105 M72 101 V105 M77.4 101 V105 M82.8 101 V105 M88.2 101 V105 M93.6 101 V105 M99 101 V105 M104.4 101 V105 M109.8 101 V105 M115.2 101 V105 M120.6 101 V105 M126 101 V105 M131.4 101 V105 M136.8 101 V105 M142.2 101 V105 M147.6 101 V105 M153 101 V105 M158.4 101 V105 M163.8 101 V105 M169.2 101 V105 M174.6 101 V105 M180 101 V105 M185.4 101 V105 M190.8 101 V105 M196.2 101 V105 M201.6 101 V105 M207 101 V105 M212.4 101 V105 M217.8 101 V105 M223.2 101 V105 M228.6 101 V105 M234 101 V105 M239.4 101 V105 M244.8 101 V105 M250.2 101 V105 M255.6 101 V105 M261 101 V105 M266.4 101 V105 M271.8 101 V105 M277.2 101 V105 M282.6 101 V105 M288 101 V105 M151 16 H155 M151 20.4 H155 M151 24.7 H155 M151 29 H155 M151 33.4 H155 M151 37.8 H155 M151 42.1 H155 M151 46.4 H155 M151 50.8 H155 M151 55.1 H155 M151 59.5 H155 M151 63.8 H155 M151 68.2 H155 M151 72.5 H155 M151 76.9 H155 M151 81.2 H155 M151 85.6 H155 M151 89.9 H155 M151 94.3 H155 M151 98.6 H155 M151 103 H155 M151 107.3 H155 M151 111.7 H155 M151 116 H155 M151 120.4 H155 M151 124.7 H155 M151 129.1 H155 M151 133.4 H155 M151 137.8 H155 M151 142.1 H155 M151 146.5 H155 M151 150.8 H155 M151 155.2 H155 M151 159.5 H155 M151 163.9 H155 M151 168.2 H155 M151 172.6 H155 M151 176.9 H155 M151 181.3 H155 M151 185.6 H155 M151 190 H155" fill="none" stroke-width="0.7" stroke-opacity="0.45"></path>
+        <path class="ph" data-trace="out" d="" fill="none" stroke-width="1.4" opacity="0.55" filter="url(#nx-glow)"></path>
+        <path class="ph" data-trace="in" d="" fill="none" stroke-width="5" opacity="0.18" filter="url(#nx-soft)"></path>
+        <path class="ph" data-trace="in" d="" fill="none" stroke-width="1.8" filter="url(#nx-glow)"></path>
+        <path class="ph-hot" data-trace="in" d="" fill="none" stroke-width="0.6" opacity="0.8"></path>
+        <g data-spot hidden><circle class="ph-dot pulse" r="3" filter="url(#nx-glowS)"></circle></g>
+        <rect x="16" y="16" width="274" height="174" rx="14" fill="url(#nx-glass) rgba(0,0,0,0)"></rect>
+        <path d="M26 24 Q153 14 280 24" fill="none" stroke="#FFFFFF" stroke-width="1.2" opacity="0.18"></path>
+        <text x="343" y="25" text-anchor="middle" font-family="IBM Plex Sans Condensed, sans-serif" font-weight="600" font-size="7.5" letter-spacing="1" fill="#D8D2C4">VOLTS/DIV</text><use href="#nx-knob" x="343" y="46"></use><rect x="341.5" y="32" width="3" height="10" rx="1.5" fill="#E8E6DC" transform="rotate(30 343 46)"></rect>
+        <text x="343" y="83" text-anchor="middle" font-family="IBM Plex Sans Condensed, sans-serif" font-weight="600" font-size="7.5" letter-spacing="1" fill="#D8D2C4">TIME/DIV</text><use href="#nx-knob" x="343" y="104"></use><rect x="341.5" y="90" width="3" height="10" rx="1.5" fill="#E8E6DC" transform="rotate(-50 343 104)"></rect>
+        <text x="343" y="141" text-anchor="middle" font-family="IBM Plex Sans Condensed, sans-serif" font-weight="600" font-size="7.5" letter-spacing="1" fill="#D8D2C4">POSITION</text><use href="#nx-knob" x="343" y="162"></use><rect x="341.5" y="148" width="3" height="10" rx="1.5" fill="#E8E6DC" transform="rotate(120 343 162)"></rect>
+      </svg>
+    </div>
+  </section>
+  <!--/rg-groups-->
+  </div>
+
+  <!-- ===== uptime ===== -->
+  <footer class="plate foot" data-need="73">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw ml"></i><i class="screw mr"></i>
+    <span class="eng" style="position: relative; letter-spacing: 0.2em">UPTIME</span>
+    <div class="win up">
+      <svg class="nixie" role="img" data-nixie="73" data-tubes="2" data-size="38x40" data-kind="days" aria-label="Days"></svg>
+      <span class="neon sm">D</span>
+      <svg class="nixie" role="img" data-nixie="73" data-tubes="2" data-size="38x40" data-kind="hours" aria-label="Hours"></svg>
+      <span class="neon sm">H</span>
+    </div>
+    <div class="lampline" style="position: relative"><span class="lamp"></span><span class="cap11">READY</span></div>
+  </footer>
+</div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout).
+     rg-Sens builds the groups from these in place of the ones between the
+     rg-groups markers; a field name in double braces (value, caption, unit,
+     max, time ...) becomes a placeholder bound to the widget's own sensor. -->
+<template data-rg-group="plate" data-rg-label="Front panel">
+  <section class="plate" data-section>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h2>{{title}}</h2></div>
+    <!--rg-items-->
+  </section>
+</template>
+<template data-rg-group="console" data-rg-label="Console">
+  <header class="plate console" data-section>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushL)" opacity="0.55"></rect><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#nx-brushD)" opacity="0.35"></rect></svg><div class="sheen" aria-hidden="true"></div><i class="screw tl"></i><i class="screw bl"></i><i class="screw tr"></i><i class="screw br"></i>
+    <div class="head"><h1>{{title}}</h1><span>MODEL NX-480</span></div>
+    <!--rg-items-->
+  </header>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock" data-rg-size="large" data-rg-sources="clock" data-rg-group="console" data-rg-width="392" data-rg-height="224">
+  <div class="w" style="gap: 10px">
+    <div class="win clockwin">
+      <svg class="nixie" role="img" data-nixie="{{time}}" data-tubes="2" data-size="156x168" data-kind="hh" aria-label="Hours"></svg>
+      <svg aria-hidden="true" width="16" height="168" viewBox="0 0 16 168">
+          <rect x="3" y="44" width="10" height="20" rx="5" fill="#0E0A08" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="0.6"></rect>
+          <rect x="3" y="104" width="10" height="20" rx="5" fill="#0E0A08" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="0.6"></rect>
+          <g class="colon"><circle cx="8" cy="54" r="2.6" fill="#FF8A2A" filter="url(#nx-glowS)"></circle><circle cx="8" cy="114" r="2.6" fill="#FF8A2A" filter="url(#nx-glowS)"></circle></g>
+        </svg>
+      <svg class="nixie" role="img" data-nixie="{{time}}" data-tubes="2" data-size="156x168" data-kind="mm" aria-label="Minutes"></svg>
+    </div>
+    <span class="eng" style="font-size: 15px; letter-spacing: 0.2em" data-date="{{day_name}} {{day}} {{month_name}}">&nbsp;</span>
+  </div>
+</template>
+<template data-rg-widget="nixie" data-rg-label="Nixie readout" data-rg-size="large" data-rg-width="240" data-rg-height="178">
+  <div class="w" style="gap: 8px" data-need="{{value}}">
+    <div class="win" style="align-items: flex-end">
+      <svg class="nixie" role="img" data-nixie="{{value}}" data-tubes="2-3" data-size="118x132" data-places="0" data-unit-of="{{unit}}" aria-label="Reading"></svg>
+      <span class="neon" data-unit="{{unit}}" data-default=""></span>
+    </div>
+    <div class="lampline" style="max-width: 100%"><span class="lamp" data-lamp="{{value}}" data-max="{{max}}"></span><span class="cap11" data-cap="{{caption}}" data-default="" data-upper></span></div>
+  </div>
+</template>
+<template data-rg-widget="nixie" data-rg-label="Nixie readout" data-rg-size="medium" data-rg-width="150" data-rg-height="108">
+  <div class="w" data-need="{{value}}">
+    <div class="win" style="align-items: flex-end; padding: 6px 8px">
+      <svg class="nixie" role="img" data-nixie="{{value}}" data-tubes="2-3" data-size="66x74" data-places="0" data-unit-of="{{unit}}" aria-label="Reading"></svg>
+      <span class="neon sm" style="padding-bottom: 8px" data-unit="{{unit}}" data-default=""></span>
+    </div>
+    <span class="cap9" data-cap="{{caption}}" data-default="" data-upper></span>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Neon bar" data-rg-size="small" data-rg-width="125" data-rg-height="46">
+  <div class="w wbar" data-need="{{value}}">
+    <div class="line"><span class="cap9" data-cap="{{caption}}" data-default="" data-upper></span><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span> <small data-unit="{{unit}}" data-default=""></small></span></div>
+    <div class="htube"><i data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Neon bar" data-rg-size="large" data-rg-width="390" data-rg-height="30">
+  <div class="w wbar long" data-need="{{value}}">
+    <span class="cap11" data-cap="{{caption}}" data-default="" data-upper></span>
+    <div class="htube"><i data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div>
+    <span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span> <small data-unit="{{unit}}" data-default=""></small></span>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Neon bar" data-rg-size="medium" data-rg-width="72" data-rg-height="208">
+  <div class="w" data-need="{{value}}">
+    <div class="win tall">
+      <svg class="bt" role="img" aria-label="Level" width="40" height="150" viewBox="0 0 40 150"><use href="#nx-bt-back"></use><g class="breathe"><rect data-bar="{{value}}" data-max="{{max}}" data-scale="100" data-unit-of="{{unit}}" x="18" y="138" width="8" height="0" rx="2" fill="url(#nx-bar) #FF6A2A" filter="url(#nx-glow)"></rect></g><use href="#nx-bt-front"></use></svg>
+      <span class="btv"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span></span>
+      <span class="btc" style="max-width: 52px; overflow: hidden; text-overflow: ellipsis" data-cap="{{caption}}" data-default="" data-upper></span>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Counting tube" data-rg-size="small" data-rg-sources="fan" data-rg-width="100" data-rg-height="152">
+  <div class="w" style="gap: 4px" data-need="{{value}}">
+    <svg class="dk" role="img" aria-label="Fan" width="92" height="92" viewBox="-46 -46 92 92"><use href="#nx-dk-back"></use><use href="#nx-dk-spot" data-deka="{{value}}"></use><use href="#nx-dk-front"></use></svg>
+    <svg class="nixie" role="img" data-nixie="{{value}}" data-tubes="4" data-size="76x40" data-places="0" aria-label="RPM"></svg>
+    <span class="cap9" data-cap="{{caption}}" data-default="" data-upper></span>
+  </div>
+</template>
+<template data-rg-widget="eye" data-rg-label="Magic eye" data-rg-default-for="memory disk" data-rg-size="medium" data-rg-width="130" data-rg-height="172">
+  <div class="w" style="gap: 4px" data-need="{{value}}">
+    <svg class="eye" role="img" aria-label="Share in use" width="108" height="108" viewBox="-54 -54 108 108"><use href="#nx-eye-back"></use><g class="eyeglow"><circle r="35" fill="url(#nx-eye) #2EC85A" filter="url(#nx-glow)" opacity="0.92"></circle></g><path data-eye="{{value}}" data-max="{{max}}" fill="#060806" d=""></path><path fill="none" stroke="#D8FFC8" stroke-width="1" opacity="0.8" d=""></path><use href="#nx-eye-front"></use></svg>
+    <span class="pct"><span data-pct="{{value}}" data-max="{{max}}">--</span>%</span>
+    <span class="cap11" data-cap="{{caption}}" data-default="" data-upper></span>
+    <span class="sub"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-plain>--</span> / <span data-num="{{max}}" data-places="0" data-unit-of="{{unit}}" data-plain>--</span> <span data-unit="{{unit}}" data-default=""></span></span>
+  </div>
+</template>
+<template data-rg-widget="eye" data-rg-label="Magic eye" data-rg-default-for="memory disk" data-rg-size="small" data-rg-width="112" data-rg-height="152">
+  <div class="w" style="gap: 4px" data-need="{{value}}">
+    <svg class="eye" role="img" aria-label="Share in use" width="108" height="108" viewBox="-54 -54 108 108"><use href="#nx-eye-back"></use><g class="eyeglow"><circle r="35" fill="url(#nx-eye) #2EC85A" filter="url(#nx-glow)" opacity="0.92"></circle></g><path data-eye="{{value}}" data-max="{{max}}" fill="#060806" d=""></path><path fill="none" stroke="#D8FFC8" stroke-width="1" opacity="0.8" d=""></path><use href="#nx-eye-front"></use></svg>
+    <span class="pct"><span data-pct="{{value}}" data-max="{{max}}">--</span>%</span>
+    <span class="cap9" data-cap="{{caption}}" data-default="" data-upper></span>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Small readout" data-rg-size="small" data-rg-width="125" data-rg-height="72">
+  <div class="w" style="gap: 5px" data-need="{{value}}">
+    <div class="win" style="align-items: flex-end; padding: 4px 8px">
+      <svg class="nixie" role="img" data-nixie="{{value}}" data-tubes="2-4" data-size="38x40" data-places="1" data-unit-of="{{unit}}" aria-label="Reading"></svg>
+      <span class="neon sm" data-unit="{{unit}}" data-default=""></span>
+    </div>
+    <span class="cap9" data-cap="{{caption}}" data-default="" data-upper></span>
+  </div>
+</template>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "finish", "label": "Finish", "type": "choice", "var": "--finish", "default": "aluminium", "choices": [{"value": "aluminium", "label": "Brushed Aluminium"}, {"value": "black", "label": "Black Anodised"}, {"value": "steel", "label": "Brushed Steel"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Scope full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var WARM = 72, HOT = 85;
+  var SAMPLES = 54, SAMPLE_MS = 1111;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+  // The finish is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-finish', (css.getPropertyValue('--finish') || 'aluminium').trim() || 'aluminium');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  function isMhz(v, id) { return /^mhz$/i.test(String(v[id] || '')); }
+  // A clock given in MHz is shown, and scaled, in GHz: where the template
+  // says so (data-ghz) and in every generated widget.
+  function inGhz(el, v, unitId) { return (el.hasAttribute('data-ghz') || el.closest('.rg-item') !== null) && isMhz(v, unitId); }
+
+  // ------------------------------------------------------- the tube
+  // <svg data-nixie="ID" data-tubes="2-3" data-size="118x132"> becomes a row
+  // of tubes: as many as the number needs within the range, 44 units apart
+  // in a 92 unit high box, and `data-size` is the size with the fewest.
+  var LIT = ' fill="none" stroke-linecap="round" stroke-linejoin="round"';
+  function tube(x) {
+    return '<g transform="translate(' + x + ' 0)"><use href="#nx-back"></use>' +
+      '<ellipse data-halo hidden cx="20" cy="46" rx="22" ry="40" fill="url(#nx-halo) rgba(0,0,0,0)"></ellipse>' +
+      '<use href="#nx-stack"></use>' +
+      '<g class="lit" hidden>' +
+        '<use' + LIT + ' stroke="#FF5A0A" stroke-width="5" opacity="0.55" filter="url(#nx-glowD)"></use>' +
+        '<use' + LIT + ' stroke="#FF9030" stroke-width="2.4"></use>' +
+        '<use' + LIT + ' stroke="#FFF0D8" stroke-width="0.9"></use></g>' +
+      '<circle data-dot hidden cx="36" cy="78" r="2.6" fill="#FFB060" filter="url(#nx-glowS)"></circle>' +
+      '<use href="#nx-front"></use></g>';
+  }
+  // `shown` is digits with an optional point ("12.4"), or '' for dark tubes.
+  function setTubes(svg, shown) {
+    var range = (svg.getAttribute('data-tubes') || '2').split('-'), min = +range[0], max = +(range[1] || range[0]);
+    var digits = [], dots = {};
+    for (var i = 0; i < shown.length; i++) {
+      var c = shown.charAt(i);
+      if (c === '.') dots[digits.length - 1] = true; else if (c >= '0' && c <= '9') digits.push(c);
+    }
+    var n = Math.min(Math.max(digits.length, min), max);
+    if (svg.__n !== n) {
+      svg.__n = n;
+      var size = svg.getAttribute('data-size').split('x'), wide = n * 44 - 4, html = '';
+      for (var k = 0; k < n; k++) html += tube(k * 44);
+      svg.innerHTML = html;
+      svg.setAttribute('viewBox', '0 0 ' + wide + ' 92');
+      svg.setAttribute('width', (+size[0] * wide / (min * 44 - 4)).toFixed(1));
+      svg.setAttribute('height', size[1]);
+    }
+    var pad = n - digits.length;            // dark tubes on the left
+    for (var t = 0; t < n; t++) {
+      var g = svg.children[t], d = t >= pad ? digits[t - pad] : null;
+      var halo = g.children[1], lit = g.children[3], dot = g.children[4];
+      hide(halo, d === null); hide(lit, d === null);
+      if (d !== null) for (var u = 0; u < 3; u++) attr(lit.children[u], 'href', '#nx-d' + d);
+      hide(dot, !dots[t - pad]);
+    }
+  }
+  function zeros(s, width) { while (s.replace('.', '').length < width) s = '0' + s; return s; }
+  // A number on `min` to `max` tubes: as many decimals (up to `places`) as
+  // fit, padded with zeros, and all nines when it is too large.
+  function tubeNumber(n, min, max, places) {
+    if (!isFinite(n)) return '';
+    n = Math.abs(n);
+    for (var p = places; p >= 0; p--) {
+      var s = n.toFixed(p);
+      if (s.replace('.', '').length <= max) return zeros(s, min);
+    }
+    return new Array(max + 1).join('9');
+  }
+
+  // ------------------------------------------------------- magic eyes
+  // The green target shows through pct x 360 degrees clockwise from 12
+  // o'clock; the rest is a shadow wedge. Full: no wedge.
+  function drawEye(el, f) {
+    var a = (-90 + f * 360) * Math.PI / 180, wedge = '', edge = 'M0 0 L0 -35';
+    if (f < 0.999) {
+      var g = Math.max(f, 0.002), b = (-90 + g * 360) * Math.PI / 180;
+      wedge = 'M0 0 L' + (36 * Math.cos(b)).toFixed(1) + ' ' + (36 * Math.sin(b)).toFixed(1) +
+        ' A36 36 0 ' + ((1 - g) * 360 > 180 ? 1 : 0) + ' 1 0 -36 Z';
+      if (f > 0.002) edge += ' M0 0 L' + (35 * Math.cos(a)).toFixed(1) + ' ' + (35 * Math.sin(a)).toFixed(1);
+    }
+    attr(el, 'd', wedge);
+    attr(el.nextElementSibling, 'd', edge);
+  }
+
+  // ------------------------------------------------------- scope history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-nixie-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+    }
+  } catch (e) { /* no storage: the scope starts empty */ }
+
+  // The value the top of the graticule stands for, shared by both channels:
+  // the Scope full scale option, else the peak of the last minute in steps
+  // (1, 2, 4, 8 ...), so the traces do not rescale with every sample.
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+  // A smooth line through the samples; the newest is at the right edge.
+  function trace(list, full) {
+    var n = list.length;
+    if (n < 2) return { d: '', x: 0, y: 0 };
+    var step = 262 / (SAMPLES - 1), pts = list.map(function (v, i) {
+      return [284 - (n - 1 - i) * step, 182 - clamp01(v / full) * 152];
+    });
+    var d = 'M' + pts[0][0].toFixed(1) + ' ' + pts[0][1].toFixed(1);
+    for (var i = 0; i < n - 1; i++) {
+      var p0 = pts[Math.max(i - 1, 0)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(i + 2, n - 1)];
+      d += ' C' + (p1[0] + step / 3).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1) + ' ' +
+        (p2[0] - step / 3).toFixed(1) + ' ' + (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1) + ' ' +
+        p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return { d: d, x: pts[n - 1][0], y: pts[n - 1][1] };
+  }
+  function drawScope() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var inn = trace(hist.down, full), out = trace(hist.up, full);
+    each('[data-trace="in"]', function (el) { attr(el, 'd', inn.d); }, svg);
+    each('[data-trace="out"]', function (el) { attr(el, 'd', out.d); }, svg);
+    var spot = svg.querySelector('[data-spot]');
+    hide(spot, !inn.d);
+    if (inn.d) attr(spot, 'transform', 'translate(' + inn.x.toFixed(1) + ' ' + inn.y.toFixed(1) + ')');
+  }
+  function sample() {
+    if (!document.querySelector('[data-chart]')) return;
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawScope();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawScope();
+
+  // ------------------------------------------------------- values
+  var moving = false;                   // the motion ticker is running
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    each('[data-nixie]', function (el) {
+      var id = el.getAttribute('data-nixie'), kind = el.getAttribute('data-kind'), shown = '';
+      var range = (el.getAttribute('data-tubes') || '2').split('-'), min = +range[0], max = +(range[1] || range[0]);
+      if (kind === 'hh' || kind === 'mm') {           // hours and minutes of the bound time ("9:24 PM" shows 09 24)
+        var hm = /(\d{1,2}):(\d{2})/.exec(known(v[id]) ? String(v[id]) : '');
+        if (hm) shown = zeros(hm[kind === 'hh' ? 1 : 2], 2);
+      } else if (kind === 'days' || kind === 'hours') {   // of an uptime in seconds
+        var sec = num(v[id]);
+        if (isFinite(sec)) shown = tubeNumber(kind === 'days' ? Math.min(Math.floor(sec / 86400), 99) : Math.floor(sec / 3600) % 24, 2, 2, 0);
+      } else {
+        var n = num(v[id]);
+        if (el.hasAttribute('data-unit-of') && inGhz(el, v, el.getAttribute('data-unit-of'))) n /= 1000;
+        shown = tubeNumber(n, min, max, +el.getAttribute('data-places') || 0);
+      }
+      setTubes(el, shown);
+    });
+    each('[data-date]', function (el) {    // FRIDAY · 13 NOVEMBER: the ids of day name, day and month
+      var ids = el.getAttribute('data-date').split(' '), day = num(v[ids[1]]);
+      var left = known(v[ids[0]]) ? String(v[ids[0]]) : '';
+      var right = [isFinite(day) ? String(Math.round(day)) : '', known(v[ids[2]]) ? String(v[ids[2]]) : ''].filter(Boolean).join(' ');
+      text(el, [left, right].filter(Boolean).join(' · ').toUpperCase() || ' ');
+    });
+
+    each('[data-num]', function (el) {
+      var id = el.getAttribute('data-num'), n = num(v[id]);
+      if (el.hasAttribute('data-unit-of') && inGhz(el, v, el.getAttribute('data-unit-of'))) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      var shown = inGhz(el, v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? shown.toUpperCase() : shown);
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      var name = known(c) ? String(c) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? name.toUpperCase() : name);
+    });
+
+    // Jewel lamps: amber from 72, red from 85 (degrees, or percent of the
+    // sensor's maximum where the lamp names one).
+    function heat(el, key) {
+      var t = num(v[el.getAttribute(key)]);
+      if (el.hasAttribute('data-max') && isFinite(t)) t = share(t, num(v[el.getAttribute('data-max')]), 100) * 100;
+      return t;
+    }
+    each('[data-lamp]', function (el) {
+      var t = heat(el, 'data-lamp');
+      flag(el, 'hot', t >= HOT); flag(el, 'warm', t >= WARM && t < HOT);
+    });
+    each('[data-state]', function (el) {
+      var t = heat(el, 'data-state');
+      text(el, t >= HOT ? 'OVER TEMP' : t >= WARM ? 'WARM' : 'NORMAL');
+    });
+
+    // Neon columns, against the sensor's own maximum, else the limit in the
+    // stylesheet (a number, or the name of a custom property). A bar-graph
+    // tube is an SVG rect that rises; a lying one is a strip that widens.
+    each('[data-bar]', function (el) {
+      var val = num(v[el.getAttribute('data-bar')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if ((scale.indexOf('clock') > 0 || el.closest('.rg-item')) && isMhz(v, el.getAttribute('data-unit-of'))) { val /= 1000; max /= 1000; }
+      var f = share(val, max, fallback);
+      if (el.namespaceURI === 'http://www.w3.org/2000/svg') {
+        var h = f * 126;
+        attr(el, 'height', h.toFixed(1)); attr(el, 'y', (138 - h).toFixed(1));
+      } else {
+        var w = 'calc((100% - 8px) * ' + f.toFixed(3) + ')';
+        if (el.__w !== w) { el.__w = w; el.style.width = w; }
+      }
+    });
+    each('[data-deka]', function (el) {
+      var rpm = num(v[el.getAttribute('data-deka')]);
+      el.__rpm = isFinite(rpm) ? rpm : 0;
+    });
+    each('[data-eye]', function (el) {
+      el.__to = share(num(v[el.getAttribute('data-eye')]), num(v[el.getAttribute('data-max')]), 100);
+      if (!moving || el.__at === undefined) { el.__at = el.__to; drawEye(el, el.__at); }   // else the ticker eases it over
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    each('[data-chart]', function (el) {             // the ids of inbound and outbound
+      var ids = el.getAttribute('data-chart').split(' ');
+      latest.down = num(v[ids[0]]); latest.up = num(v[ids[1]]);
+    });
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    function empty(el) { return el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null; }
+    each('[data-hide-empty]', function (el) { hide(el, empty(el)); });
+    each('[data-section]', function (el) { hide(el, empty(el)); });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a cached list would revive animations
+    // of elements that have since been hidden.
+    var anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;
+    // Counting tubes: the glow steps round the 30 cathodes, one turn every
+    // 2400 / RPM seconds, but never more than 7 pins a frame (a jump of
+    // half the ring would read as standing still or running backwards).
+    each('[data-deka]', function (el) {
+      var rpm = el.__rpm || 0;
+      if (rpm <= 0) return;
+      el.__pos = ((el.__pos || 0) + Math.min(rpm / 80 * dt * speed, 7)) % 30;
+      attr(el, 'transform', 'rotate(' + Math.floor(el.__pos) * 12 + ')');
+    });
+    // Magic eyes ease to a new reading over about 400 ms.
+    each('[data-eye]', function (el) {
+      if (el.__to === undefined || el.__at === el.__to) return;
+      var gap = el.__to - el.__at, step = Math.max(Math.abs(gap), 0.05) * dt / 0.4;
+      el.__at = Math.abs(gap) <= step ? el.__to : el.__at + (gap > 0 ? step : -step);
+      drawEye(el, el.__at);
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still-motion', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    moving = on;
+    if (!on) {
+      each('[data-eye]', function (el) { if (el.__to !== undefined) { el.__at = el.__to; drawEye(el, el.__at); } });
+      return;
+    }
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // dark tubes and closed eyes before the first values arrive
+})();
+</script>
+</body>
+</html>

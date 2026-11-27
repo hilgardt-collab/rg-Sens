@@ -114,3 +114,16 @@ html, body { margin: 0; background: var(--sky-2); }
 .groups > section[data-section] > :last-child { margin-bottom: auto; }
 /* The gumdrops perched on the clock card's top edge, three at each corner. */
 .perch { position: absolute; top: -22px; z-index: 2; overflow: visible; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A group is a glass card with its title (or the clock's perch); each
+   sweet is scaled to the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > section:has(.rg-items) { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.groups > section:has(.rg-items) > :nth-child(3) { margin-top: 0; }
+.groups > section:has(.rg-items) > :last-child { margin-bottom: 0; }
+.gd-items { position: relative; flex: 1; min-height: 0; display: flex; }
+.gd-items > .rg-items, .gd-bare > .rg-items { flex: 1; min-height: 0; }
+.gd-clock { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; }
+.rg-fit > div { box-sizing: border-box; }
+.gd-cut { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

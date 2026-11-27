@@ -422,6 +422,10 @@ pub fn build_document(
         (None, false) => Some(options),
         (None, true) => None,
     };
+    // A custom layout replaces the template's own groups before anything
+    // else looks at the page.
+    let expanded = crate::ui::css_template_layout::expand_layout(html, &config.layout);
+    let html = expanded.as_ref().map_or(html, |e| e.html.as_str());
     prepare_html_document(&transform_template(html), user_css, embedded.as_deref())
 }
 
@@ -1009,6 +1013,29 @@ pub fn generate_update_script() -> &'static str {
         else setup();
     })();
 
+    // Fit. A custom layout puts each widget, at the size it was drawn for,
+    // in a box (.rg-fit) centred in the grid cells the user gave it
+    // (.rg-item); the box is scaled to those cells here, so any widget can
+    // be shown small, medium or large.
+    (function () {
+        if (!document.querySelector('.rg-item > .rg-fit')) return;
+        function fit() {
+            Array.prototype.forEach.call(document.querySelectorAll('.rg-item > .rg-fit'), function (el) {
+                var cell = el.parentNode, w = el.offsetWidth, h = el.offsetHeight;
+                if (!(w > 0 && h > 0 && cell.clientWidth > 0 && cell.clientHeight > 0)) return;
+                var t = 'translate(-50%,-50%) scale(' + Math.min(cell.clientWidth / w, cell.clientHeight / h).toFixed(4) + ')';
+                if (el.style.transform !== t) el.style.transform = t;
+            });
+        }
+        window.addEventListener('resize', fit);
+        window.addEventListener('rg-layout', fit);
+        if (window.ResizeObserver) {
+            var watch = new ResizeObserver(fit);
+            Array.prototype.forEach.call(document.querySelectorAll('.rg-items'), function (el) { watch.observe(el); });
+        }
+        fit();
+    })();
+
     // Signal that the bridge is ready
     window.rgBridgeReady = true;
     console.log('rg-sens CSS Template bridge initialized');
@@ -1402,6 +1429,34 @@ mod tests {
             (
                 include_str!("../../examples/brutalist_panel.html"),
                 include_str!("../../examples/brutalist_panel.css"),
+            ),
+            (
+                include_str!("../../examples/hifi_panel.html"),
+                include_str!("../../examples/hifi_panel.css"),
+            ),
+            (
+                include_str!("../../examples/atomic_panel.html"),
+                include_str!("../../examples/atomic_panel.css"),
+            ),
+            (
+                include_str!("../../examples/blueprint_panel.html"),
+                include_str!("../../examples/blueprint_panel.css"),
+            ),
+            (
+                include_str!("../../examples/nixie_panel.html"),
+                include_str!("../../examples/nixie_panel.css"),
+            ),
+            (
+                include_str!("../../examples/memphis_panel.html"),
+                include_str!("../../examples/memphis_panel.css"),
+            ),
+            (
+                include_str!("../../examples/cockpit_panel.html"),
+                include_str!("../../examples/cockpit_panel.css"),
+            ),
+            (
+                include_str!("../../examples/porcelain_panel.html"),
+                include_str!("../../examples/porcelain_panel.css"),
             ),
         ];
         for (html, css) in panels {

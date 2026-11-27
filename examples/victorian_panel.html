@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1920 960x1060 1440x775 2880x450">
+<meta name="rg-group-size" content="480x290+180">
 <title>Victorian Sensor Panel</title>
 <!--
   Victorian sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -110,9 +111,10 @@
 
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+<!--rg-groups 0-71 90-->
   <section class="frame">
     <div class="card head">
-      <svg class="watch" data-watch role="img" aria-label="Pocket watch" width="160" height="184" viewBox="0 0 200 230">
+      <svg class="watch" data-watch="0" role="img" aria-label="Pocket watch" width="160" height="184" viewBox="0 0 200 230">
         <ellipse cx="100" cy="17" rx="15" ry="13" fill="none" stroke="url(#vc-gilt) #C9A24A" stroke-width="5"></ellipse>
         <rect x="96" y="30" width="8" height="8" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></rect>
         <rect x="91" y="24" width="18" height="10" rx="3" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></rect>
@@ -143,7 +145,7 @@
         <span class="system">SYSTEM</span>
         <span class="sensors">SENSORS</span>
         <i></i>
-        <span class="date" data-date>&nbsp;</span>
+        <span class="date" data-date="1 2 3">&nbsp;</span>
         <span class="anno" data-year="90">&nbsp;</span>
       </div>
     </div>
@@ -260,7 +262,7 @@
         <span data-need="65">Received <b class="fat in" data-num="65" data-places="1">--</b> <span data-unit="66" data-default="MB/s">MB/s</span></span>
         <span data-need="69">Dispatched <b class="fat" data-num="69" data-places="1">--</b> <span data-unit="70" data-default="MB/s">MB/s</span></span>
       </div>
-      <svg class="chart" data-chart role="img" aria-label="Chart of network traffic over the last minute" width="376" height="128" viewBox="0 0 376 128">
+      <svg class="chart" data-chart data-down="65" data-up="69" data-units="66 70" role="img" aria-label="Chart of network traffic over the last minute" width="376" height="128" viewBox="0 0 376 128">
         <g data-grid></g>
         <path data-hatch d="" fill="none" stroke="#8E1B1B" stroke-width="0.8" opacity="0.7"></path>
         <path data-line="down" d="" fill="none" stroke="#8E1B1B" stroke-width="2.2" stroke-linejoin="round"></path>
@@ -271,7 +273,7 @@
       <div class="note ends"><span>One minute since</span><span>The present moment</span></div>
     </div>
   </section>
-
+<!--/rg-groups-->
   </div>
 
   <footer class="ribbon" data-need="73">
@@ -287,6 +289,162 @@
   </footer>
 </div>
 
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): two group styles and the pieces the groups
+     are built from, drawn exactly as the cards above. -->
+<template data-rg-group="card" data-rg-label="Gilt frame">
+  <section class="frame" data-section><div class="card"><div class="heading"><h2>{{title}}</h2><i></i></div><!--rg-items--></div></section>
+</template>
+<template data-rg-group="masthead" data-rg-label="Masthead frame">
+  <section class="frame" data-section><div class="card head vc-head"><!--rg-items--></div></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Pocket watch" data-rg-size="large" data-rg-sources="clock" data-rg-group="masthead" data-rg-width="400" data-rg-height="200">
+  <div class="vc-watch" data-need="{{time}}"><svg class="watch" data-watch="{{time}}" role="img" aria-label="Pocket watch" width="160" height="184" viewBox="0 0 200 230">
+        <ellipse cx="100" cy="17" rx="15" ry="13" fill="none" stroke="url(#vc-gilt) #C9A24A" stroke-width="5"></ellipse>
+        <rect x="96" y="30" width="8" height="8" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></rect>
+        <rect x="91" y="24" width="18" height="10" rx="3" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></rect>
+        <circle cx="100" cy="128" r="88" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="1"></circle>
+        <circle cx="100" cy="128" r="81" fill="none" stroke="#6E5018" stroke-width="1" stroke-dasharray="1.5 2.5"></circle>
+        <circle cx="100" cy="128" r="77" fill="url(#vc-enamel) #FBF8EF" stroke="#5A3E12" stroke-width="1.2"></circle>
+        <circle cx="100" cy="128" r="70" fill="none" stroke="#2B1A12" stroke-width="0.8"></circle>
+        <circle cx="100" cy="128" r="64" fill="none" stroke="#2B1A12" stroke-width="0.8"></circle>
+        <g data-dial></g>
+        <circle cx="100" cy="160" r="15" fill="none" stroke="#2B1A12" stroke-width="0.8"></circle>
+        <g data-seconds style="transform-box: view-box; transform-origin: 100px 160px">
+          <line x1="100" y1="163" x2="100" y2="147" stroke="#1E3570" stroke-width="1.2"></line>
+        </g>
+        <circle class="steel" cx="100" cy="160" r="1.8"></circle>
+        <g data-hand="hour">
+          <polygon class="steel" points="100,90 102.5,128 100,140 97.5,128"></polygon>
+          <circle class="pomme" cx="100" cy="98" r="5" stroke-width="2.4"></circle>
+        </g>
+        <g data-hand="minute">
+          <polygon class="steel" points="100,68 101.9,128 100,140 98.1,128"></polygon>
+          <circle class="pomme" cx="100" cy="78" r="3.4" stroke-width="1.8"></circle>
+        </g>
+        <circle class="steel" cx="100" cy="128" r="3.8"></circle>
+        <ellipse cx="78" cy="96" rx="46" ry="22" transform="rotate(-32 78 96)" fill="#FFFFFF" opacity="0.28"></ellipse>
+      </svg><div class="masthead">
+        <span class="the">~ The ~</span>
+        <span class="system">SYSTEM</span>
+        <span class="sensors">SENSORS</span>
+        <i></i>
+        <span class="date" data-date="{{day_name}} {{day:.0}} {{month_name}}">&nbsp;</span>
+        <span class="anno" data-year="{{year}}">&nbsp;</span>
+      </div></div>
+</template>
+<template data-rg-widget="clock" data-rg-label="Pocket watch" data-rg-size="medium" data-rg-sources="clock" data-rg-group="masthead" data-rg-width="160" data-rg-height="184">
+  <svg class="watch" data-watch="{{time}}" role="img" aria-label="Pocket watch" width="160" height="184" viewBox="0 0 200 230">
+        <ellipse cx="100" cy="17" rx="15" ry="13" fill="none" stroke="url(#vc-gilt) #C9A24A" stroke-width="5"></ellipse>
+        <rect x="96" y="30" width="8" height="8" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></rect>
+        <rect x="91" y="24" width="18" height="10" rx="3" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></rect>
+        <circle cx="100" cy="128" r="88" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="1"></circle>
+        <circle cx="100" cy="128" r="81" fill="none" stroke="#6E5018" stroke-width="1" stroke-dasharray="1.5 2.5"></circle>
+        <circle cx="100" cy="128" r="77" fill="url(#vc-enamel) #FBF8EF" stroke="#5A3E12" stroke-width="1.2"></circle>
+        <circle cx="100" cy="128" r="70" fill="none" stroke="#2B1A12" stroke-width="0.8"></circle>
+        <circle cx="100" cy="128" r="64" fill="none" stroke="#2B1A12" stroke-width="0.8"></circle>
+        <g data-dial></g>
+        <circle cx="100" cy="160" r="15" fill="none" stroke="#2B1A12" stroke-width="0.8"></circle>
+        <g data-seconds style="transform-box: view-box; transform-origin: 100px 160px">
+          <line x1="100" y1="163" x2="100" y2="147" stroke="#1E3570" stroke-width="1.2"></line>
+        </g>
+        <circle class="steel" cx="100" cy="160" r="1.8"></circle>
+        <g data-hand="hour">
+          <polygon class="steel" points="100,90 102.5,128 100,140 97.5,128"></polygon>
+          <circle class="pomme" cx="100" cy="98" r="5" stroke-width="2.4"></circle>
+        </g>
+        <g data-hand="minute">
+          <polygon class="steel" points="100,68 101.9,128 100,140 98.1,128"></polygon>
+          <circle class="pomme" cx="100" cy="78" r="3.4" stroke-width="1.8"></circle>
+        </g>
+        <circle class="steel" cx="100" cy="128" r="3.8"></circle>
+        <ellipse cx="78" cy="96" rx="46" ry="22" transform="rotate(-32 78 96)" fill="#FFFFFF" opacity="0.28"></ellipse>
+      </svg>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Thermometer" data-rg-size="large" data-rg-width="320" data-rg-height="232">
+  <div class="engine vc-engine" data-need="{{value}}">
+    <svg class="thermo" data-thermo="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-need="{{value}}" role="img" aria-label="Processor thermometer" width="120" height="230" viewBox="0 0 120 230">
+          <path d="M6 228 V34 Q6 6 60 6 Q114 6 114 34 V228 Z" fill="#E6D4AC" stroke="#2B1A12" stroke-width="1.3"></path>
+          <path d="M11 223 V36 Q11 11 60 11 Q109 11 109 36 V223 Z" fill="none" stroke="#2B1A12" stroke-width="0.6"></path>
+          <circle cx="60" cy="6" r="4" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></circle>
+          <g data-scale></g>
+          <text class="n" x="58" y="63" style="fill: #B01414">Fever</text><text class="n" x="58" y="89" style="fill: #8E1B1B">Warm</text><text class="n" x="58" y="153" style="fill: #2E5A2E">Temperate</text>
+          <rect x="44" y="22" width="10" height="182" rx="5" fill="rgba(255,255,255,0.6)" stroke="#2B1A12" stroke-width="1"></rect>
+          <rect data-spirit x="46.5" y="190" width="5" height="16" fill="#A3171B"></rect>
+          <circle cx="49" cy="208" r="12" fill="#A3171B" stroke="#2B1A12" stroke-width="1"></circle>
+          <circle cx="45" cy="204" r="3" fill="#FFFFFF" opacity="0.55"></circle>
+          <rect x="46" y="26" width="1.6" height="172" fill="#FFFFFF" opacity="0.7"></rect>
+        </svg>
+    <div class="reads"><div class="big">
+      <b><span data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-places="1" style="font: inherit">--</span></b>
+      <span data-cap="{{caption}}" data-default="" class="vc-cut"></span>
+      <span class="state" data-state="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}">Temperate</span>
+    </div></div>
+  </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Thermometer" data-rg-size="medium" data-rg-width="320" data-rg-height="232">
+  <div class="engine vc-engine" data-need="{{value}}">
+    <svg class="thermo" data-thermo="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-need="{{value}}" role="img" aria-label="Processor thermometer" width="120" height="230" viewBox="0 0 120 230">
+          <path d="M6 228 V34 Q6 6 60 6 Q114 6 114 34 V228 Z" fill="#E6D4AC" stroke="#2B1A12" stroke-width="1.3"></path>
+          <path d="M11 223 V36 Q11 11 60 11 Q109 11 109 36 V223 Z" fill="none" stroke="#2B1A12" stroke-width="0.6"></path>
+          <circle cx="60" cy="6" r="4" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></circle>
+          <g data-scale></g>
+          <text class="n" x="58" y="63" style="fill: #B01414">Fever</text><text class="n" x="58" y="89" style="fill: #8E1B1B">Warm</text><text class="n" x="58" y="153" style="fill: #2E5A2E">Temperate</text>
+          <rect x="44" y="22" width="10" height="182" rx="5" fill="rgba(255,255,255,0.6)" stroke="#2B1A12" stroke-width="1"></rect>
+          <rect data-spirit x="46.5" y="190" width="5" height="16" fill="#A3171B"></rect>
+          <circle cx="49" cy="208" r="12" fill="#A3171B" stroke="#2B1A12" stroke-width="1"></circle>
+          <circle cx="45" cy="204" r="3" fill="#FFFFFF" opacity="0.55"></circle>
+          <rect x="46" y="26" width="1.6" height="172" fill="#FFFFFF" opacity="0.7"></rect>
+        </svg>
+    <div class="reads"><div class="big">
+      <b><span data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-places="1" style="font: inherit">--</span></b>
+      <span data-cap="{{caption}}" data-default="" class="vc-cut"></span>
+      <span class="state" data-state="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}">Temperate</span>
+    </div></div>
+  </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Thermometer" data-rg-size="small" data-rg-width="120" data-rg-height="230">
+  <svg class="thermo" data-thermo="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-need="{{value}}" role="img" aria-label="Processor thermometer" width="120" height="230" viewBox="0 0 120 230">
+          <path d="M6 228 V34 Q6 6 60 6 Q114 6 114 34 V228 Z" fill="#E6D4AC" stroke="#2B1A12" stroke-width="1.3"></path>
+          <path d="M11 223 V36 Q11 11 60 11 Q109 11 109 36 V223 Z" fill="none" stroke="#2B1A12" stroke-width="0.6"></path>
+          <circle cx="60" cy="6" r="4" fill="url(#vc-gilt) #C9A24A" stroke="#5A3E12" stroke-width="0.8"></circle>
+          <g data-scale></g>
+          <text class="n" x="58" y="63" style="fill: #B01414">Fever</text><text class="n" x="58" y="89" style="fill: #8E1B1B">Warm</text><text class="n" x="58" y="153" style="fill: #2E5A2E">Temperate</text>
+          <rect x="44" y="22" width="10" height="182" rx="5" fill="rgba(255,255,255,0.6)" stroke="#2B1A12" stroke-width="1"></rect>
+          <rect data-spirit x="46.5" y="190" width="5" height="16" fill="#A3171B"></rect>
+          <circle cx="49" cy="208" r="12" fill="#A3171B" stroke="#2B1A12" stroke-width="1"></circle>
+          <circle cx="45" cy="204" r="3" fill="#FFFFFF" opacity="0.55"></circle>
+          <rect x="46" y="26" width="1.6" height="172" fill="#FFFFFF" opacity="0.7"></rect>
+        </svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Ruled bar" data-rg-size="small" data-rg-width="200" data-rg-height="48">
+  <div class="item vc-item" data-need="{{value}}">
+    <div class="row"><span data-cap="{{caption}}" data-default=""></span><i></i><b data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-places="1">--</b><em data-unit="{{unit}}" data-ghz data-default=""></em></div>
+    <div class="bar"><i data-bar="{{value}}" data-max="{{max}}" data-scale="100"></i></div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Ruled bar" data-rg-size="large" data-rg-width="380" data-rg-height="48">
+  <div class="item vc-item" data-need="{{value}}">
+    <div class="row"><span data-cap="{{caption}}" data-default=""></span><i></i><b data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-places="1">--</b><em data-unit="{{unit}}" data-ghz data-default=""></em></div>
+    <div class="bar"><i data-bar="{{value}}" data-max="{{max}}" data-scale="100"></i></div>
+  </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Fan bar" data-rg-size="small" data-rg-sources="fan" data-rg-width="220" data-rg-height="48">
+  <div class="item vc-item" data-need="{{value}}">
+    <div class="row"><span data-cap="{{caption}}" data-default=""></span><i></i><b data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-places="1">--</b><em data-unit="{{unit}}" data-ghz data-default=""></em></div>
+    <div class="bar"><i data-bar="{{value}}" data-max="{{max}}" data-scale="--fan-max"></i></div>
+  </div>
+</template>
+<template data-rg-widget="store" data-rg-label="Red bar" data-rg-size="large" data-rg-default-for="memory disk" data-rg-width="380" data-rg-height="48">
+  <div class="item vc-item" data-need="{{value}}">
+    <div class="row"><span data-cap="{{caption}}" data-default=""></span><i></i><b data-num="{{value}}" data-places="1">--</b><em data-of="{{max}}" data-unit-of="{{unit}}">&nbsp;</em></div>
+    <div class="bar red"><i data-bar="{{value}}" data-max="{{max}}" data-scale="100"></i></div>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Ruled line" data-rg-size="small" data-rg-width="220" data-rg-height="28">
+  <div class="row vc-item" data-need="{{value}}"><span data-cap="{{caption}}" data-default=""></span><i></i><b data-num="{{value}}" data-unit-of="{{unit}}" data-ghz data-places="1">--</b><em data-unit="{{unit}}" data-ghz data-default=""></em></div>
+</template>
 <script type="application/json" id="rg-template-options">
 [
     {"id": "wallpaper", "label": "Wallpaper", "type": "choice", "default": "burgundy", "choices": [{"value": "burgundy", "label": "Burgundy", "set": {"--wall": "#3A0E14", "--motif": "#521821"}}, {"value": "green", "label": "Bottle Green", "set": {"--wall": "#0F2A1E", "--motif": "#1C4432"}}, {"value": "blue", "label": "Midnight Blue", "set": {"--wall": "#101A33", "--motif": "#1C2C52"}}]},
@@ -596,19 +754,19 @@
 
     // The watch: hours and minutes of the bound time; a.m. or p.m. makes no
     // difference to where the hour hand points.
-    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
-    var h = hm ? +hm[1] : 10, m = hm ? +hm[2] : 10;
-    each('[data-hand="hour"]', function (el) { attr(el, 'transform', 'rotate(' + ((h % 12 + m / 60) * 30).toFixed(1) + ' 100 128)'); });
-    each('[data-hand="minute"]', function (el) { attr(el, 'transform', 'rotate(' + (m * 6) + ' 100 128)'); });
     each('[data-watch]', function (el) {
+      var hm = /(\d{1,2}):(\d{2})/.exec(known(v[el.getAttribute('data-watch')]) ? String(v[el.getAttribute('data-watch')]) : '');
+      var h = hm ? +hm[1] : 10, m = hm ? +hm[2] : 10;
+      each('[data-hand="hour"]', function (hand) { attr(hand, 'transform', 'rotate(' + ((h % 12 + m / 60) * 30).toFixed(1) + ' 100 128)'); }, el);
+      each('[data-hand="minute"]', function (hand) { attr(hand, 'transform', 'rotate(' + (m * 6) + ' 100 128)'); }, el);
       attr(el, 'aria-label', hm ? 'Pocket watch showing ' + hm[0] : 'Pocket watch');
       hide(el, anyMapped && !hm);
     });
     if (!moving) seconds(false);
     each('[data-date]', function (el) {    // Friday, 13th November
-      var day = num(v['2']);
-      var rest = [isFinite(day) ? ordinal(Math.round(day)) : '', known(v['3']) ? String(v['3']) : ''].join(' ').trim();
-      text(el, [known(v['1']) ? String(v['1']) : '', rest].filter(Boolean).join(', ') || ' ');
+      var ids = el.getAttribute('data-date').split(' '), day = num(v[ids[1]]);   // day name, day, month
+      var rest = [isFinite(day) ? ordinal(Math.round(day)) : '', known(v[ids[2]]) ? String(v[ids[2]]) : ''].join(' ').trim();
+      text(el, [known(v[ids[0]]) ? String(v[ids[0]]) : '', rest].filter(Boolean).join(', ') || ' ');
     });
     each('[data-year]', function (el) {    // Anno MMXXVI
       var y = num(v[el.getAttribute('data-year')]);
@@ -618,7 +776,8 @@
     each('[data-num]', function (el) {
       var id = el.getAttribute('data-num'), n = num(v[id]);
       // a clock in MHz is given in GHz, like the unit printed beside it
-      if (el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[+id + 1] || ''))) n /= 1000;
+      var unitId = el.getAttribute('data-unit-of') || String(+id + 1);
+      if (el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[unitId] || ''))) n /= 1000;
       text(el, fmt(n, +el.getAttribute('data-places')));
     });
     each('[data-unit]', function (el) {
@@ -641,14 +800,29 @@
     });
 
     // Thermometers: the spirit rises from the bulb to the reading.
+    // A generated thermometer (it has data-max) reads 0 to its sensor's
+    // maximum: its numbers are relabelled and it rises by the same share.
+    function shareOf(el, id) {
+      var t = num(v[id]), max = num(v[el.getAttribute('data-max')]);
+      if (/^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { t /= 1000; max /= 1000; }
+      return { t: t, full: max > 0 ? max : 100 };
+    }
     each('[data-thermo]', function (el) {
-      var t = num(v[el.getAttribute('data-thermo')]), y = isFinite(t) ? tempY(t) : 190;
+      var t = num(v[el.getAttribute('data-thermo')]);
+      if (el.hasAttribute('data-max')) {
+        var r = shareOf(el, el.getAttribute('data-thermo'));
+        t = isFinite(r.t) ? T_MIN + clamp01(r.t / r.full) * (T_MAX - T_MIN) : NaN;
+        var labels = el.querySelectorAll('[data-scale] text');
+        for (var i = 0; i < labels.length; i++) text(labels[i], fmt(r.full * i / (labels.length - 1), 1).replace(/,/g, ''));
+      }
+      var y = isFinite(t) ? tempY(t) : 190;
       var spirit = el.querySelector('[data-spirit]');
       attr(spirit, 'y', y.toFixed(1));
       attr(spirit, 'height', (206 - y).toFixed(1));
     });
     each('[data-state]', function (el) {
       var t = num(v[el.getAttribute('data-state')]);
+      if (el.hasAttribute('data-max')) { var r = shareOf(el, el.getAttribute('data-state')); t = isFinite(r.t) ? T_MIN + clamp01(r.t / r.full) * (T_MAX - T_MIN) : NaN; }
       text(el, t >= FEVER ? 'Fever Heat!' : t >= WARM ? 'Uncommonly Warm' : 'Temperate');
       flag(el, 'fever', t >= FEVER);
       flag(el, 'warm', t >= WARM && t < FEVER);
@@ -669,12 +843,16 @@
       text(el, 'The whole scale being ' + words(fanScale || cssNum('--fan-max', 2400)) + ' revolutions.');
     });
 
-    latest.down = num(v['65']); latest.up = num(v['69']);
-    netUnit = known(v['66']) ? String(v['66']) : known(v['70']) ? String(v['70']) : '';
+    // The chart names its sensors; without one (a custom layout) nothing is sampled.
+    var chart = document.querySelector('[data-chart]'), units = chart ? chart.getAttribute('data-units').split(' ') : [];
+    latest.down = chart ? num(v[chart.getAttribute('data-down')]) : NaN;
+    latest.up = chart ? num(v[chart.getAttribute('data-up')]) : NaN;
+    netUnit = known(v[units[0]]) ? String(v[units[0]]) : known(v[units[1]]) ? String(v[units[1]]) : '';
 
     // Hide what has no data. With nothing bound at all, show the whole design.
     each('[data-need]', function (el) {
-      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+      var raw = v[el.getAttribute('data-need')];
+      hide(el, anyMapped && !isFinite(num(raw)) && !known(raw));
     });
     each('[data-section]', function (el) {
       hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);

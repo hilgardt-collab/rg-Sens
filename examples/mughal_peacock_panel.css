@@ -103,3 +103,14 @@ html, body { margin: 0; background: var(--wall-2); }
 .edge { position: absolute; top: 0; z-index: 0; pointer-events: none; max-height: 1920px; }
 .edge.l { left: 0; }
 .edge.r { right: 0; transform: scaleX(-1); }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A group is an arched panel with its title; each piece is scaled to
+   the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > section:has(.rg-items) { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.mg-panel { flex: 1; min-height: 0; }
+.mg-panel > .rg-items { flex: 1; min-height: 0; align-self: stretch; }
+.mg-gate { width: 100%; }
+.rg-fit > div { box-sizing: border-box; }
+.mg-cut { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

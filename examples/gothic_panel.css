@@ -85,3 +85,16 @@ html, body { margin: 0; background: #0B0A0C; }
 .iron { top: 0; opacity: 0.55; max-height: 1920px; }
 .iron.l { left: 0; }
 .iron.r { right: 0; transform: scaleX(-1); }
+
+/* ---- custom layouts: groups built from the templates after the page ------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). The groups share the
+   height equally, and a group hands what is left under its title to the
+   grid. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > section:has(.rg-items) { min-height: 0; }
+.groups > section:has(.rg-items) > div:nth-child(2) { min-height: 0; overflow: hidden; justify-content: flex-start; }
+.groups > header:has(.rg-items) { min-height: 0; min-width: 0; justify-content: flex-start; gap: 6px; }
+.groups > header > .rg-items { align-self: stretch; }
+.rg-item .gx-cap { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

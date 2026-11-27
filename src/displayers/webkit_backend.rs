@@ -603,9 +603,10 @@ impl TemplateBackend for WebKitBackend {
 
 /// Build JavaScript values string from display data
 fn build_js_values(data: &DisplayData) -> String {
-    let mut entries = Vec::with_capacity(data.config.mappings.len());
+    let mut entries =
+        Vec::with_capacity(data.config.mappings.len() + data.layout_mappings.len());
 
-    for mapping in &data.config.mappings {
+    for mapping in data.config.mappings.iter().chain(&data.layout_mappings) {
         let mut value = String::new();
         write_mapped_value(&data.values, mapping, &mut value);
 
@@ -623,7 +624,7 @@ fn build_js_values(data: &DisplayData) -> String {
 
 /// Load HTML content from config
 fn load_html_content(data: &Arc<Mutex<DisplayData>>) -> Option<(String, Option<String>)> {
-    let data_guard = data.try_lock().ok()?;
+    let mut data_guard = data.try_lock().ok()?;
 
     let base_uri = if !data_guard.config.html_path.as_os_str().is_empty()
         && data_guard.config.html_path.exists()
@@ -654,6 +655,8 @@ fn load_html_content(data: &Arc<Mutex<DisplayData>>) -> Option<(String, Option<S
     });
 
     html.map(|h| {
+        // A hot-reloaded template may have changed its prototypes.
+        data_guard.refresh_layout(&h);
         (
             build_document(&h, &data_guard.config, css.as_deref()),
             base_uri,
@@ -807,9 +810,29 @@ mod tests {
         let brutalist_defaults = extract_placeholder_defaults(brutalist);
         assert_eq!(brutalist_defaults.len(), deco.len() + 1);
         assert_eq!(brutalist_defaults[&90].field, "year");
+        // Hi-Fi, Atomic, Nixie, Memphis, Cockpit and Porcelain keep to the shared 74;
+        // Blueprint has the year on 90.
+        let hifi = include_str!("../../examples/hifi_panel.html");
+        let atomic = include_str!("../../examples/atomic_panel.html");
+        let blueprint = include_str!("../../examples/blueprint_panel.html");
+        let nixie = include_str!("../../examples/nixie_panel.html");
+        let memphis = include_str!("../../examples/memphis_panel.html");
+        let cockpit = include_str!("../../examples/cockpit_panel.html");
+        let porcelain = include_str!("../../examples/porcelain_panel.html");
+        for panel in [hifi, atomic, blueprint, nixie, memphis, cockpit, porcelain] {
+            assert!(detect_placeholders(panel).is_empty());
+            assert!(!panel.contains("fonts.googleapis.com"));
+        }
+        for plain in [hifi, atomic, nixie, memphis, cockpit, porcelain] {
+            assert_eq!(extract_placeholder_defaults(plain).len(), deco.len());
+        }
+        let blueprint_defaults = extract_placeholder_defaults(blueprint);
+        assert_eq!(blueprint_defaults.len(), deco.len() + 1);
+        assert_eq!(blueprint_defaults[&90].field, "year");
         for other in [
             nouveau, steampunk, neon, lcars, warrior, leather, lcd, victorian, mughal, bauhaus,
-            gothic, western, japandi, gumdrop, filigree, brutalist,
+            gothic, western, japandi, gumdrop, filigree, brutalist, hifi, atomic, blueprint, nixie,
+            memphis, cockpit, porcelain,
         ] {
             let other = extract_placeholder_defaults(other);
             for (index, default) in &deco {

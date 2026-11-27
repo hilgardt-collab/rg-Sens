@@ -488,6 +488,9 @@ impl DisplayerConfig {
             DisplayerConfig::ArtDeco(cfg) => sync!(cfg),
             DisplayerConfig::ArtNouveau(cfg) => sync!(cfg),
             DisplayerConfig::Steampunk(cfg) => sync!(cfg),
+            DisplayerConfig::CssTemplate(cfg) => cfg
+                .layout
+                .sync(groups.iter().map(|g| g.item_count as u32).collect()),
             _ => {}
         }
     }

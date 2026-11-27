@@ -134,3 +134,19 @@ html, body { margin: 0; background: #2A1A10; }
 [data-belt] i u { position: absolute; left: 0; right: 0; bottom: 2px; height: 16px; border-radius: 2px;
   background: linear-gradient(90deg, #3E200E 0%, #7A4A28 40%, #6A3C1E 60%, #3A1C0C 100%);
   box-shadow: 0 -1px 0 rgba(255,220,170,0.15), 0 1px 2px rgba(0,0,0,0.5); }
+
+/* ---- custom layouts: groups built from the templates after the page ------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). The groups share the
+   height equally; a poster hands what is left under its title to the grid,
+   and the posters lean left and right in turn. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > section:has(.rg-items) { min-height: 0; justify-content: flex-start; }
+.groups > section[data-section]:has(.rg-items) > div:first-child { min-height: 0; overflow: hidden; }
+.groups > section[data-section] > div:first-child > div.rg-items { margin: 0; }
+.wx-poster.wx-odd { transform: rotate(-0.4deg); }
+.wx-poster.wx-even { transform: rotate(0.45deg); }
+.wx-poster .wx-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.groups > .wx-vista { align-items: stretch; }
+.wx-vista > .rg-items { align-self: stretch; }

@@ -47,6 +47,8 @@ pub struct CssTemplateConfigWidget {
     bindings: Rc<BindingsPage>,
     /// The template's own options, on the Display tab.
     options: Rc<OptionsPane>,
+    /// Template's own layout, or the user's groups and widgets.
+    layout: Rc<LayoutPane>,
     // Display widgets
     animation_check: CheckButton,
     animation_speed_spin: SpinButton,
@@ -77,6 +79,13 @@ impl CssTemplateConfigWidget {
 
         let (display_page, animation_check, animation_speed_spin) =
             Self::create_display_tab(config.clone(), on_change.clone());
+        let layout = LayoutPane::new(
+            config.clone(),
+            on_change.clone(),
+            bindings.clone(),
+            notebook.clone(),
+        );
+        display_page.append(&layout.pane);
         let options = OptionsPane::new(config.clone(), on_change.clone());
         display_page.append(&options.pane);
         notebook.append_page(&display_page, Some(&Label::new(Some("Display"))));
@@ -94,6 +103,7 @@ impl CssTemplateConfigWidget {
             scan_btn,
             bindings,
             options,
+            layout,
             animation_check,
             animation_speed_spin,
         };
@@ -492,6 +502,7 @@ impl CssTemplateConfigWidget {
 
         self.bindings.rebuild();
         self.options.rebuild();
+        self.layout.refresh();
         self.scan_btn
             .set_sensitive(self.bindings.template.borrow().readable);
     }
@@ -510,6 +521,7 @@ impl CssTemplateConfigWidget {
 
     /// The panel's sensors (from the tree dialog): what the picker offers.
     pub fn set_slot_kinds(&self, kinds: Vec<SlotKind>) {
+        *self.layout.kinds.borrow_mut() = kinds.clone();
         self.bindings.set_kinds(kinds);
     }
 
@@ -524,14 +536,137 @@ impl Default for CssTemplateConfigWidget {
     }
 }
 
-/// The template as it is on disk now, else the HTML embedded in the config.
-fn read_template(config: &CssTemplateDisplayConfig) -> Option<String> {
-    if !config.html_path.as_os_str().is_empty() {
-        if let Ok(html) = std::fs::read_to_string(&config.html_path) {
-            return Some(html);
+use crate::ui::css_template_layout::read_template;
+
+/// The Display tab's Layout section: the template's own groups, or groups
+/// and widgets built from the panel's Content (see `css_template_layout`).
+struct LayoutPane {
+    pane: GtkBox,
+    dropdown: DropDown,
+    hint: Label,
+    config: Rc<RefCell<CssTemplateDisplayConfig>>,
+    kinds: RefCell<Vec<SlotKind>>,
+    loading: std::cell::Cell<bool>,
+    /// The Bindings tab is out of use while a custom layout is on.
+    notebook: Notebook,
+    bindings_page: gtk4::Widget,
+}
+
+impl LayoutPane {
+    fn new(
+        config: Rc<RefCell<CssTemplateDisplayConfig>>,
+        on_change: ChangeHook,
+        bindings: Rc<BindingsPage>,
+        notebook: Notebook,
+    ) -> Rc<Self> {
+        let pane = GtkBox::new(Orientation::Vertical, 6);
+        pane.set_margin_top(12);
+        pane.append(&create_section_header("Layout"));
+        let dropdown = DropDown::new(
+            Some(StringList::new(&[
+                "The template's own layout",
+                "My own groups and widgets",
+            ])),
+            None::<gtk4::Expression>,
+        );
+        dropdown.set_halign(gtk4::Align::Start);
+        pane.append(&dropdown);
+        let hint = Label::new(None);
+        hint.set_wrap(true);
+        hint.set_xalign(0.0);
+        hint.add_css_class("dim-label");
+        pane.append(&hint);
+        let this = Rc::new(Self {
+            pane,
+            dropdown,
+            hint,
+            config,
+            kinds: RefCell::new(Vec::new()),
+            loading: std::cell::Cell::new(false),
+            notebook,
+            bindings_page: bindings.page.clone().upcast(),
+        });
+        let weak = Rc::downgrade(&this);
+        let bindings = Rc::downgrade(&bindings);
+        this.dropdown.connect_selected_notify(move |dropdown| {
+            let Some(this) = weak.upgrade() else { return };
+            if this.loading.get() {
+                return;
+            }
+            this.set_custom(dropdown.selected() == 1);
+            this.refresh();
+            // The template's own groups come and go with the layout.
+            if let Some(bindings) = bindings.upgrade() {
+                bindings.rebuild();
+            }
+            if let Some(cb) = on_change.borrow().as_ref() {
+                cb();
+            }
+        });
+        this
+    }
+
+    /// Turn the custom layout on or off. Turning it on for the first time
+    /// names each group after the source of its first item; the widgets are
+    /// chosen by the dialog (`coerce_layout`). Turning it off keeps the
+    /// arrangement for the next time.
+    fn set_custom(&self, custom: bool) {
+        let mut config = self.config.borrow_mut();
+        config.layout.custom = custom;
+        if custom && config.layout.groups.is_empty() {
+            for kind in self.kinds.borrow().iter() {
+                if let Some((group, 0)) =
+                    rg_sens_types::display_configs::css_template::parse_slot(&kind.prefix)
+                {
+                    if config.layout.groups.len() <= group {
+                        config.layout.groups.resize(group + 1, Default::default());
+                    }
+                    config.layout.groups[group].title = source_title(&kind.source);
+                }
+            }
         }
     }
-    config.embedded_html.clone()
+
+    fn refresh(&self) {
+        let (custom, usable) = {
+            let config = self.config.borrow();
+            let usable = read_template(&config)
+                .is_some_and(|html| crate::ui::css_template_layout::layout_spec(&html).usable());
+            (config.layout.custom, usable)
+        };
+        self.loading.set(true);
+        self.dropdown.set_selected(u32::from(custom && usable));
+        self.loading.set(false);
+        self.dropdown.set_sensitive(usable);
+        // With a custom layout every sensor is bound by its widget, on the
+        // item pages; the template's bindings do not apply.
+        let bindings_on = !(custom && usable);
+        self.bindings_page.set_sensitive(bindings_on);
+        if let Some(tab) = self.notebook.tab_label(&self.bindings_page) {
+            tab.set_sensitive(bindings_on);
+            tab.set_tooltip_text((!bindings_on).then_some(
+                "Not used with your own groups and widgets: each item is bound by its widget",
+            ));
+        }
+        if !bindings_on && self.notebook.nth_page(self.notebook.current_page()).as_ref()
+            == Some(&self.bindings_page)
+        {
+            self.notebook.set_current_page(Some(0));
+        }
+        self.hint.set_text(if !usable {
+            "This template has a fixed layout: it declares no widget prototypes."
+        } else if custom {
+            "The page is built from Content: each group there is a group here \
+             (its title, and a board to place up to 6 widgets on), and each \
+             item chooses its widget, size and colour on its own page. The \
+             Bindings tab is not used; what the template shows outside its \
+             groups keeps the binding it has."
+        } else {
+            "The template arranges its own groups; bind them on the Bindings tab. \
+             Choose \"My own groups and widgets\" to decide the number of groups \
+             and the widget each sensor is shown with."
+        });
+    }
 }
 
 /// The stylesheet that belongs to a template: the file of the same name
@@ -1064,12 +1199,25 @@ impl BindingsPage {
     fn read(&self) {
         let html = read_template(&self.config.borrow());
         *self.template.borrow_mut() = match html {
-            Some(html) => Template {
-                readable: true,
-                placeholders: detect_placeholders(&html),
-                defaults: extract_placeholder_defaults(&html),
-                hints: extract_placeholder_hints(&html),
-            },
+            Some(html) => {
+                let mut placeholders = detect_placeholders(&html);
+                let mut defaults = extract_placeholder_defaults(&html);
+                // A custom layout replaces the template's own groups: what
+                // they showed is bound on the item pages under Content.
+                if self.config.borrow().layout.custom {
+                    let spec = crate::ui::css_template_layout::layout_spec(&html);
+                    if spec.usable() {
+                        placeholders.retain(|i| !spec.own_indices.contains(i));
+                        defaults.retain(|i, _| !spec.own_indices.contains(i));
+                    }
+                }
+                Template {
+                    readable: true,
+                    placeholders,
+                    defaults,
+                    hints: extract_placeholder_hints(&html),
+                }
+            }
             None => Template::default(),
         };
     }
@@ -1694,6 +1842,67 @@ mod preview {
             context.iteration(false);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }
+    }
+
+    /// The Display tab's Layout switch: off for a template without
+    /// prototypes; on, it names the groups, reports a change and leaves the
+    /// Bindings page only what sits outside the template's own groups.
+    #[test]
+    #[ignore = "needs a display"]
+    fn layout_switch_hands_the_groups_to_content() {
+        gtk4::init().expect("a display");
+        crate::sources::register_all();
+        let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples");
+        let html_path = examples.join("bauhaus_panel.html");
+        let html = std::fs::read_to_string(&html_path).unwrap();
+        let mut source = crate::sources::ComboSourceConfig::default();
+        add_wanted_slots(
+            &mut source,
+            &wanted_slots(&detect_placeholders(&html), &extract_placeholder_defaults(&html)),
+        );
+
+        let widget = Rc::new(CssTemplateConfigWidget::new());
+        let changes = Rc::new(Cell::new(0));
+        let counter = changes.clone();
+        widget.set_on_change(move || counter.set(counter.get() + 1));
+        widget.set_slot_kinds(combo_slot_kinds(&source));
+        widget.set_config(&CssTemplateDisplayConfig {
+            html_path: examples.join("art_deco_panel.html"),
+            ..Default::default()
+        });
+        assert!(!widget.layout.dropdown.is_sensitive(), "no prototypes: fixed layout");
+
+        widget.set_config(&CssTemplateDisplayConfig {
+            html_path,
+            ..Default::default()
+        });
+        let window = gtk4::Window::new();
+        window.set_child(Some(widget.widget()));
+        window.present();
+        pump(300);
+        assert!(widget.layout.dropdown.is_sensitive());
+        assert_eq!(widget.layout.dropdown.selected(), 0);
+        let rows_before = widget.bindings.rows.borrow().len();
+        changes.set(0);
+
+        widget.layout.dropdown.set_selected(1);
+        pump(300);
+        let config = widget.get_config();
+        assert!(config.layout.custom);
+        assert_eq!(changes.get(), 1);
+        assert_eq!(config.layout.groups.len(), source.groups.len());
+        assert!(config.layout.groups.iter().all(|g| !g.title.is_empty()));
+        let rows_after = widget.bindings.rows.borrow().len();
+        assert!(rows_after > 0 && rows_after < rows_before, "{rows_before} -> {rows_after}");
+        assert!(!widget.bindings.page.is_sensitive(), "Bindings is out of use");
+
+        // off again: the arrangement is kept for the next time
+        widget.layout.dropdown.set_selected(0);
+        pump(300);
+        let config = widget.get_config();
+        assert!(!config.layout.custom && !config.layout.groups.is_empty());
+        assert_eq!(widget.bindings.rows.borrow().len(), rows_before);
+        assert!(widget.bindings.page.is_sensitive());
     }
 
     /// Drives the pickers the way a user does, against a stand-in for the

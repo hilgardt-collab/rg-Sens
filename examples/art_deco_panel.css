@@ -60,3 +60,63 @@ html, body { margin: 0; background: var(--bg); }
 .groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
   grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 10px 28px; align-content: stretch; }
 .groups > * { justify-content: center; min-width: 0; }
+
+/* ---- custom layouts: groups built from the templates after the page ------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). The groups share the
+   height equally, and a group hands what is left under its plaque to the
+   grid. The .ad- classes are used by the templates only: the template's own
+   groups carry their styles inline. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > .ad-g { justify-content: flex-start; min-height: 0; overflow: hidden; }
+.ad-g > .ad-head { flex: none; width: 100%; }
+.ad-g > .rg-items { align-self: stretch; }
+.ad-title { max-width: 270px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; }
+.rg-fit > * { box-sizing: border-box; }
+.rg-fit > .ad-bar, .rg-fit > .ad-fan, .rg-fit > .ad-reading, .rg-fit > .ad-clock { width: 100%; height: 100%; }
+
+/* what the widgets share: a spaced caption, a Limelight value with its unit */
+.ad-cap { min-width: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.24em; color: var(--label);
+  text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-val { flex: none; font-family: Limelight, serif; font-size: 20px; line-height: 1; color: var(--text); white-space: nowrap; }
+.ad-unit { font-family: 'Josefin Sans', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--lt); text-transform: uppercase; }
+.ad-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.ad-plaque { max-width: 90%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-plaque.ad-small { font-size: 9px !important; padding: 4px 11px 2px 14px !important; }
+.ad-gnum { font-size: var(--ad-n); }
+.ad-gnum.ad-long { font-size: calc(var(--ad-n) * 0.72); }
+.ad-gauge .ad-gnum.ad-long { align-self: center; }
+
+/* clock: the sunburst plaque over the date */
+.ad-clock { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+/* bar: the memory rows' chevron track with its quarter marks */
+.ad-track { flex: none; position: relative; height: 12px; background: var(--track);
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 6px 100%, 0 50%); }
+.ad-bar { display: flex; flex-direction: column; justify-content: center; gap: 7px; min-width: 0; }
+.ad-bar.ad-compact { gap: 5px; }
+.ad-bar.ad-compact .ad-cap { font-size: 11px; letter-spacing: 0.16em; }
+.ad-bar.ad-compact .ad-val { font-size: 22px; }
+.ad-bar.ad-compact .ad-track { height: 10px; }
+.ad-bar.ad-long { flex-direction: row; align-items: center; gap: 12px; }
+.ad-bar.ad-long .ad-cap { flex: none; width: 104px; }
+.ad-bar.ad-long .ad-track { flex: 1; }
+.ad-bar.ad-long .ad-val { min-width: 84px; text-align: right; }
+
+/* fan: the little sunburst over its reading, or the cooling row */
+.ad-fan { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ad-fan > svg { flex: none; }
+.ad-fan.ad-compact { flex-direction: column; justify-content: center; gap: 6px; }
+.ad-fan.ad-compact .ad-cap { max-width: 100%; font-size: 11px; letter-spacing: 0.16em; }
+.ad-fan.ad-compact .ad-val { font-size: 23px; }
+.ad-fan.ad-compact .segs { align-self: stretch; height: 10px; }
+.ad-fan-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ad-fan.ad-long .ad-val { font-size: 23px; }
+
+/* reading: a processor stat cell between two gold rules */
+.ad-reading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-width: 0;
+  border-top: 1px solid var(--mid); border-bottom: 1px solid var(--mid); padding: 0 4px; }
+.ad-reading .ad-cap { max-width: 100%; font-size: 11px; }
+.ad-reading .ad-val { font-size: 27px; }
+.ad-reading .ad-unit { font-family: Limelight, serif; font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; }

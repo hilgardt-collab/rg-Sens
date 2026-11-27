@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1800 960x1050 1440x725 2880x455">
+<!-- custom layouts: the room a group gets, plus the footer -->
+<meta name="rg-group-size" content="480x345+60">
 <title>Bauhaus Sensor Panel</title>
 <!--
   Bauhaus sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -72,6 +74,7 @@
 
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+  <!--rg-groups 0-71 90-->
   <header class="poster">
     <svg aria-hidden="true" width="432" height="340" viewBox="0 0 432 340">
       <circle class="red" cx="318" cy="128" r="118"></circle>
@@ -84,7 +87,7 @@
     </svg>
     <div class="spine"><span>system sensors</span></div>
     <div class="clock" data-clock="0">--:--</div>
-    <div class="date"><span data-date>&nbsp;</span><b data-year="90"></b></div>
+    <div class="date"><span data-date="1 2 3">&nbsp;</span><b data-year="90"></b></div>
   </header>
 
 
@@ -230,7 +233,7 @@
       </div>
     </div>
   </section>
-
+  <!--/rg-groups-->
   </div>
 
   <footer class="foot">
@@ -244,6 +247,104 @@
     </div>
   </footer>
 </div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout).
+     rg-Sens builds the groups from these in place of the ones between the
+     rg-groups markers; a field name in double braces (value, caption, unit,
+     max, time ...) becomes a placeholder bound to the widget's own sensor. -->
+<template data-rg-group="section" data-rg-label="Section">
+  <section class="section" data-section>
+    <div>
+      <div class="label"><h2>{{title}}</h2></div>
+      <!--rg-items-->
+    </div>
+  </section>
+</template>
+<template data-rg-group="poster" data-rg-label="Poster">
+  <header class="poster">
+    <svg aria-hidden="true" width="432" height="340" viewBox="0 0 432 340">
+      <circle class="red" cx="318" cy="128" r="118"></circle>
+      <rect class="blue" x="44" y="0" width="92" height="92"></rect>
+      <g class="turn"><polygon class="yellow" points="306,286 426,286 366,182"></polygon></g>
+      <rect class="ink" x="44" y="262" width="388" height="12"></rect>
+      <circle class="ink" cx="160" cy="46" r="10"></circle>
+      <rect class="ink" x="170" y="44" width="130" height="4"></rect>
+      <rect class="ink" x="0" y="0" width="6" height="340"></rect>
+    </svg>
+    <div class="spine"><span>{{title}}</span></div>
+    <!--rg-items-->
+  </header>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock" data-rg-size="large" data-rg-sources="clock" data-rg-group="poster">
+  <div class="clock" data-clock="{{time}}">--:--</div>
+  <div class="date"><span data-date="{{day_name}} {{day}} {{month_name}}">&nbsp;</span><b data-year="{{year}}"></b></div>
+</template>
+<template data-rg-widget="dial" data-rg-colors="red blue yellow black" data-rg-label="Dial" data-rg-size="large" data-rg-width="330" data-rg-height="190">
+  <div class="unit" data-need="{{value}}">
+    <svg data-gauge="{{value}}" data-max="{{max}}" role="img" aria-label="Gauge" width="184" height="184" viewBox="0 0 200 200">
+      <circle class="paper2" cx="100" cy="100" r="84"></circle>
+      <path class="{{color}}" data-pie d=""></path>
+      <circle class="line" cx="100" cy="100" r="84" stroke-width="6"></circle>
+      <g data-ticks></g>
+      <circle class="ink" cx="100" cy="100" r="7"></circle>
+    </svg>
+    <div class="read">
+      <span class="temp"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}">--</span><small data-unit="{{unit}}" data-default=""></small></span>
+      <span class="name" data-cap="{{caption}}" data-default=""></span>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="dial" data-rg-colors="red blue yellow black" data-rg-label="Dial" data-rg-size="medium" data-rg-width="220" data-rg-height="100">
+  <div class="unit compact" data-need="{{value}}">
+    <svg data-gauge="{{value}}" data-max="{{max}}" role="img" aria-label="Gauge" width="96" height="96" viewBox="0 0 200 200">
+      <circle class="paper2" cx="100" cy="100" r="84"></circle>
+      <path class="{{color}}" data-pie d=""></path>
+      <circle class="line" cx="100" cy="100" r="84" stroke-width="8"></circle>
+      <circle class="ink" cx="100" cy="100" r="9"></circle>
+    </svg>
+    <div class="read">
+      <span class="temp"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}">--</span><small data-unit="{{unit}}" data-default=""></small></span>
+      <span class="name" data-cap="{{caption}}" data-default=""></span>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Bar" data-rg-size="small" data-rg-colors="red yellow blue black" data-rg-width="125" data-rg-height="46">
+  <div class="stat stacked" data-need="{{value}}"><span data-cap="{{caption}}" data-default=""></span><span class="val"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}" style="font: inherit">--</span><span> <span data-unit="{{unit}}" data-default=""></span></span></span><div class="bar"><i class="{{color}}" data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div></div>
+</template>
+<template data-rg-widget="bar" data-rg-colors="red yellow blue black" data-rg-label="Bar" data-rg-size="large" data-rg-width="390" data-rg-height="30">
+  <div class="stat" data-need="{{value}}"><span data-cap="{{caption}}" data-default=""></span><div class="bar"><i class="{{color}}" data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" style="font: inherit">--</span><span> <span data-unit="{{unit}}" data-default=""></span></span></span></div>
+</template>
+<template data-rg-widget="bar" data-rg-colors="red yellow blue black" data-rg-label="Bar" data-rg-size="medium" data-rg-width="190" data-rg-height="52">
+  <div class="stat stacked" data-need="{{value}}"><span data-cap="{{caption}}" data-default=""></span><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" style="font: inherit">--</span><span> <span data-unit="{{unit}}" data-default=""></span></span></span><div class="bar"><i class="{{color}}" data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div></div>
+</template>
+<template data-rg-widget="fan" data-rg-colors="red yellow blue black" data-rg-label="Pinwheel" data-rg-size="small" data-rg-sources="fan" data-rg-width="132" data-rg-height="185">
+  <div class="fan" data-need="{{value}}">
+    <div><svg aria-hidden="true" viewBox="0 0 80 80">
+      <g data-rotor="{{value}}"><path class="{{color}}" d="M40 40 L40 8 A32 32 0 0 1 72 40 Z"></path><path class="{{color}}" d="M40 40 L40 72 A32 32 0 0 1 8 40 Z"></path><circle class="line" cx="40" cy="40" r="32" stroke-width="3"></circle></g>
+      <circle class="ink" cx="40" cy="40" r="5"></circle>
+    </svg></div>
+    <b data-num="{{value}}" data-places="0" data-unit-of="{{unit}}" data-plain>--</b>
+    <span data-cap="{{caption}}" data-default=""></span>
+  </div>
+</template>
+<template data-rg-widget="pool" data-rg-colors="blue yellow red black" data-rg-label="Column" data-rg-size="medium" data-rg-width="125" data-rg-height="250">
+  <div class="pool" data-need="{{value}}">
+    <span class="pct"><span data-pct="{{value}}" data-max="{{max}}" style="font: inherit">--</span><span>%</span></span>
+    <div class="col"><i class="{{color}}" data-rise="{{value}}" data-max="{{max}}"></i></div>
+    <span class="name" data-cap="{{caption}}" data-default=""></span>
+    <span class="sub"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-plain>--</span> of <span data-num="{{max}}" data-places="0" data-unit-of="{{unit}}" data-plain>--</span> <span data-unit="{{unit}}" data-default=""></span></span>
+  </div>
+</template>
+<template data-rg-widget="pool" data-rg-colors="blue yellow red black" data-rg-label="Column" data-rg-size="small" data-rg-width="125" data-rg-height="150">
+  <div class="pool short" data-need="{{value}}">
+    <span class="pct"><span data-pct="{{value}}" data-max="{{max}}" style="font: inherit">--</span><span>%</span></span>
+    <div class="col"><i class="{{color}}" data-rise="{{value}}" data-max="{{max}}"></i></div>
+    <span class="name" data-cap="{{caption}}" data-default=""></span>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Reading" data-rg-size="small" data-rg-width="125" data-rg-height="62">
+  <div class="reading" data-need="{{value}}"><span class="v"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" style="font: inherit">--</span><span> <span data-unit="{{unit}}" data-default=""></span></span></span><span class="name" data-cap="{{caption}}" data-default=""></span></div>
+</template>
 
 <script type="application/json" id="rg-template-options">
 [
@@ -471,12 +572,14 @@
     var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
 
     // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
-    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
-    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
-    each('[data-date]', function (el) {    // friday 13 november
-      var day = num(v['2']);
-      text(el, [known(v['1']) ? String(v['1']) : '', isFinite(day) ? String(Math.round(day)) : '',
-                known(v['3']) ? String(v['3']) : ''].filter(Boolean).join(' ') || ' ');
+    each('[data-clock]', function (el) {
+      var t = v[el.getAttribute('data-clock')], hm = /(\d{1,2}):(\d{2})/.exec(known(t) ? String(t) : '');
+      text(el, hm ? hm[1] + ':' + hm[2] : '--:--');
+    });
+    each('[data-date]', function (el) {    // friday 13 november: the ids of day name, day and month
+      var ids = el.getAttribute('data-date').split(' '), day = num(v[ids[1]]);
+      text(el, [known(v[ids[0]]) ? String(v[ids[0]]) : '', isFinite(day) ? String(Math.round(day)) : '',
+                known(v[ids[2]]) ? String(v[ids[2]]) : ''].filter(Boolean).join(' ') || ' ');
     });
     each('[data-year]', function (el) {
       var y = num(v[el.getAttribute('data-year')]);
@@ -486,12 +589,13 @@
     each('[data-num]', function (el) {
       var id = el.getAttribute('data-num'), n = num(v[id]);
       if (el.hasAttribute('data-ghz') && isMhz(v, +id + 1)) n /= 1000;
+      else if (el.hasAttribute('data-unit-of') && isMhz(v, el.getAttribute('data-unit-of'))) n /= 1000;
       var shown = fmt(n, +el.getAttribute('data-places'));
       text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);
     });
     each('[data-unit]', function (el) {
       var id = el.getAttribute('data-unit'), u = v[id];
-      text(el, el.hasAttribute('data-ghz') && isMhz(v, id) ? 'ghz' : known(u) ? String(u) : el.getAttribute('data-default'));
+      text(el, (el.hasAttribute('data-ghz') || el.closest('.rg-item')) && isMhz(v, id) ? 'ghz' : known(u) ? String(u) : el.getAttribute('data-default'));
     });
     each('[data-cap]', function (el) {
       var c = v[el.getAttribute('data-cap')];
@@ -520,7 +624,10 @@
     // Gauges: the pie fills from 20 degrees (empty) to 100 (the whole circle).
     each('[data-gauge]', function (el) {
       var t = num(v[el.getAttribute('data-gauge')]);
-      attr(el.querySelector('[data-pie]'), 'd', pie(isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0));
+      // a generated dial fills against its sensor's own maximum
+      var f = el.hasAttribute('data-max') ? share(t, num(v[el.getAttribute('data-max')]), 100)
+                                          : isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      attr(el.querySelector('[data-pie]'), 'd', pie(f));
     });
     each('[data-state]', function (el) {
       var t = num(v[el.getAttribute('data-state')]);
@@ -534,7 +641,7 @@
     each('[data-bar]', function (el) {
       var val = num(v[el.getAttribute('data-bar')]), max = num(v[el.getAttribute('data-max')]);
       var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
-      if (scale.indexOf('clock') > 0 && isMhz(v, el.getAttribute('data-unit-of'))) { val /= 1000; max /= 1000; }
+      if ((scale.indexOf('clock') > 0 || el.closest('.rg-item')) && isMhz(v, el.getAttribute('data-unit-of'))) { val /= 1000; max /= 1000; }
       style(el, 'width', (share(val, max, fallback) * 100).toFixed(1) + '%');
     });
     // Memory: a column rising from the bottom, and the share as a percentage.

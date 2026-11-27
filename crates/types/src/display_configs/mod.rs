@@ -29,7 +29,10 @@ pub use bar::{
 };
 pub use clock::{AnalogClockConfig, FaceStyle, HandStyle};
 pub use core_bars::{CoreBarsConfig, LabelPosition};
-pub use css_template::{CssTemplateDisplayConfig, PlaceholderDefault, PlaceholderMapping};
+pub use css_template::{
+    CssGroupLayout, CssLayoutConfig, CssTemplateDisplayConfig, CssWidgetChoice, PlaceholderDefault,
+    PlaceholderMapping, CSS_LAYOUT_MAX_ITEMS,
+};
 pub use cyberpunk::CyberpunkFrameConfig;
 pub use digital_clock::{DigitalClockConfig, DigitalStyle};
 pub use graph::{AxisConfig, DataPoint, FillMode, GraphDisplayConfig, GraphType, LineStyle, Margin};

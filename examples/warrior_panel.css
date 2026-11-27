@@ -90,3 +90,117 @@ html, body { margin: 0; background: var(--bg); }
 .groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
   grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 10px 28px; align-content: stretch; }
 .groups > * { justify-content: center; min-width: 0; }
+
+/* ---- custom layouts: groups built from the prototypes -------------------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). The .wr- classes are
+   used by the prototypes only: the template's own groups carry their styles
+   inline. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+/* group shells: a title plate, then the chamfered well (the crest has none) */
+.wr-g { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow: hidden; }
+.wr-crest { gap: 4px; }
+.wr-bar { flex: none; display: flex; align-items: center; gap: 8px; height: 30px; }
+.wr-tab { flex: none; width: 14px; height: 30px; background: var(--red); clip-path: polygon(0 0, 100% 0, 40% 100%, 0 100%); }
+.wr-right .wr-tab { clip-path: polygon(0 0, 100% 0, 100% 100%, 60% 100%); }
+.wr-name { min-width: 0; height: 30px; padding: 0 26px; display: flex; align-items: center;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 45%, var(--m-dk) 100%);
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%); }
+.wr-right .wr-name { clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 100%, 12px 100%); }
+.wr-crest .wr-name { padding: 0 28px; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%); }
+.wr-name h2 { margin: 0; font-family: Teko, sans-serif; font-weight: 600; font-size: 24px; line-height: 1; letter-spacing: 0.16em;
+  padding-top: 4px; color: #1A0A06; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+.wr-rule { flex: 1; min-width: 40px; position: relative; height: 30px; }
+.wr-rule i { position: absolute; top: 13px; height: 4px; }
+.wr-rule b { position: absolute; top: 5px; width: 14px; height: 20px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--metal) 40%, var(--m-dk) 100%); }
+.wr-rule-r i { left: 0; right: 18px; background: linear-gradient(90deg, var(--red), var(--red-dk)); clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.wr-rule-r b { right: 0; clip-path: polygon(0 50%, 100% 0, 60% 50%, 100% 100%); }
+.wr-rule-l i { right: 0; left: 18px; background: linear-gradient(270deg, var(--red), var(--red-dk)); clip-path: polygon(0 50%, 100% 0, 100% 100%); }
+.wr-rule-l b { left: 0; clip-path: polygon(100% 50%, 0 0, 40% 50%, 0 100%); }
+.wr-rim { flex: 1; min-height: 0; display: flex; padding: 2px;
+  background: linear-gradient(160deg, var(--m-hi) 0%, var(--metal) 30%, var(--m-dp) 60%, var(--red) 100%);
+  clip-path: polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px); }
+.wr-well { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; overflow: hidden; padding: 14px 20px;
+  background: radial-gradient(ellipse at 30% 0%, color-mix(in srgb, var(--red) 15%, transparent) 0%, rgba(0,0,0,0) 60%), #120607;
+  clip-path: polygon(25px 0, 100% 0, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0 100%, 0 25px); }
+.wr-right .wr-rim { clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 26px 100%, 0 calc(100% - 26px)); }
+.wr-right .wr-well { background: radial-gradient(ellipse at 70% 0%, color-mix(in srgb, var(--red) 15%, transparent) 0%, rgba(0,0,0,0) 60%), #120607;
+  clip-path: polygon(0 0, calc(100% - 25px) 0, 100% 25px, 100% 100%, 25px 100%, 0 calc(100% - 25px)); }
+.wr-scan { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, transparent 1px, transparent 3px); }
+.wr-g .rg-items { align-self: stretch; }
+
+/* what the widgets share: caption, Teko value with its unit, chevron row */
+.rg-fit > * { width: 100%; height: 100%; box-sizing: border-box; }
+.wr-cap { min-width: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.22em; color: var(--m-lt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wr-val { flex: none; font-family: Teko, sans-serif; font-weight: 500; font-size: 30px; line-height: 0.8; color: var(--value); white-space: nowrap; }
+.wr-unit { font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--red); }
+.wr-chev { display: flex; gap: 1px; height: 12px; }
+.wr-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+
+/* clock: the crescent blade over the time, the date below */
+.wr-clock { display: flex; flex-direction: column; align-items: center; }
+.wr-blade { position: relative; width: 428px; height: 196px; }
+.wr-blade svg { position: absolute; top: 0; left: 0; overflow: visible; }
+.wr-time { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-family: Teko, sans-serif; font-weight: 500; font-size: 112px;
+  line-height: 0.78; letter-spacing: 0.02em; color: var(--value); text-shadow: 0 0 12px var(--red), 0 0 34px var(--red); animation: wr-flick 6s steps(1) infinite; }
+.wr-date { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.wr-date span { font-size: 16px; font-weight: 700; letter-spacing: 0.32em; padding-left: 0.32em; color: var(--m-lt); white-space: nowrap; }
+.wr-date i { width: 26px; height: 3px; background: var(--red); clip-path: polygon(0 50%, 100% 0, 100% 100%); }
+.wr-date i:last-child { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+
+/* gauge: teeth and spear, the reading inside the ring */
+.wr-gauge { position: relative; }
+.wr-gauge svg { position: absolute; top: 0; left: 0; }
+.wr-read { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.wr-read .wr-num { font-family: Teko, sans-serif; font-weight: 500; font-size: 68px; line-height: 0.8; color: var(--value); text-shadow: 0 0 10px var(--red), 0 0 26px var(--red); }
+.wr-read .wr-unit { font-family: Teko, sans-serif; font-size: 22px; font-weight: 400; line-height: 1; }
+.wr-read .wr-cap { max-width: 118px; margin-top: 4px; font-size: 11px; letter-spacing: 0.16em; }
+.wr-gauge.wr-compact .wr-num { font-size: 42px; }
+.wr-gauge.wr-compact .wr-unit { font-size: 15px; }
+.wr-gauge.wr-compact .wr-cap { max-width: 72px; margin-top: 2px; font-size: 9px; letter-spacing: 0.08em; }
+
+/* chevron bar: stacked (compact, medium) or one long row */
+.wr-stat { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
+.rg-fit > .wr-stat:not(.wr-long), .rg-fit > .wr-mem.wr-compact, .rg-fit > .wr-reading { padding: 0 3px; }
+.wr-stat.wr-compact .wr-cap { font-size: 11px; letter-spacing: 0.12em; }
+.wr-stat.wr-compact .wr-val { font-size: 26px; }
+.wr-stat.wr-compact .wr-unit { font-size: 11px; }
+.wr-stat.wr-long { flex-direction: row; align-items: center; gap: 12px; }
+.wr-stat.wr-long .wr-cap { flex: none; width: 104px; }
+.wr-stat.wr-long .wr-chev { flex: 1; height: 14px; }
+.wr-stat.wr-long .wr-val { min-width: 86px; text-align: right; }
+
+/* fan: the rotor over its reading, or the template's own row */
+.wr-fan { display: flex; align-items: center; }
+.wr-fan svg { flex: none; }
+.wr-fan.wr-compact { flex-direction: column; justify-content: center; gap: 5px; }
+.wr-fan.wr-compact .wr-val { font-size: 28px; margin-top: 4px; }
+.wr-fan.wr-compact .wr-cap { max-width: 100%; font-size: 11px; letter-spacing: 0.12em; }
+.wr-fan.wr-compact .wr-chev { align-self: stretch; height: 10px; }
+.wr-fan.wr-long { gap: 12px; }
+.wr-fan.wr-long .wr-stat { flex: 1; gap: 5px; }
+.wr-fan.wr-long .wr-cap { font-size: 13px; }
+.wr-fan.wr-long .wr-val { font-size: 28px; }
+.wr-fan .wr-unit { font-size: 12px; }
+
+/* blade bar: the memory rows' tapered bar with its share */
+.wr-mem { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; }
+.wr-mem .wr-cap { font-size: 13px; }
+.wr-mem .wr-val { font-size: 26px; }
+.wr-of { font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 600; color: var(--m-lt); white-space: nowrap; }
+.wr-pct { font-family: 'Saira Condensed', sans-serif; font-size: 13px; font-weight: 700; color: var(--red); margin-left: 8px; }
+.wr-track { flex: none; position: relative; height: 14px; background: color-mix(in srgb, var(--red) 15%, transparent); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+.wr-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: linear-gradient(90deg, var(--red-dk), var(--red) 70%, var(--hot));
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%); filter: drop-shadow(0 0 6px var(--red)); }
+.wr-mem.wr-compact { gap: 4px; }
+.wr-mem.wr-compact .wr-cap { font-size: 11px; letter-spacing: 0.12em; }
+.wr-mem.wr-compact .wr-track { height: 12px; }
+.wr-mem.wr-compact .wr-of { font-size: 11px; }
+
+/* reading: a red tab, the caption over the value */
+.wr-reading { display: flex; align-items: center; gap: 9px; }
+.wr-reading > i { flex: none; width: 10px; height: 34px; background: var(--red); clip-path: polygon(0 0, 100% 0, 40% 100%, 0 100%); }
+.wr-reading > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.wr-reading .wr-cap { font-size: 11px; letter-spacing: 0.12em; }

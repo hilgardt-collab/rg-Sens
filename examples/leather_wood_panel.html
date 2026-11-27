@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1500 960x910 1440x635 2880x390">
+<meta name="rg-group-size" content="480x230+120">
 <title>Leather &amp; Wood Sensor Panel</title>
 <!--
   Leather & Wood sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -103,8 +104,9 @@
 
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+<!--rg-groups 0-71-->
   <!-- ===== HEADER: dashboard clock ===== -->
-  <section data-section="clock" style="position: relative; z-index: 1; border-radius: 20px; padding: 18px 20px; background: radial-gradient(ellipse at 30% 15%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), radial-gradient(circle at 1px 1px, rgba(0,0,0,0.28) 1px, transparent 1.6px) 0 0 / 4px 4px, radial-gradient(circle at 3px 2px, rgba(255,255,255,0.05) 1px, transparent 1.6px) 0 0 / 5px 5px, linear-gradient(160deg, var(--l-hi) 0%, var(--l-mid) 50%, var(--l-sh) 100%); box-shadow: 0 0 0 2px var(--mt-mid), 0 0 0 3.5px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.6), inset 0 2px 3px rgba(255,255,255,0.14), inset 0 -4px 8px rgba(0,0,0,0.45); display: flex; align-items: center; gap: 18px">
+  <section data-section="clock" data-time="0" style="position: relative; z-index: 1; border-radius: 20px; padding: 18px 20px; background: radial-gradient(ellipse at 30% 15%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), radial-gradient(circle at 1px 1px, rgba(0,0,0,0.28) 1px, transparent 1.6px) 0 0 / 4px 4px, radial-gradient(circle at 3px 2px, rgba(255,255,255,0.05) 1px, transparent 1.6px) 0 0 / 5px 5px, linear-gradient(160deg, var(--l-hi) 0%, var(--l-mid) 50%, var(--l-sh) 100%); box-shadow: 0 0 0 2px var(--mt-mid), 0 0 0 3.5px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.6), inset 0 2px 3px rgba(255,255,255,0.14), inset 0 -4px 8px rgba(0,0,0,0.45); display: flex; align-items: center; gap: 18px">
     <div aria-hidden="true" style="position: absolute; top: 7px; right: 7px; bottom: 7px; left: 7px; border-radius: 14px; border: 1.5px dashed var(--stitch); opacity: 0.75; pointer-events: none"></div>
     <div style="position: relative; width: 190px; height: 190px; flex: none; filter: drop-shadow(0 5px 6px rgba(0,0,0,0.6))">
       <svg role="img" aria-label="Analogue clock" width="190" height="190" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0">
@@ -130,7 +132,7 @@
       <span style="font-family: 'Playfair Display', serif; font-weight: 700; font-size: 14px; letter-spacing: 0.24em; color: #D9B36A; text-shadow: 0 1px 0 rgba(0,0,0,0.6); white-space: nowrap">SYSTEM SENSORS</span>
       <div style="height: 1px; background: linear-gradient(90deg, #D9B36A, rgba(217,179,106,0))"></div>
       <span style="font-family: 'Playfair Display', serif; font-weight: 500; font-size: 62px; line-height: 1; color: #F6ECD8; text-shadow: 0 2px 3px rgba(0,0,0,0.5)" data-clock="0">--:--</span>
-      <span style="font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; color: #E8D7B6; white-space: nowrap" data-date>&nbsp;</span>
+      <span style="font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; color: #E8D7B6; white-space: nowrap" data-date="1 2 3">&nbsp;</span>
     </div>
   </section>
 
@@ -406,7 +408,7 @@
     </div>
     <div style="position: relative; height: 96px; border-radius: 6px; padding: 3px; background: linear-gradient(180deg, var(--mt-hi) 0%, var(--mt-lt) 35%, var(--mt-mid) 65%, var(--mt-dk) 100%); box-shadow: 0 3px 6px rgba(0,0,0,0.55)">
       <div style="position: relative; height: 100%; border-radius: 4px; overflow: hidden; background-color: #F4EBD7; background-image: linear-gradient(rgba(150,90,60,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(150,90,60,0.18) 1px, transparent 1px); background-size: 18px 18px; box-shadow: inset 0 2px 5px rgba(80,50,20,0.35)">
-        <svg data-chart aria-hidden="true" width="378" height="90" viewBox="0 0 378 90" style="position: absolute; top: 0; left: 0">
+        <svg data-chart data-down="65" data-up="69" aria-hidden="true" width="378" height="90" viewBox="0 0 378 90" style="position: absolute; top: 0; left: 0">
           <path data-line="down" d="" fill="none" stroke="#8E1F1A" stroke-width="1.6" stroke-linejoin="round"></path>
           <path data-line="up" d="" fill="none" stroke="#1F3A6E" stroke-width="1.3" stroke-linejoin="round"></path>
         </svg>
@@ -414,7 +416,7 @@
       </div>
     </div>
   </section>
-
+<!--/rg-groups-->
   </div>
 
   <!-- ===== FOOTER: brass nameplate ===== -->
@@ -427,6 +429,150 @@
   </footer>
 </div>
 
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): one group style and the instruments the
+     groups are built from, cut from the panels above. -->
+<template data-rg-group="leather" data-rg-label="Stitched leather">
+  <section data-section style="position: relative; z-index: 1; border-radius: 20px; padding: 16px 20px 18px; background: radial-gradient(ellipse at 30% 15%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 55%), radial-gradient(circle at 1px 1px, rgba(0,0,0,0.28) 1px, transparent 1.6px) 0 0 / 4px 4px, radial-gradient(circle at 3px 2px, rgba(255,255,255,0.05) 1px, transparent 1.6px) 0 0 / 5px 5px, linear-gradient(160deg, var(--l-hi) 0%, var(--l-mid) 50%, var(--l-sh) 100%); box-shadow: 0 0 0 2px var(--mt-mid), 0 0 0 3.5px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.6), inset 0 2px 3px rgba(255,255,255,0.14), inset 0 -4px 8px rgba(0,0,0,0.45); display: flex; flex-direction: column; gap: 10px">
+    <div aria-hidden="true" style="position: absolute; top: 7px; right: 7px; bottom: 7px; left: 7px; border-radius: 14px; border: 1.5px dashed var(--stitch); opacity: 0.75; pointer-events: none"></div>
+    <h2 style="margin: 0; font-family: 'Playfair Display', serif; font-weight: 700; font-size: 15px; letter-spacing: 0.26em; color: #D9B36A; text-shadow: 0 1px 0 rgba(0,0,0,0.6); white-space: nowrap">{{title}}</h2>
+    <!--rg-items-->
+  </section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Dashboard clock" data-rg-size="large" data-rg-sources="clock" data-rg-width="430" data-rg-height="194">
+  <div class="lw-clock" data-time="{{time}}" data-need="{{time}}">
+    <div style="position: relative; width: 190px; height: 190px; flex: none; filter: drop-shadow(0 5px 6px rgba(0,0,0,0.6))">
+      <svg role="img" aria-label="Analogue clock" width="190" height="190" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0">
+        <circle cx="100" cy="100" r="97" fill="url(#lw-bezel) #A7AEB6" stroke="#2C3035" stroke-width="1"></circle>
+        <circle cx="100" cy="100" r="89" fill="url(#lw-bezel-rev) #A7AEB6"></circle>
+        <circle cx="100" cy="100" r="84" fill="url(#lw-ivory) #EFE5CC"></circle>
+        <line x1="100.0" y1="30.0" x2="100.0" y2="20.0" stroke="#2A1D14" stroke-width="3"></line><line x1="107.9" y1="24.4" x2="108.4" y2="20.4" stroke="#2A1D14" stroke-width="1"></line><line x1="115.8" y1="25.7" x2="116.6" y2="21.7" stroke="#2A1D14" stroke-width="1"></line><line x1="123.5" y1="27.7" x2="124.7" y2="23.9" stroke="#2A1D14" stroke-width="1"></line><line x1="130.9" y1="30.6" x2="132.5" y2="26.9" stroke="#2A1D14" stroke-width="1"></line><line x1="135.0" y1="39.4" x2="140.0" y2="30.7" stroke="#2A1D14" stroke-width="3"></line><line x1="144.7" y1="38.5" x2="147.0" y2="35.3" stroke="#2A1D14" stroke-width="1"></line><line x1="150.9" y1="43.5" x2="153.5" y2="40.5" stroke="#2A1D14" stroke-width="1"></line><line x1="156.5" y1="49.1" x2="159.5" y2="46.5" stroke="#2A1D14" stroke-width="1"></line><line x1="161.5" y1="55.3" x2="164.7" y2="53.0" stroke="#2A1D14" stroke-width="1"></line><line x1="160.6" y1="65.0" x2="169.3" y2="60.0" stroke="#2A1D14" stroke-width="3"></line><line x1="169.4" y1="69.1" x2="173.1" y2="67.5" stroke="#2A1D14" stroke-width="1"></line><line x1="172.3" y1="76.5" x2="176.1" y2="75.3" stroke="#2A1D14" stroke-width="1"></line><line x1="174.3" y1="84.2" x2="178.3" y2="83.4" stroke="#2A1D14" stroke-width="1"></line><line x1="175.6" y1="92.1" x2="179.6" y2="91.6" stroke="#2A1D14" stroke-width="1"></line><line x1="170.0" y1="100.0" x2="180.0" y2="100.0" stroke="#2A1D14" stroke-width="3"></line><line x1="175.6" y1="107.9" x2="179.6" y2="108.4" stroke="#2A1D14" stroke-width="1"></line><line x1="174.3" y1="115.8" x2="178.3" y2="116.6" stroke="#2A1D14" stroke-width="1"></line><line x1="172.3" y1="123.5" x2="176.1" y2="124.7" stroke="#2A1D14" stroke-width="1"></line><line x1="169.4" y1="130.9" x2="173.1" y2="132.5" stroke="#2A1D14" stroke-width="1"></line><line x1="160.6" y1="135.0" x2="169.3" y2="140.0" stroke="#2A1D14" stroke-width="3"></line><line x1="161.5" y1="144.7" x2="164.7" y2="147.0" stroke="#2A1D14" stroke-width="1"></line><line x1="156.5" y1="150.9" x2="159.5" y2="153.5" stroke="#2A1D14" stroke-width="1"></line><line x1="150.9" y1="156.5" x2="153.5" y2="159.5" stroke="#2A1D14" stroke-width="1"></line><line x1="144.7" y1="161.5" x2="147.0" y2="164.7" stroke="#2A1D14" stroke-width="1"></line><line x1="135.0" y1="160.6" x2="140.0" y2="169.3" stroke="#2A1D14" stroke-width="3"></line><line x1="130.9" y1="169.4" x2="132.5" y2="173.1" stroke="#2A1D14" stroke-width="1"></line><line x1="123.5" y1="172.3" x2="124.7" y2="176.1" stroke="#2A1D14" stroke-width="1"></line><line x1="115.8" y1="174.3" x2="116.6" y2="178.3" stroke="#2A1D14" stroke-width="1"></line><line x1="107.9" y1="175.6" x2="108.4" y2="179.6" stroke="#2A1D14" stroke-width="1"></line><line x1="100.0" y1="170.0" x2="100.0" y2="180.0" stroke="#2A1D14" stroke-width="3"></line><line x1="92.1" y1="175.6" x2="91.6" y2="179.6" stroke="#2A1D14" stroke-width="1"></line><line x1="84.2" y1="174.3" x2="83.4" y2="178.3" stroke="#2A1D14" stroke-width="1"></line><line x1="76.5" y1="172.3" x2="75.3" y2="176.1" stroke="#2A1D14" stroke-width="1"></line><line x1="69.1" y1="169.4" x2="67.5" y2="173.1" stroke="#2A1D14" stroke-width="1"></line><line x1="65.0" y1="160.6" x2="60.0" y2="169.3" stroke="#2A1D14" stroke-width="3"></line><line x1="55.3" y1="161.5" x2="53.0" y2="164.7" stroke="#2A1D14" stroke-width="1"></line><line x1="49.1" y1="156.5" x2="46.5" y2="159.5" stroke="#2A1D14" stroke-width="1"></line><line x1="43.5" y1="150.9" x2="40.5" y2="153.5" stroke="#2A1D14" stroke-width="1"></line><line x1="38.5" y1="144.7" x2="35.3" y2="147.0" stroke="#2A1D14" stroke-width="1"></line><line x1="39.4" y1="135.0" x2="30.7" y2="140.0" stroke="#2A1D14" stroke-width="3"></line><line x1="30.6" y1="130.9" x2="26.9" y2="132.5" stroke="#2A1D14" stroke-width="1"></line><line x1="27.7" y1="123.5" x2="23.9" y2="124.7" stroke="#2A1D14" stroke-width="1"></line><line x1="25.7" y1="115.8" x2="21.7" y2="116.6" stroke="#2A1D14" stroke-width="1"></line><line x1="24.4" y1="107.9" x2="20.4" y2="108.4" stroke="#2A1D14" stroke-width="1"></line><line x1="30.0" y1="100.0" x2="20.0" y2="100.0" stroke="#2A1D14" stroke-width="3"></line><line x1="24.4" y1="92.1" x2="20.4" y2="91.6" stroke="#2A1D14" stroke-width="1"></line><line x1="25.7" y1="84.2" x2="21.7" y2="83.4" stroke="#2A1D14" stroke-width="1"></line><line x1="27.7" y1="76.5" x2="23.9" y2="75.3" stroke="#2A1D14" stroke-width="1"></line><line x1="30.6" y1="69.1" x2="26.9" y2="67.5" stroke="#2A1D14" stroke-width="1"></line><line x1="39.4" y1="65.0" x2="30.7" y2="60.0" stroke="#2A1D14" stroke-width="3"></line><line x1="38.5" y1="55.3" x2="35.3" y2="53.0" stroke="#2A1D14" stroke-width="1"></line><line x1="43.5" y1="49.1" x2="40.5" y2="46.5" stroke="#2A1D14" stroke-width="1"></line><line x1="49.1" y1="43.5" x2="46.5" y2="40.5" stroke="#2A1D14" stroke-width="1"></line><line x1="55.3" y1="38.5" x2="53.0" y2="35.3" stroke="#2A1D14" stroke-width="1"></line><line x1="65.0" y1="39.4" x2="60.0" y2="30.7" stroke="#2A1D14" stroke-width="3"></line><line x1="69.1" y1="30.6" x2="67.5" y2="26.9" stroke="#2A1D14" stroke-width="1"></line><line x1="76.5" y1="27.7" x2="75.3" y2="23.9" stroke="#2A1D14" stroke-width="1"></line><line x1="84.2" y1="25.7" x2="83.4" y2="21.7" stroke="#2A1D14" stroke-width="1"></line><line x1="92.1" y1="24.4" x2="91.6" y2="20.4" stroke="#2A1D14" stroke-width="1"></line>
+        <text style="font-variant-numeric: lining-nums" x="100.0" y="50.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">12</text><text style="font-variant-numeric: lining-nums" x="157.0" y="107.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">3</text><text style="font-variant-numeric: lining-nums" x="100.0" y="164.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">6</text><text style="font-variant-numeric: lining-nums" x="43.0" y="107.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">9</text>
+        <text style="font-variant-numeric: lining-nums" x="100" y="64" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="7.5" letter-spacing="2" fill="#6E5A44">SYSTEM</text>
+        <rect x="126" y="92" width="22" height="16" rx="1.5" fill="#FFFFFF" stroke="#6E5A44" stroke-width="1.2"></rect>
+        <text style="font-variant-numeric: lining-nums" x="137" y="104.5" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="11" fill="#2A1D14" data-day="{{day}}">--</text>
+        <polygon data-hand="hour" data-drawn="-23.5" points="140.4,82.5 101.8,104.1 87.2,105.6 98.2,95.9" fill="#1A1410"></polygon>
+        <polygon data-hand="minute" data-drawn="-12" points="166.5,85.9 100.7,103.1 86.3,102.9 99.3,96.9" fill="#1A1410"></polygon>
+        <g data-seconds style="transform-box: view-box; transform-origin: 100px 100px">
+          <line x1="100" y1="116" x2="100" y2="24" stroke="#B3261E" stroke-width="1.4"></line>
+          <circle cx="100" cy="112" r="3.5" fill="#B3261E"></circle>
+        </g>
+        <circle cx="100" cy="100" r="5" fill="url(#lw-bezel) #A7AEB6" stroke="#1A1410" stroke-width="1"></circle>
+        <ellipse cx="78" cy="62" rx="56" ry="26" transform="rotate(-30 78 62)" fill="#FFFFFF" opacity="0.14"></ellipse>
+      </svg>
+    </div>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+      <span style="font-family: 'Playfair Display', serif; font-weight: 700; font-size: 14px; letter-spacing: 0.24em; color: #D9B36A; text-shadow: 0 1px 0 rgba(0,0,0,0.6); white-space: nowrap">SYSTEM SENSORS</span>
+      <div style="height: 1px; background: linear-gradient(90deg, #D9B36A, rgba(217,179,106,0))"></div>
+      <span style="font-family: 'Playfair Display', serif; font-weight: 500; font-size: 62px; line-height: 1; color: #F6ECD8; text-shadow: 0 2px 3px rgba(0,0,0,0.5)" data-clock>--:--</span>
+      <span style="font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; color: #E8D7B6; white-space: nowrap" data-date="{{day_name}} {{day:.0}} {{month_name}}">&nbsp;</span>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="clock" data-rg-label="Dashboard clock" data-rg-size="medium" data-rg-sources="clock" data-rg-width="190" data-rg-height="190">
+  <div class="lw-clock" data-time="{{time}}" data-need="{{time}}">
+<div style="position: relative; width: 190px; height: 190px; flex: none; filter: drop-shadow(0 5px 6px rgba(0,0,0,0.6))">
+      <svg role="img" aria-label="Analogue clock" width="190" height="190" viewBox="0 0 200 200" style="position: absolute; top: 0; left: 0">
+        <circle cx="100" cy="100" r="97" fill="url(#lw-bezel) #A7AEB6" stroke="#2C3035" stroke-width="1"></circle>
+        <circle cx="100" cy="100" r="89" fill="url(#lw-bezel-rev) #A7AEB6"></circle>
+        <circle cx="100" cy="100" r="84" fill="url(#lw-ivory) #EFE5CC"></circle>
+        <line x1="100.0" y1="30.0" x2="100.0" y2="20.0" stroke="#2A1D14" stroke-width="3"></line><line x1="107.9" y1="24.4" x2="108.4" y2="20.4" stroke="#2A1D14" stroke-width="1"></line><line x1="115.8" y1="25.7" x2="116.6" y2="21.7" stroke="#2A1D14" stroke-width="1"></line><line x1="123.5" y1="27.7" x2="124.7" y2="23.9" stroke="#2A1D14" stroke-width="1"></line><line x1="130.9" y1="30.6" x2="132.5" y2="26.9" stroke="#2A1D14" stroke-width="1"></line><line x1="135.0" y1="39.4" x2="140.0" y2="30.7" stroke="#2A1D14" stroke-width="3"></line><line x1="144.7" y1="38.5" x2="147.0" y2="35.3" stroke="#2A1D14" stroke-width="1"></line><line x1="150.9" y1="43.5" x2="153.5" y2="40.5" stroke="#2A1D14" stroke-width="1"></line><line x1="156.5" y1="49.1" x2="159.5" y2="46.5" stroke="#2A1D14" stroke-width="1"></line><line x1="161.5" y1="55.3" x2="164.7" y2="53.0" stroke="#2A1D14" stroke-width="1"></line><line x1="160.6" y1="65.0" x2="169.3" y2="60.0" stroke="#2A1D14" stroke-width="3"></line><line x1="169.4" y1="69.1" x2="173.1" y2="67.5" stroke="#2A1D14" stroke-width="1"></line><line x1="172.3" y1="76.5" x2="176.1" y2="75.3" stroke="#2A1D14" stroke-width="1"></line><line x1="174.3" y1="84.2" x2="178.3" y2="83.4" stroke="#2A1D14" stroke-width="1"></line><line x1="175.6" y1="92.1" x2="179.6" y2="91.6" stroke="#2A1D14" stroke-width="1"></line><line x1="170.0" y1="100.0" x2="180.0" y2="100.0" stroke="#2A1D14" stroke-width="3"></line><line x1="175.6" y1="107.9" x2="179.6" y2="108.4" stroke="#2A1D14" stroke-width="1"></line><line x1="174.3" y1="115.8" x2="178.3" y2="116.6" stroke="#2A1D14" stroke-width="1"></line><line x1="172.3" y1="123.5" x2="176.1" y2="124.7" stroke="#2A1D14" stroke-width="1"></line><line x1="169.4" y1="130.9" x2="173.1" y2="132.5" stroke="#2A1D14" stroke-width="1"></line><line x1="160.6" y1="135.0" x2="169.3" y2="140.0" stroke="#2A1D14" stroke-width="3"></line><line x1="161.5" y1="144.7" x2="164.7" y2="147.0" stroke="#2A1D14" stroke-width="1"></line><line x1="156.5" y1="150.9" x2="159.5" y2="153.5" stroke="#2A1D14" stroke-width="1"></line><line x1="150.9" y1="156.5" x2="153.5" y2="159.5" stroke="#2A1D14" stroke-width="1"></line><line x1="144.7" y1="161.5" x2="147.0" y2="164.7" stroke="#2A1D14" stroke-width="1"></line><line x1="135.0" y1="160.6" x2="140.0" y2="169.3" stroke="#2A1D14" stroke-width="3"></line><line x1="130.9" y1="169.4" x2="132.5" y2="173.1" stroke="#2A1D14" stroke-width="1"></line><line x1="123.5" y1="172.3" x2="124.7" y2="176.1" stroke="#2A1D14" stroke-width="1"></line><line x1="115.8" y1="174.3" x2="116.6" y2="178.3" stroke="#2A1D14" stroke-width="1"></line><line x1="107.9" y1="175.6" x2="108.4" y2="179.6" stroke="#2A1D14" stroke-width="1"></line><line x1="100.0" y1="170.0" x2="100.0" y2="180.0" stroke="#2A1D14" stroke-width="3"></line><line x1="92.1" y1="175.6" x2="91.6" y2="179.6" stroke="#2A1D14" stroke-width="1"></line><line x1="84.2" y1="174.3" x2="83.4" y2="178.3" stroke="#2A1D14" stroke-width="1"></line><line x1="76.5" y1="172.3" x2="75.3" y2="176.1" stroke="#2A1D14" stroke-width="1"></line><line x1="69.1" y1="169.4" x2="67.5" y2="173.1" stroke="#2A1D14" stroke-width="1"></line><line x1="65.0" y1="160.6" x2="60.0" y2="169.3" stroke="#2A1D14" stroke-width="3"></line><line x1="55.3" y1="161.5" x2="53.0" y2="164.7" stroke="#2A1D14" stroke-width="1"></line><line x1="49.1" y1="156.5" x2="46.5" y2="159.5" stroke="#2A1D14" stroke-width="1"></line><line x1="43.5" y1="150.9" x2="40.5" y2="153.5" stroke="#2A1D14" stroke-width="1"></line><line x1="38.5" y1="144.7" x2="35.3" y2="147.0" stroke="#2A1D14" stroke-width="1"></line><line x1="39.4" y1="135.0" x2="30.7" y2="140.0" stroke="#2A1D14" stroke-width="3"></line><line x1="30.6" y1="130.9" x2="26.9" y2="132.5" stroke="#2A1D14" stroke-width="1"></line><line x1="27.7" y1="123.5" x2="23.9" y2="124.7" stroke="#2A1D14" stroke-width="1"></line><line x1="25.7" y1="115.8" x2="21.7" y2="116.6" stroke="#2A1D14" stroke-width="1"></line><line x1="24.4" y1="107.9" x2="20.4" y2="108.4" stroke="#2A1D14" stroke-width="1"></line><line x1="30.0" y1="100.0" x2="20.0" y2="100.0" stroke="#2A1D14" stroke-width="3"></line><line x1="24.4" y1="92.1" x2="20.4" y2="91.6" stroke="#2A1D14" stroke-width="1"></line><line x1="25.7" y1="84.2" x2="21.7" y2="83.4" stroke="#2A1D14" stroke-width="1"></line><line x1="27.7" y1="76.5" x2="23.9" y2="75.3" stroke="#2A1D14" stroke-width="1"></line><line x1="30.6" y1="69.1" x2="26.9" y2="67.5" stroke="#2A1D14" stroke-width="1"></line><line x1="39.4" y1="65.0" x2="30.7" y2="60.0" stroke="#2A1D14" stroke-width="3"></line><line x1="38.5" y1="55.3" x2="35.3" y2="53.0" stroke="#2A1D14" stroke-width="1"></line><line x1="43.5" y1="49.1" x2="40.5" y2="46.5" stroke="#2A1D14" stroke-width="1"></line><line x1="49.1" y1="43.5" x2="46.5" y2="40.5" stroke="#2A1D14" stroke-width="1"></line><line x1="55.3" y1="38.5" x2="53.0" y2="35.3" stroke="#2A1D14" stroke-width="1"></line><line x1="65.0" y1="39.4" x2="60.0" y2="30.7" stroke="#2A1D14" stroke-width="3"></line><line x1="69.1" y1="30.6" x2="67.5" y2="26.9" stroke="#2A1D14" stroke-width="1"></line><line x1="76.5" y1="27.7" x2="75.3" y2="23.9" stroke="#2A1D14" stroke-width="1"></line><line x1="84.2" y1="25.7" x2="83.4" y2="21.7" stroke="#2A1D14" stroke-width="1"></line><line x1="92.1" y1="24.4" x2="91.6" y2="20.4" stroke="#2A1D14" stroke-width="1"></line>
+        <text style="font-variant-numeric: lining-nums" x="100.0" y="50.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">12</text><text style="font-variant-numeric: lining-nums" x="157.0" y="107.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">3</text><text style="font-variant-numeric: lining-nums" x="100.0" y="164.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">6</text><text style="font-variant-numeric: lining-nums" x="43.0" y="107.0" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="19" fill="#2A1D14">9</text>
+        <text style="font-variant-numeric: lining-nums" x="100" y="64" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="7.5" letter-spacing="2" fill="#6E5A44">SYSTEM</text>
+        <rect x="126" y="92" width="22" height="16" rx="1.5" fill="#FFFFFF" stroke="#6E5A44" stroke-width="1.2"></rect>
+        <text style="font-variant-numeric: lining-nums" x="137" y="104.5" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="11" fill="#2A1D14" data-day="{{day}}">--</text>
+        <polygon data-hand="hour" data-drawn="-23.5" points="140.4,82.5 101.8,104.1 87.2,105.6 98.2,95.9" fill="#1A1410"></polygon>
+        <polygon data-hand="minute" data-drawn="-12" points="166.5,85.9 100.7,103.1 86.3,102.9 99.3,96.9" fill="#1A1410"></polygon>
+        <g data-seconds style="transform-box: view-box; transform-origin: 100px 100px">
+          <line x1="100" y1="116" x2="100" y2="24" stroke="#B3261E" stroke-width="1.4"></line>
+          <circle cx="100" cy="112" r="3.5" fill="#B3261E"></circle>
+        </g>
+        <circle cx="100" cy="100" r="5" fill="url(#lw-bezel) #A7AEB6" stroke="#1A1410" stroke-width="1"></circle>
+        <ellipse cx="78" cy="62" rx="56" ry="26" transform="rotate(-30 78 62)" fill="#FFFFFF" opacity="0.14"></ellipse>
+      </svg>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Chrome gauge" data-rg-size="large" data-rg-width="208" data-rg-height="208">
+      <div style="position: relative; width: 208px; height: 208px; flex: none; filter: drop-shadow(0 5px 6px rgba(0,0,0,0.6))">
+        <svg role="img" aria-label="CPU temperature gauge" data-need="{{value}}" width="208" height="208" viewBox="0 0 220 220" style="position: absolute; top: 0; left: 0">
+          <circle cx="110" cy="110" r="108" fill="url(#lw-bezel) #A7AEB6" stroke="#2C3035" stroke-width="1"></circle>
+          <circle cx="110" cy="110" r="99" fill="url(#lw-bezel-rev) #A7AEB6"></circle>
+          <circle cx="110" cy="110" r="94" fill="url(#lw-face) #141212"></circle>
+          <path d="M169.1 40.8 A91 91 0 0 1 200.6 101.1" fill="none" stroke="#D9A13A" stroke-width="3.5"></path>
+          <path d="M200.6 101.1 A91 91 0 0 1 174.3 174.3" fill="none" stroke="#C8402A" stroke-width="3.5"></path>
+          <line x1="56.3" y1="163.7" x2="47.8" y2="172.2" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="45.6" y1="160.8" x2="40.9" y2="164.5" stroke="#F1E6CF" stroke-width="1"></line><line x1="40.1" y1="152.8" x2="35.0" y2="156.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="35.5" y1="144.3" x2="30.1" y2="146.8" stroke="#F1E6CF" stroke-width="1"></line><line x1="32.0" y1="135.3" x2="26.3" y2="137.2" stroke="#F1E6CF" stroke-width="1"></line><line x1="35.5" y1="124.8" x2="23.7" y2="127.2" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="28.3" y1="116.4" x2="22.3" y2="116.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="28.1" y1="106.8" x2="22.1" y2="106.5" stroke="#F1E6CF" stroke-width="1"></line><line x1="29.0" y1="97.2" x2="23.1" y2="96.2" stroke="#F1E6CF" stroke-width="1"></line><line x1="31.1" y1="87.7" x2="25.3" y2="86.1" stroke="#F1E6CF" stroke-width="1"></line><line x1="39.8" y1="80.9" x2="28.7" y2="76.3" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="38.5" y1="69.9" x2="33.2" y2="67.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="43.7" y1="61.8" x2="38.8" y2="58.3" stroke="#F1E6CF" stroke-width="1"></line><line x1="49.8" y1="54.3" x2="45.4" y2="50.3" stroke="#F1E6CF" stroke-width="1"></line><line x1="56.7" y1="47.6" x2="52.8" y2="43.1" stroke="#F1E6CF" stroke-width="1"></line><line x1="67.8" y1="46.8" x2="61.1" y2="36.8" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="72.8" y1="36.9" x2="70.0" y2="31.6" stroke="#F1E6CF" stroke-width="1"></line><line x1="81.6" y1="33.1" x2="79.5" y2="27.4" stroke="#F1E6CF" stroke-width="1"></line><line x1="90.9" y1="30.3" x2="89.5" y2="24.4" stroke="#F1E6CF" stroke-width="1"></line><line x1="100.4" y1="28.6" x2="99.7" y2="22.6" stroke="#F1E6CF" stroke-width="1"></line><line x1="110.0" y1="34.0" x2="110.0" y2="22.0" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="119.6" y1="28.6" x2="120.3" y2="22.6" stroke="#F1E6CF" stroke-width="1"></line><line x1="129.1" y1="30.3" x2="130.5" y2="24.4" stroke="#F1E6CF" stroke-width="1"></line><line x1="138.4" y1="33.1" x2="140.5" y2="27.4" stroke="#F1E6CF" stroke-width="1"></line><line x1="147.2" y1="36.9" x2="150.0" y2="31.6" stroke="#F1E6CF" stroke-width="1"></line><line x1="152.2" y1="46.8" x2="158.9" y2="36.8" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="163.3" y1="47.6" x2="167.2" y2="43.1" stroke="#F1E6CF" stroke-width="1"></line><line x1="170.2" y1="54.3" x2="174.6" y2="50.3" stroke="#F1E6CF" stroke-width="1"></line><line x1="176.3" y1="61.8" x2="181.2" y2="58.3" stroke="#F1E6CF" stroke-width="1"></line><line x1="181.5" y1="69.9" x2="186.8" y2="67.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="180.2" y1="80.9" x2="191.3" y2="76.3" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="188.9" y1="87.7" x2="194.7" y2="86.1" stroke="#F1E6CF" stroke-width="1"></line><line x1="191.0" y1="97.2" x2="196.9" y2="96.2" stroke="#F1E6CF" stroke-width="1"></line><line x1="191.9" y1="106.8" x2="197.9" y2="106.5" stroke="#F1E6CF" stroke-width="1"></line><line x1="191.7" y1="116.4" x2="197.7" y2="116.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="184.5" y1="124.8" x2="196.3" y2="127.2" stroke="#F1E6CF" stroke-width="2.4"></line><line x1="188.0" y1="135.3" x2="193.7" y2="137.2" stroke="#F1E6CF" stroke-width="1"></line><line x1="184.5" y1="144.3" x2="189.9" y2="146.8" stroke="#F1E6CF" stroke-width="1"></line><line x1="179.9" y1="152.8" x2="185.0" y2="156.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="174.4" y1="160.8" x2="179.1" y2="164.5" stroke="#F1E6CF" stroke-width="1"></line><line x1="163.7" y1="163.7" x2="172.2" y2="172.2" stroke="#F1E6CF" stroke-width="2.4"></line>
+          <text style="font-variant-numeric: lining-nums" x="64.7" y="159.8" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.0">20</text><text style="font-variant-numeric: lining-nums" x="47.2" y="127.0" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.125">30</text><text style="font-variant-numeric: lining-nums" x="50.9" y="90.0" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.25">40</text><text style="font-variant-numeric: lining-nums" x="74.4" y="61.3" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.375">50</text><text style="font-variant-numeric: lining-nums" x="110.0" y="50.5" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.5">60</text><text style="font-variant-numeric: lining-nums" x="145.6" y="61.3" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.625">70</text><text style="font-variant-numeric: lining-nums" x="169.1" y="90.0" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.75">80</text><text style="font-variant-numeric: lining-nums" x="172.8" y="127.0" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="0.875">90</text><text style="font-variant-numeric: lining-nums" x="155.3" y="159.8" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="12" fill="#F1E6CF" data-lf="1.0">100</text>
+          <text style="font-variant-numeric: lining-nums" x="110" y="80" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" letter-spacing="2.5" fill="#B9AC94" data-unit="{{unit}}"></text>
+          <text style="font-variant-numeric: lining-nums" x="110" y="166" text-anchor="middle" font-family="Playfair Display, serif" font-weight="600" font-size="26" fill="#F6ECD8"><tspan data-num="{{value}}" data-places="1">--</tspan></text>
+          <text style="font-variant-numeric: lining-nums" x="110" y="182" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="8" letter-spacing="2" fill="#B9AC94" data-cap="{{caption}}" data-default=""></text>
+          <g style="transform-box: view-box; transform-origin: 110px 110px; animation: lw-quiver 1.3s ease-in-out infinite">
+            <polygon data-needle="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-drawn="263.25" data-center="110" points="100.1,26.6 114.0,109.5 112.4,129.9 106.0,110.5" fill="#F26A21" style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6))"></polygon>
+          </g>
+          <circle cx="110" cy="110" r="11" fill="url(#lw-bezel) #A7AEB6" stroke="#000" stroke-width="0.8"></circle>
+          <circle cx="110" cy="110" r="3.5" fill="#1A1410"></circle>
+          <ellipse cx="84" cy="70" rx="64" ry="30" transform="rotate(-30 84 70)" fill="#FFFFFF" opacity="0.07"></ellipse>
+        </svg>
+      </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Brass groove" data-rg-size="small" data-rg-width="180" data-rg-height="60">
+          <div style="display: flex; flex-direction: column; gap: 5px" data-need="{{value}}">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.22em; color: #CDBB9C" data-cap="{{caption}}" data-default="" class="lw-cut"></span>
+            <span style="font-family: 'Playfair Display', serif; font-weight: 600; font-size: 28px; line-height: 1; color: #F6ECD8"><span data-num="{{value}}" data-places="2">--</span><span style="font-family: Lato, sans-serif; font-size: 12px; font-weight: 700; color: #D9B36A"> <span data-unit="{{unit}}"></span></span></span>
+            <div style="position: relative; height: 8px; border-radius: 4px; background: rgba(0,0,0,0.45); box-shadow: inset 0 1px 2px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.12)">
+              <div data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-inset="2" style="position: absolute; top: 1px; bottom: 1px; left: 1px; width: 0; border-radius: 3px; background: linear-gradient(180deg, var(--mt-hi) 0%, var(--mt-lt) 35%, var(--mt-mid) 65%, var(--mt-dk) 100%)"></div>
+            </div>
+          </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Brass groove" data-rg-size="large" data-rg-width="380" data-rg-height="60">
+          <div style="display: flex; flex-direction: column; gap: 5px" data-need="{{value}}">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.22em; color: #CDBB9C" data-cap="{{caption}}" data-default="" class="lw-cut"></span>
+            <span style="font-family: 'Playfair Display', serif; font-weight: 600; font-size: 28px; line-height: 1; color: #F6ECD8"><span data-num="{{value}}" data-places="2">--</span><span style="font-family: Lato, sans-serif; font-size: 12px; font-weight: 700; color: #D9B36A"> <span data-unit="{{unit}}"></span></span></span>
+            <div style="position: relative; height: 8px; border-radius: 4px; background: rgba(0,0,0,0.45); box-shadow: inset 0 1px 2px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.12)">
+              <div data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-inset="2" style="position: absolute; top: 1px; bottom: 1px; left: 1px; width: 0; border-radius: 3px; background: linear-gradient(180deg, var(--mt-hi) 0%, var(--mt-lt) 35%, var(--mt-mid) 65%, var(--mt-dk) 100%)"></div>
+            </div>
+          </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Rev counter" data-rg-size="small" data-rg-sources="fan" data-rg-width="110" data-rg-height="116">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px" data-need="{{value}}">
+          <div style="position: relative; width: 92px; height: 92px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.6))">
+            <svg role="img" aria-label="Rev counter" width="92" height="92" viewBox="0 0 120 120" style="position: absolute; top: 0; left: 0">
+              <circle cx="60" cy="60" r="58" fill="url(#lw-bezel) #A7AEB6" stroke="#2C3035" stroke-width="1"></circle>
+              <circle cx="60" cy="60" r="53" fill="url(#lw-bezel-rev) #A7AEB6"></circle>
+              <circle cx="60" cy="60" r="50" fill="url(#lw-face) #141212"></circle>
+              <path d="M108.5 60.0 A48.5 48.5 0 0 1 94.3 94.3" fill="none" stroke="#C8402A" stroke-width="2.5"></path>
+              <line x1="31.7" y1="88.3" x2="26.8" y2="93.2" stroke="#F1E6CF" stroke-width="1.8"></line><line x1="23.8" y1="84.2" x2="20.9" y2="86.1" stroke="#F1E6CF" stroke-width="1"></line><line x1="19.8" y1="76.6" x2="16.6" y2="78.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="17.3" y1="68.5" x2="13.9" y2="69.2" stroke="#F1E6CF" stroke-width="1"></line><line x1="20.0" y1="60.0" x2="13.0" y2="60.0" stroke="#F1E6CF" stroke-width="1.8"></line><line x1="17.3" y1="51.5" x2="13.9" y2="50.8" stroke="#F1E6CF" stroke-width="1"></line><line x1="19.8" y1="43.4" x2="16.6" y2="42.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="23.8" y1="35.8" x2="20.9" y2="33.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="31.7" y1="31.7" x2="26.8" y2="26.8" stroke="#F1E6CF" stroke-width="1.8"></line><line x1="35.8" y1="23.8" x2="33.9" y2="20.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="43.4" y1="19.8" x2="42.0" y2="16.6" stroke="#F1E6CF" stroke-width="1"></line><line x1="51.5" y1="17.3" x2="50.8" y2="13.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="60.0" y1="20.0" x2="60.0" y2="13.0" stroke="#F1E6CF" stroke-width="1.8"></line><line x1="68.5" y1="17.3" x2="69.2" y2="13.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="76.6" y1="19.8" x2="78.0" y2="16.6" stroke="#F1E6CF" stroke-width="1"></line><line x1="84.2" y1="23.8" x2="86.1" y2="20.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="88.3" y1="31.7" x2="93.2" y2="26.8" stroke="#F1E6CF" stroke-width="1.8"></line><line x1="96.2" y1="35.8" x2="99.1" y2="33.9" stroke="#F1E6CF" stroke-width="1"></line><line x1="100.2" y1="43.4" x2="103.4" y2="42.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="102.7" y1="51.5" x2="106.1" y2="50.8" stroke="#F1E6CF" stroke-width="1"></line><line x1="100.0" y1="60.0" x2="107.0" y2="60.0" stroke="#F1E6CF" stroke-width="1.8"></line><line x1="102.7" y1="68.5" x2="106.1" y2="69.2" stroke="#F1E6CF" stroke-width="1"></line><line x1="100.2" y1="76.6" x2="103.4" y2="78.0" stroke="#F1E6CF" stroke-width="1"></line><line x1="96.2" y1="84.2" x2="99.1" y2="86.1" stroke="#F1E6CF" stroke-width="1"></line><line x1="88.3" y1="88.3" x2="93.2" y2="93.2" stroke="#F1E6CF" stroke-width="1.8"></line>
+              <text style="font-variant-numeric: lining-nums" x="36.0" y="87.2" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" fill="#F1E6CF">0</text><text style="font-variant-numeric: lining-nums" x="26.0" y="63.2" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" fill="#F1E6CF">4</text><text style="font-variant-numeric: lining-nums" x="36.0" y="39.2" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" fill="#F1E6CF">8</text><text style="font-variant-numeric: lining-nums" x="60.0" y="29.2" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" fill="#F1E6CF">12</text><text style="font-variant-numeric: lining-nums" x="84.0" y="39.2" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" fill="#F1E6CF">16</text><text style="font-variant-numeric: lining-nums" x="94.0" y="63.2" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" fill="#F1E6CF">20</text><text style="font-variant-numeric: lining-nums" x="84.0" y="87.2" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="9" fill="#F1E6CF">24</text>
+              <text style="font-variant-numeric: lining-nums" x="60" y="92" text-anchor="middle" font-family="Lato, sans-serif" font-weight="700" font-size="10" fill="#F6ECD8" data-num="{{value}}" data-places="0">--</text>
+              <g style="transform-box: view-box; transform-origin: 60px 60px; animation: lw-wobble 1.10s ease-in-out infinite">
+                <polygon data-rev="{{value}}" data-max="{{max}}" data-drawn="274.5" points="63.5,16.1 62.6,60.2 59.1,71.0 57.4,59.8" fill="#F26A21"></polygon>
+              </g>
+              <circle cx="60" cy="60" r="6.5" fill="url(#lw-bezel) #A7AEB6" stroke="#000" stroke-width="0.6"></circle>
+              <ellipse cx="46" cy="38" rx="34" ry="15" transform="rotate(-30 46 38)" fill="#FFFFFF" opacity="0.07"></ellipse>
+            </svg>
+          </div>
+          <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.2em; color: #CDBB9C; white-space: nowrap" data-cap="{{caption}}" data-default="FAN">FAN</span>
+        </div>
+</template>
+<template data-rg-widget="pool" data-rg-label="Memory groove" data-rg-size="large" data-rg-default-for="memory disk" data-rg-width="380" data-rg-height="56">
+      <div style="display: flex; flex-direction: column; gap: 5px" data-need="{{value}}">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.22em; color: #CDBB9C" data-cap="{{caption}}" data-default="" class="lw-cut"></span>
+          <span style="font-family: 'Playfair Display', serif; font-weight: 600; font-size: 20px; line-height: 1; color: #F6ECD8"><span data-num="{{value}}" data-places="1">--</span><span style="font-family: 'Playfair Display', serif; font-style: italic; font-weight: 500; font-size: 14px; color: #CDBB9C"> of <span data-num="{{max}}" data-places="0">--</span> <span data-unit="{{unit}}"></span></span></span>
+        </div>
+        <div style="position: relative; height: 12px; border-radius: 6px; background: rgba(0,0,0,0.5); box-shadow: inset 0 2px 3px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.12)">
+          <div data-bar="{{value}}" data-max="{{max}}" data-scale="100" data-inset="4" style="position: absolute; top: 2px; bottom: 2px; left: 2px; width: 0; border-radius: 4px; background: linear-gradient(180deg, var(--mt-hi) 0%, var(--mt-lt) 35%, var(--mt-mid) 65%, var(--mt-dk) 100%)"></div>
+        </div>
+        <div style="position: relative; height: 8px">
+          <div style="position: absolute; left: 0; top: 0; width: 1px; height: 5px; background: #CDBB9C"></div>
+          <div style="position: absolute; left: 25%; top: 0; width: 1px; height: 3px; background: #CDBB9C"></div>
+          <div style="position: absolute; left: 50%; top: 0; width: 1px; height: 5px; background: #CDBB9C"></div>
+          <div style="position: absolute; left: 75%; top: 0; width: 1px; height: 3px; background: #CDBB9C"></div>
+          <div style="position: absolute; right: 0; top: 0; width: 1px; height: 5px; background: #CDBB9C"></div>
+        </div>
+      </div>
+</template>
 <script type="application/json" id="rg-template-options">
 [
     {"id": "wood", "label": "Wood", "type": "choice", "default": "walnut", "choices": [{"value": "walnut", "label": "Walnut", "set": {"--w-base": "#4A2C18", "--w-hi": "#6E4426", "--w-sh": "#2A170C", "--w-grain": "#1A0C05", "--w-streak": "#E0A870"}}, {"value": "mahogany", "label": "Mahogany", "set": {"--w-base": "#5C2416", "--w-hi": "#8A3A22", "--w-sh": "#2E0F08", "--w-grain": "#1E0704", "--w-streak": "#F0A080"}}, {"value": "oak", "label": "Light Oak", "set": {"--w-base": "#9A7046", "--w-hi": "#C49A68", "--w-sh": "#6A4A28", "--w-grain": "#4A2E14", "--w-streak": "#FFE0B0"}}, {"value": "ebony", "label": "Ebony", "set": {"--w-base": "#1E1612", "--w-hi": "#3A2C22", "--w-sh": "#0E0907", "--w-grain": "#000000", "--w-streak": "#C09070"}}]},
@@ -611,17 +757,24 @@
 
     // Time: the first four digits ("9:24 PM" shows 09:24); with a.m./p.m. the
     // hour hand still lands right, since it only needs the hour modulo 12.
-    var digits = known(v['0']) ? String(v['0']).replace(/\D/g, '') : '';
-    if (digits.length === 3 || digits.length === 5) digits = '0' + digits;
-    var have = digits.length >= 4, h = have ? +digits.slice(0, 2) : 10, m = have ? +digits.slice(2, 4) : 10;
-    each('[data-clock]', function (el) { text(el, have ? digits.slice(0, 2) + ':' + digits.slice(2, 4) : '--:--'); });
-    each('[data-hand="hour"]', function (el) { turn(el, (h % 12 + m / 60) * 30 - 90, 100); });
-    each('[data-hand="minute"]', function (el) { turn(el, m * 6 - 90, 100); });
+    // Each clock (data-time names its time) sets its own hands and digits.
+    function clockOf(id) {
+      var digits = known(v[id]) ? String(v[id]).replace(/\D/g, '') : '';
+      if (digits.length === 3 || digits.length === 5) digits = '0' + digits;
+      return digits.length >= 4 ? digits : '';
+    }
+    each('[data-time]', function (scope) {
+      var digits = clockOf(scope.dataset.time), have = !!digits, h = have ? +digits.slice(0, 2) : 10, m = have ? +digits.slice(2, 4) : 10;
+      each('[data-clock]', function (el) { text(el, have ? digits.slice(0, 2) + ':' + digits.slice(2, 4) : '--:--'); }, scope);
+      each('[data-hand="hour"]', function (el) { turn(el, (h % 12 + m / 60) * 30 - 90, 100); }, scope);
+      each('[data-hand="minute"]', function (el) { turn(el, m * 6 - 90, 100); }, scope);
+    });
     if (!moving) seconds(false);
     each('[data-day]', function (el) { text(el, known(v[el.dataset.day]) ? String(Math.round(num(v[el.dataset.day]))) : ''); });
     each('[data-date]', function (el) {    // Friday, 13 November
-      var rest = [known(v['2']) ? String(v['2']) : '', known(v['3']) ? String(v['3']) : ''].join(' ').trim();
-      text(el, [known(v['1']) ? String(v['1']) : '', rest].filter(Boolean).join(', ') || ' ');
+      var ids = el.dataset.date.split(' ');   // day name, day, month
+      var rest = [known(v[ids[1]]) ? String(Math.round(num(v[ids[1]]))) : '', known(v[ids[2]]) ? String(v[ids[2]]) : ''].join(' ').trim();
+      text(el, [known(v[ids[0]]) ? String(v[ids[0]]) : '', rest].filter(Boolean).join(', ') || ' ');
     });
 
     each('[data-num]', function (el) { text(el, fmt(num(v[el.dataset.num]), +el.dataset.places)); });
@@ -639,12 +792,22 @@
     });
 
     // Needles: 135 degrees + 270 x fraction, clockwise.
+    // A generated gauge (its needle has data-max) reads 0 to its sensor's
+    // maximum, and its numbers (data-lf, a share of the scale) follow.
     each('[data-needle]', function (el) {
-      var t = num(v[el.dataset.needle]);
-      turn(el, 135 + 270 * (isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0), el.dataset.center);
+      var t = num(v[el.dataset.needle]), f;
+      if (el.hasAttribute('data-max')) {
+        var max = num(v[el.dataset.max]);
+        if (/^mhz$/i.test(String(v[el.dataset.unitOf] || ''))) { t /= 1000; max /= 1000; }
+        var full = max > 0 ? max : 100;
+        f = share(t, full, full);
+        each('[data-lf]', function (label) { text(label, fmt(full * +label.dataset.lf, 1).replace(/,/g, '')); }, el.closest('svg'));
+      } else f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      turn(el, 135 + 270 * f, el.dataset.center);
     });
     each('[data-rev]', function (el) {
-      turn(el, 135 + 270 * share(num(v[el.dataset.rev]), REV_MAX, REV_MAX), 60);
+      var max = el.hasAttribute('data-max') ? num(v[el.dataset.max]) : NaN;
+      turn(el, 135 + 270 * share(num(v[el.dataset.rev]), max > 0 ? max : REV_MAX, REV_MAX), 60);
     });
 
     // Grooves: against the sensor's own maximum, else the limit in the
@@ -657,15 +820,19 @@
       style(el, 'width', f > 0 ? 'calc(' + (f * 100).toFixed(1) + '% - ' + el.dataset.inset + 'px)' : '0px');
     });
 
-    latest.down = num(v['65']); latest.up = num(v['69']);
+    // The chart names its sensors; without one (a custom layout) nothing is sampled.
+    var chart = document.querySelector('[data-chart]');
+    latest.down = chart ? num(v[chart.dataset.down]) : NaN;
+    latest.up = chart ? num(v[chart.dataset.up]) : NaN;
 
     // Hide what has no data. With nothing bound at all, show the whole design.
     each('[data-need]', function (el) {
-      var hide = anyMapped && !isFinite(num(v[el.dataset.need]));
+      var raw = v[el.dataset.need];
+      var hide = anyMapped && !isFinite(num(raw)) && !known(raw);
       if (el.hidden !== hide) el.hidden = hide;
     });
     each('[data-section]', function (el) {
-      var hide = anyMapped && el.dataset.section === 'clock' ? !have :
+      var hide = anyMapped && el.dataset.time !== undefined ? !clockOf(el.dataset.time) :
                  el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null;
       if (el.hidden !== hide) el.hidden = hide;
     });

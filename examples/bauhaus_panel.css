@@ -148,3 +148,27 @@ html, body { margin: 0; background: var(--paper); }
 .foot > div { display: flex; align-items: center; justify-content: space-between; }
 .foot .up { font-size: 20px; }
 .foot .up b { font-weight: 800; }
+
+/* ---- custom layouts: groups built from the prototypes -------------------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). */
+.poster > .rg-items, .poster .rg-item, .poster .rg-fit { display: contents; }
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.section:has(.rg-items) { min-height: 0; overflow: hidden; }
+.section:has(.rg-items) > div { min-height: 0; }
+.section .rg-items { align-self: stretch; }
+.rg-fit > * { width: 100%; }
+.unit .temp small { font-size: 22px; font-weight: 500; letter-spacing: 0; margin-left: 4px; }
+.unit.compact { gap: 10px; }
+.unit.compact .temp { font-size: 34px; }
+.unit.compact .name { font-size: 13px; }
+.stat > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rg-item .stat { grid-template-columns: 96px 1fr 84px; }
+.rg-item .stat.stacked { grid-template-columns: 1fr auto; gap: 4px 8px; }
+.rg-item .stat.stacked .bar { grid-column: 1 / -1; }
+.pool.short .col { height: 84px; }
+.reading { display: flex; flex-direction: column; gap: 4px; min-width: 0; border-top: 3px solid var(--ink); padding-top: 6px; }
+.reading .v { font-size: 26px; font-weight: 700; line-height: 1; }
+.reading .v > span:last-child { font-size: 13px; font-weight: 500; }
+.reading .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

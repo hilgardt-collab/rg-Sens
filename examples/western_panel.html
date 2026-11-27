@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1920 960x1100 1440x800 2880x510">
+<!-- custom layouts: the room a group gets, plus the sign, the footer and the paddings -->
+<meta name="rg-group-size" content="480x288+194">
 <title>Western Sensor Panel</title>
 <!--
   Western sensor panel for the rg-Sens CSS Template displayer, drawn for
@@ -66,6 +68,12 @@
   distant windpump turns, a hot horseshoe flickers and the dot at the newest
   sample pulses, at --motion-fps frames a second. 0 turns motion off, as do
   the panel's Animation switch and the system's reduced-motion setting.
+
+  Custom layouts (Display > Layout > "My own groups and widgets"): the
+  templates after the page are the building blocks: two group styles (the
+  paper poster, and the bare wall the vista clock hangs on) and the widgets:
+  vista clock, horseshoe, gun belt, windpump, whiskey bottle and plain
+  reading. The telegraph chart needs two sensors and is not one of them.
 
   Fonts: Rye (titles, signs, clock), Alfa Slab One (numbers) and Special
   Elite (labels), loaded from the fonts folder next to this file; copy that
@@ -146,6 +154,7 @@
   </header>
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+  <!--rg-groups 0-71-->
   <section class="vista">
     <div style="position: relative; width: 432px; filter: drop-shadow(0 12px 14px rgba(0,0,0,0.65))">
       <div style="position: relative; padding: 12px; background: linear-gradient(135deg, #6A4426 0%, #4A2C16 40%, #5E3C20 70%, #3A2210 100%); box-shadow: inset 0 0 0 1px #1A0E06, inset 0 2px 0 rgba(255,214,160,0.18), inset 0 -2px 0 rgba(0,0,0,0.4)">
@@ -194,7 +203,7 @@
           </svg>
           <div style="position: absolute; left: 0; right: 0; top: 30px; display: flex; flex-direction: column; align-items: center; gap: 6px">
             <span style="font-family: Rye, serif; font-size: 80px; line-height: 1; color: var(--clock); text-shadow: 0 3px 0 rgba(0,0,0,0.35), 0 0 22px var(--clock-glow)" data-clock="0">--:--</span>
-            <span style="font-size: 15px; letter-spacing: 0.08em; color: var(--clock); text-shadow: 0 1px 2px rgba(0,0,0,0.7); white-space: nowrap" data-date>&nbsp;</span>
+            <span style="font-size: 15px; letter-spacing: 0.08em; color: var(--clock); text-shadow: 0 1px 2px rgba(0,0,0,0.7); white-space: nowrap" data-date="1 2 3">&nbsp;</span>
           </div>
         </div>
         <div style="position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
@@ -241,7 +250,7 @@
             <div data-need="13" style="display: flex; flex-direction: column; gap: 9px">
               <div style="display: flex; align-items: baseline; justify-content: space-between">
                 <span style="font-size: 13px; color: #5E4630">Clock</span>
-                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="13" data-places="2" data-ghz>--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="14" data-default="GHz" data-ghz>GHz</span></span></span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="13" data-places="2" data-unit-of="14" data-ghz>--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="14" data-default="GHz" data-ghz>GHz</span></span></span>
               </div>
               <div data-belt="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
               </div>
@@ -284,7 +293,7 @@
             <div data-need="29" style="display: flex; flex-direction: column; gap: 9px">
               <div style="display: flex; align-items: baseline; justify-content: space-between">
                 <span style="font-size: 13px; color: #5E4630">Clock</span>
-                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="29" data-places="2" data-ghz>--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="30" data-default="GHz" data-ghz>GHz</span></span></span>
+                <span style="font-family: 'Alfa Slab One', serif; font-size: 20px; line-height: 1; color: #2A1A0F"><span data-num="29" data-places="2" data-unit-of="30" data-ghz>--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="30" data-default="GHz" data-ghz>GHz</span></span></span>
               </div>
               <div data-belt="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)">
               </div>
@@ -517,7 +526,7 @@
         <path d="M0 44 H392" stroke="#2A1A0F" stroke-width="1"></path>
         <path d="M6 46 H40 M70 46 H120 M160 46 H230 M270 46 H330 M350 46 H390" stroke="#2A1A0F" stroke-width="0.6" opacity="0.5"></path>
       </svg>
-      <svg data-chart role="img" aria-label="Network traffic over the last minute" width="392" height="104" viewBox="0 0 392 104" style="position: relative">
+      <svg data-chart data-down="65" data-up="69" role="img" aria-label="Network traffic over the last minute" width="392" height="104" viewBox="0 0 392 104" style="position: relative">
         <rect x="0.5" y="0.5" width="391" height="103" fill="#F2E7CC" stroke="#2A1A0F" stroke-width="1"></rect>
         <path d="M1 13.0 L391 13.0 M1 26.0 L391 26.0 M1 39.0 L391 39.0 M1 52.0 L391 52.0 M1 65.0 L391 65.0 M1 78.0 L391 78.0 M1 91.0 L391 91.0" fill="none" stroke="#7E9AA6" stroke-width="0.6" opacity="0.55"></path>
         <path d="M28 1 L28 103" fill="none" stroke="#8E2B17" stroke-width="0.7" opacity="0.7"></path>
@@ -530,6 +539,7 @@
     </div>
     <div style="position: absolute; top: 7px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 6px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
   </section>
+  <!--/rg-groups-->
   </div>
   <!-- ===== FOOTER: sign between horseshoes ===== -->
   <footer style="position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 12px">
@@ -553,6 +563,227 @@
 </div>
 </div>
 
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout).
+     rg-Sens builds the groups from these in place of the ones between the
+     rg-groups markers; a field name in double braces (value, caption, unit,
+     max, time ...) becomes a placeholder bound to the widget's own sensor.
+     The drawings use the gradients and the bottle clip of the wall's svg,
+     and each keeps the viewBox the script draws in. -->
+<template data-rg-group="poster" data-rg-label="Paper poster">
+  <section data-section class="wx-poster wx-{{parity}}" style="position: relative; z-index: 1; filter: drop-shadow(0 10px 10px rgba(0,0,0,0.55))">
+    <div style="position: relative; background: radial-gradient(ellipse at 18% 14%, rgba(120,70,20,0.2) 0%, rgba(120,70,20,0) 38%), radial-gradient(ellipse at 86% 82%, rgba(110,60,20,0.22) 0%, rgba(110,60,20,0) 42%), radial-gradient(ellipse at 60% 40%, rgba(255,250,235,0.35) 0%, rgba(255,250,235,0) 55%), linear-gradient(170deg, #EBDAB4 0%, #DEC596 60%, #CDAE74 100%); clip-path: polygon(0% 0.0px, 2.5% 1.3px, 5% 0.9px, 7.5% 1.2px, 10% 1.9px, 12.5% 2.1px, 15% 0.5px, 17.5% 0.1px, 20% 0.1px, 22.5% 2.6px, 25% 0.5px, 27.5% 1.8px, 30% 1.6px, 32.5% 0.3px, 35% 0.5px, 37.5% 1.9px, 40% 0.0px, 42.5% 0.1px, 45% 0.5px, 47.5% 0.6px, 50% 0.8px, 52.5% 0.2px, 55% 2.5px, 57.5% 2.5px, 60% 1.7px, 62.5% 1.9px, 65% 0.9px, 67.5% 3.1px, 70% 0.8px, 72.5% 0.3px, 75% 2.3px, 77.5% 0.9px, 80% 2.5px, 82.5% 0.5px, 85% 0.7px, 87.5% 3.2px, 90% 2.9px, 92.5% 0.9px, 95% 3.1px, 97.5% 0.3px, 100% 2.4px, calc(100% - 3.0px) 2.5%, calc(100% - 0.5px) 5%, calc(100% - 0.8px) 7.5%, calc(100% - 3.1px) 10%, calc(100% - 0.7px) 12.5%, calc(100% - 2.9px) 15%, calc(100% - 2.1px) 17.5%, calc(100% - 2.6px) 20%, calc(100% - 1.0px) 22.5%, calc(100% - 1.0px) 25%, calc(100% - 1.4px) 27.5%, calc(100% - 2.3px) 30%, calc(100% - 2.6px) 32.5%, calc(100% - 0.2px) 35%, calc(100% - 1.6px) 37.5%, calc(100% - 1.5px) 40%, calc(100% - 2.2px) 42.5%, calc(100% - 2.3px) 45%, calc(100% - 0.6px) 47.5%, calc(100% - 2.3px) 50%, calc(100% - 1.6px) 52.5%, calc(100% - 1.8px) 55%, calc(100% - 3.1px) 57.5%, calc(100% - 3.1px) 60%, calc(100% - 1.5px) 62.5%, calc(100% - 2.6px) 65%, calc(100% - 0.9px) 67.5%, calc(100% - 2.7px) 70%, calc(100% - 0.7px) 72.5%, calc(100% - 1.6px) 75%, calc(100% - 0.5px) 77.5%, calc(100% - 2.7px) 80%, calc(100% - 2.4px) 82.5%, calc(100% - 1.9px) 85%, calc(100% - 1.3px) 87.5%, calc(100% - 2.6px) 90%, calc(100% - 0.5px) 92.5%, calc(100% - 0.9px) 95%, calc(100% - 1.0px) 97.5%, 100% calc(100% - 1.5px), 97.5% calc(100% - 1.2px), 95% calc(100% - 0.2px), 92.5% calc(100% - 0.2px), 90% calc(100% - 1.9px), 87.5% calc(100% - 2.8px), 85% calc(100% - 0.7px), 82.5% calc(100% - 0.6px), 80% calc(100% - 3.2px), 77.5% calc(100% - 2.1px), 75% calc(100% - 2.2px), 72.5% calc(100% - 2.9px), 70% calc(100% - 0.2px), 67.5% calc(100% - 1.7px), 65% calc(100% - 2.5px), 62.5% calc(100% - 1.7px), 60% calc(100% - 0.8px), 57.5% calc(100% - 1.7px), 55% calc(100% - 2.6px), 52.5% calc(100% - 0.8px), 50% calc(100% - 2.0px), 47.5% calc(100% - 1.3px), 45% calc(100% - 2.8px), 42.5% calc(100% - 1.7px), 40% calc(100% - 1.5px), 37.5% calc(100% - 2.3px), 35% calc(100% - 1.3px), 32.5% calc(100% - 0.3px), 30% calc(100% - 1.9px), 27.5% calc(100% - 1.6px), 25% calc(100% - 2.8px), 22.5% calc(100% - 0.8px), 20% calc(100% - 2.1px), 17.5% calc(100% - 2.2px), 15% calc(100% - 2.8px), 12.5% calc(100% - 1.7px), 10% calc(100% - 1.5px), 7.5% calc(100% - 2.0px), 5% calc(100% - 0.5px), 2.5% calc(100% - 1.3px), 0% calc(100% - 0.9px), 2.6px 97.5%, 0.0px 95%, 0.8px 92.5%, 0.3px 90%, 0.4px 87.5%, 2.6px 85%, 2.3px 82.5%, 1.7px 80%, 3.0px 77.5%, 2.1px 75%, 3.1px 72.5%, 1.4px 70%, 0.1px 67.5%, 0.5px 65%, 0.5px 62.5%, 1.6px 60%, 1.4px 57.5%, 2.4px 55%, 1.7px 52.5%, 2.5px 50%, 2.8px 47.5%, 2.1px 45%, 1.4px 42.5%, 3.0px 40%, 0.7px 37.5%, 1.4px 35%, 2.2px 32.5%, 2.4px 30%, 1.5px 27.5%, 1.3px 25%, 2.8px 22.5%, 1.2px 20%, 1.9px 17.5%, 3.1px 15%, 2.8px 12.5%, 1.2px 10%, 3.1px 7.5%, 2.8px 5%, 1.3px 2.5%); box-shadow: inset 0 0 34px rgba(110,60,20,0.45); padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 6px">
+      <svg aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#wx-paper)"></rect></svg>
+      <div style="position: relative; display: flex; align-items: center; gap: 10px">
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <h2 style="margin: 0; font-family: Rye, serif; font-weight: 400; font-size: 32px; line-height: 1; color: #2A1A0F; white-space: nowrap" class="wx-title">{{title}}</h2>
+        <svg aria-hidden="true" width="14" height="14" viewBox="-7 -7 14 14"><polygon points="0.00,-6.40 1.53,-2.10 6.09,-1.98 2.47,0.80 3.76,5.18 0.00,2.60 -3.76,5.18 -2.47,0.80 -6.09,-1.98 -1.53,-2.10" fill="#8E2B17"></polygon></svg>
+        <div style="flex: 1; height: 3px; border-top: 2px solid #2A1A0F; border-bottom: 1px solid #2A1A0F"></div>
+      </div>
+      <!--rg-items-->
+    </div>
+    <div style="position: absolute; top: 7px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 6px; left: 50%; margin-left: -4.5px; width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+  </section>
+</template>
+<template data-rg-group="vista" data-rg-label="On the wall, no title">
+  <section class="vista wx-vista"><!--rg-items--></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Vista clock" data-rg-size="large" data-rg-sources="clock" data-rg-group="vista" data-rg-width="448" data-rg-height="332">
+  <div style="padding: 0 8px 16px; display: flex; justify-content: center">
+    <div style="position: relative; width: 432px; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.6))">
+      <div style="position: relative; padding: 12px; background: linear-gradient(135deg, #6A4426 0%, #4A2C16 40%, #5E3C20 70%, #3A2210 100%); box-shadow: inset 0 0 0 1px #1A0E06, inset 0 2px 0 rgba(255,214,160,0.18), inset 0 -2px 0 rgba(0,0,0,0.4)">
+        <svg aria-hidden="true" width="432" height="316" viewBox="0 0 432 316" style="position: absolute; top: 0; left: 0; pointer-events: none"><rect x="0" y="0" width="432" height="316" filter="url(#wx-grainH)"></rect></svg>
+        <div style="position: relative; width: 408px; height: 292px; overflow: hidden; box-shadow: 0 0 0 1px #1A0E06, inset 0 0 0 1px rgba(0,0,0,0.4)">
+          <svg role="img" aria-label="Frontier landscape at sunset" width="408" height="292" viewBox="0 0 408 292" style="position: absolute; top: 0; left: 0">
+            <rect x="0" y="0" width="408" height="292" fill="url(#wx-sky) #C2522E"></rect>
+            <g class="stars"><circle cx="0.0" cy="78.9" r="1.20" fill="#FFF6E0" opacity="0.26"></circle><circle cx="270.8" cy="11.4" r="0.71" fill="#FFF6E0" opacity="0.29"></circle><circle cx="161.8" cy="80.8" r="1.33" fill="#FFF6E0" opacity="0.34"></circle><circle cx="63.2" cy="20.7" r="0.74" fill="#FFF6E0" opacity="0.36"></circle><circle cx="145.1" cy="4.6" r="1.33" fill="#FFF6E0" opacity="0.27"></circle><circle cx="35.7" cy="52.1" r="1.35" fill="#FFF6E0" opacity="0.36"></circle><circle cx="94.2" cy="76.2" r="0.91" fill="#FFF6E0" opacity="0.25"></circle><circle cx="32.6" cy="60.7" r="1.00" fill="#FFF6E0" opacity="0.40"></circle><circle cx="127.4" cy="28.5" r="1.11" fill="#FFF6E0" opacity="0.35"></circle><circle cx="66.6" cy="93.8" r="1.36" fill="#FFF6E0" opacity="0.40"></circle><circle cx="96.0" cy="109.5" r="1.05" fill="#FFF6E0" opacity="0.39"></circle><circle cx="105.1" cy="43.6" r="0.64" fill="#FFF6E0" opacity="0.29"></circle><circle cx="148.3" cy="21.8" r="1.25" fill="#FFF6E0" opacity="0.28"></circle><circle cx="77.1" cy="44.9" r="1.22" fill="#FFF6E0" opacity="0.40"></circle><circle cx="176.5" cy="58.6" r="0.99" fill="#FFF6E0" opacity="0.26"></circle><circle cx="213.5" cy="62.7" r="1.02" fill="#FFF6E0" opacity="0.34"></circle><circle cx="380.7" cy="56.4" r="0.80" fill="#FFF6E0" opacity="0.30"></circle><circle cx="301.4" cy="44.2" r="0.95" fill="#FFF6E0" opacity="0.43"></circle><circle cx="157.2" cy="68.3" r="1.08" fill="#FFF6E0" opacity="0.27"></circle><circle cx="287.6" cy="30.1" r="1.23" fill="#FFF6E0" opacity="0.41"></circle><circle cx="56.7" cy="75.2" r="0.57" fill="#FFF6E0" opacity="0.30"></circle><circle cx="139.2" cy="17.7" r="1.11" fill="#FFF6E0" opacity="0.35"></circle><circle cx="406.9" cy="53.1" r="0.65" fill="#FFF6E0" opacity="0.32"></circle><circle cx="308.1" cy="68.0" r="1.36" fill="#FFF6E0" opacity="0.24"></circle><circle cx="24.6" cy="24.9" r="0.81" fill="#FFF6E0" opacity="0.20"></circle><circle cx="280.1" cy="40.8" r="0.89" fill="#FFF6E0" opacity="0.42"></circle></g>
+            <circle data-sun-glow cx="204" cy="206" r="170" fill="url(#wx-sunGlow) rgba(0,0,0,0)"></circle>
+            <circle data-sun cx="204" cy="206" r="44" fill="url(#wx-sun) #FFE6A0"></circle>
+            <g style="animation: wx-drift 30s ease-in-out infinite">
+              <ellipse cx="90" cy="150" rx="74" ry="4.5" fill="#F3A27A" opacity="0.45"></ellipse><ellipse cx="300" cy="138" rx="96" ry="5.5" fill="#F3A27A" opacity="0.4"></ellipse><ellipse cx="180" cy="118" rx="60" ry="3.5" fill="#F3A27A" opacity="0.3"></ellipse><ellipse cx="352" cy="170" rx="52" ry="3" fill="#F3A27A" opacity="0.35"></ellipse><ellipse cx="40" cy="104" rx="50" ry="3" fill="#F3A27A" opacity="0.25"></ellipse>
+            </g>
+            <path d="M0 216 L0 200 L26 198 L34 184 L96 182 L104 198 L150 200 L162 192 L214 191 L222 200 L270 202 L280 188 L332 186 L340 199 L408 201 L408 216 Z" fill="#8A4A52"></path>
+            <rect x="0" y="168" width="408" height="70" fill="url(#wx-haze) rgba(0,0,0,0)"></rect>
+            <path d="M0 240 L0 196 L16 192 L22 160 L66 158 L72 190 L92 196 L106 240 Z" fill="#4A2430"></path>
+            <path d="M22 160 L66 158 L68 166 L24 168 Z" fill="#F08A50" opacity="0.5"></path>
+            <path d="M296 240 L312 196 L320 164 L352 162 L358 190 L384 196 L408 204 L408 240 Z" fill="#4A2430"></path>
+            <path d="M320 164 L352 162 L354 170 L321 172 Z" fill="#F08A50" opacity="0.5"></path>
+            <path d="M246 238 L252 206 L255 192 L262 192 L266 206 L272 238 Z" fill="#4A2430"></path>
+            <!-- distant windpump -->
+            <g stroke="#4A2430" stroke-width="1.1" fill="none">
+              <path d="M280 236 L285 212 L290 236 M282 226 L288 226 M283 219 L287 219"></path>
+              <g style="transform-box: view-box; transform-origin: 285px 210px; "><circle cx="285" cy="210" r="6"></circle><path d="M279 210 H291 M285 204 V216 M280.8 205.8 L289.2 214.2 M289.2 205.8 L280.8 214.2"></path></g>
+              <path d="M286 210 L296 208 L297 213 Z" fill="#4A2430"></path>
+            </g>
+            <path d="M0 236 Q104 228 204 234 T408 232 V292 H0 Z" fill="url(#wx-ground) #3A2018"></path>
+            <path d="M186 292 C194 270 200 252 204 236 L208 236 C216 252 232 270 258 292 Z" fill="#C27A4A" opacity="0.35"></path>
+            <!-- fence running into the distance -->
+            <g stroke="#140A08" stroke-linecap="round">
+              <path d="M112 270 V248 M134 260 V244 M150 253 V241 M162 248 V239 M171 244 V237.5 M177 241 V236.5" stroke-width="2.4"></path>
+              <path d="M112 252 Q124 248 134 247 Q143 244 150 243.5 Q157 241.5 162 241 Q167 239.5 171 239 Q175 238 177 238 M112 260 Q124 256 134 254 Q143 250 150 249 Q157 246 162 245 Q167 242.5 171 242" stroke-width="0.8" fill="none"></path>
+            </g>
+            <!-- saguaros -->
+              <path d="M52 292 V194" stroke="#140A08" stroke-width="13" stroke-linecap="round" fill="none"></path>
+              <path d="M52 238.1 H36.4 V210.66 M52 250.84 H66.3 V215.56" stroke="#140A08" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path d="M50.05 288 V197 M54.6 288 V198" stroke="#F08A50" stroke-width="0.8" opacity="0.35" fill="none"></path>
+              <path d="M352 286 V214" stroke="#140A08" stroke-width="10" stroke-linecap="round" fill="none"></path>
+              <path d="M352 246.4 H340 V226.24 M352 255.76 H363 V229.84" stroke="#140A08" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path d="M350.5 282 V217 M354 282 V218" stroke="#F08A50" stroke-width="0.8" opacity="0.35" fill="none"></path>
+              <path d="M386 266 V232" stroke="#140A08" stroke-width="6" stroke-linecap="round" fill="none"></path>
+              <path d="M386 247.3 H378.8 V237.78 M386 251.72 H392.6 V239.48" stroke="#140A08" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path d="M385.1 262 V235 M387.2 262 V236" stroke="#F08A50" stroke-width="0.8" opacity="0.35" fill="none"></path>
+            <ellipse cx="0" cy="261" rx="10.8" ry="4.4" fill="#140A08"></ellipse><ellipse cx="23" cy="278" rx="10.4" ry="3.6" fill="#140A08"></ellipse><ellipse cx="224" cy="284" rx="8.2" ry="4.5" fill="#140A08"></ellipse><ellipse cx="52" cy="273" rx="11.3" ry="2.0" fill="#140A08"></ellipse><ellipse cx="167" cy="257" rx="8.1" ry="2.4" fill="#140A08"></ellipse><ellipse cx="40" cy="276" rx="4.1" ry="4.5" fill="#140A08"></ellipse><ellipse cx="157" cy="286" rx="8.5" ry="2.3" fill="#140A08"></ellipse><ellipse cx="29" cy="285" rx="7.8" ry="4.9" fill="#140A08"></ellipse><ellipse cx="188" cy="281" rx="8.1" ry="3.7" fill="#140A08"></ellipse>
+            <rect x="0" y="0" width="408" height="292" fill="url(#wx-vig) rgba(0,0,0,0)"></rect>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 30px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+            <span style="font-family: Rye, serif; font-size: 80px; line-height: 1; color: var(--clock); text-shadow: 0 3px 0 rgba(0,0,0,0.35), 0 0 22px var(--clock-glow)" data-clock="{{time}}">--:--</span>
+            <span style="font-size: 15px; letter-spacing: 0.08em; color: var(--clock); text-shadow: 0 1px 2px rgba(0,0,0,0.7); white-space: nowrap" data-date="{{day_name}} {{day}} {{month_name}}">&nbsp;</span>
+          </div>
+        </div>
+        <div style="position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 2px; left: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div><div style="position: absolute; bottom: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #D8D2C8, #6E675E 45%, #2A2622 80%); box-shadow: 1px 2px 2px rgba(0,0,0,0.6)"></div>
+      </div>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="horseshoe" data-rg-label="Horseshoe" data-rg-size="large" data-rg-width="392" data-rg-height="184">
+  <div data-need="{{value}}" style="display: flex; align-items: center; gap: 16px; height: 184px; padding-top: 4px; box-sizing: border-box">
+        <div style="position: relative; width: 180px; height: 176px; flex: none">
+          <svg data-gauge="{{value}}" data-max="{{max}}" role="img" aria-label="Horseshoe gauge" width="180" height="176" viewBox="0 0 200 196" style="position: absolute; top: 0; left: 0; overflow: visible">
+            <g style="filter: drop-shadow(2px 4px 3px rgba(40,20,5,0.55))">
+              <path d="M46.0 164.3 A84 84 0 1 1 154.0 164.3 L139.9 147.5 A62 62 0 1 0 60.1 147.5 Z" fill="url(#wx-iron) #3A3633"></path>
+              <path data-heat d="" fill="#3E3A3A" opacity="0.85"></path>
+              <path d="M45.8 148.8 A73 73 0 1 1 154.2 148.8" fill="none" stroke="#0E0B09" stroke-width="5" opacity="0.55"></path>
+              <path d="M36.4 153.4 A83 83 0 0 1 141.5 28.1" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.18"></path>
+              <rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(39.5 140.8) rotate(236.0)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(27.5 108.2) rotate(263.6)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(31.9 73.7) rotate(291.1)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(51.8 45.2) rotate(318.7)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(82.6 29.1) rotate(346.2)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(117.4 29.1) rotate(373.8)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(148.2 45.2) rotate(401.3)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(168.1 73.7) rotate(428.9)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(172.5 108.2) rotate(456.4)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(160.5 140.8) rotate(484.0)" data-hole fill="#120C08"></rect>
+            </g>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 50px; display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <span style="font-family: 'Alfa Slab One', serif; line-height: 1; color: #2A1A0F; font-size: 40px"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}">--</span></span>
+            <span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17; font-size: 14px; line-height: 1; max-width: 118px; overflow: hidden; white-space: nowrap"><span data-unit="{{unit}}" data-default=""></span></span>
+            <span class="wx-cap" style="font-size: 12px; letter-spacing: 0.1em; color: #5E4630; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 118px; margin-top: 4px" data-cap="{{caption}}" data-default=""></span>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+          <span style="font-family: Rye, serif; font-size: 30px; line-height: 1; color: #5E4630" data-state="{{value}}" data-max="{{max}}">Cool</span>
+          <span class="wx-cap" style="font-family: Rye, serif; font-size: 18px; line-height: 1.1; color: #2A1A0F; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="{{caption}}" data-default=""></span>
+          <span style="font-size: 13px; color: #5E4630; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">of <span data-num="{{max}}" data-places="0" data-unit-of="{{unit}}" data-plain>--</span> <span data-unit="{{unit}}" data-default=""></span></span>
+        </div>
+  </div>
+</template>
+<template data-rg-widget="horseshoe" data-rg-label="Horseshoe" data-rg-size="medium" data-rg-width="190" data-rg-height="186">
+  <div data-need="{{value}}" style="display: flex; justify-content: center; padding-top: 4px">
+        <div style="position: relative; width: 180px; height: 176px; flex: none">
+          <svg data-gauge="{{value}}" data-max="{{max}}" role="img" aria-label="Horseshoe gauge" width="180" height="176" viewBox="0 0 200 196" style="position: absolute; top: 0; left: 0; overflow: visible">
+            <g style="filter: drop-shadow(2px 4px 3px rgba(40,20,5,0.55))">
+              <path d="M46.0 164.3 A84 84 0 1 1 154.0 164.3 L139.9 147.5 A62 62 0 1 0 60.1 147.5 Z" fill="url(#wx-iron) #3A3633"></path>
+              <path data-heat d="" fill="#3E3A3A" opacity="0.85"></path>
+              <path d="M45.8 148.8 A73 73 0 1 1 154.2 148.8" fill="none" stroke="#0E0B09" stroke-width="5" opacity="0.55"></path>
+              <path d="M36.4 153.4 A83 83 0 0 1 141.5 28.1" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.18"></path>
+              <rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(39.5 140.8) rotate(236.0)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(27.5 108.2) rotate(263.6)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(31.9 73.7) rotate(291.1)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(51.8 45.2) rotate(318.7)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(82.6 29.1) rotate(346.2)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(117.4 29.1) rotate(373.8)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(148.2 45.2) rotate(401.3)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(168.1 73.7) rotate(428.9)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(172.5 108.2) rotate(456.4)" data-hole fill="#120C08"></rect><rect x="-2" y="-4.5" width="4" height="9" rx="1" transform="translate(160.5 140.8) rotate(484.0)" data-hole fill="#120C08"></rect>
+            </g>
+          </svg>
+          <div style="position: absolute; left: 0; right: 0; top: 50px; display: flex; flex-direction: column; align-items: center; gap: 2px">
+            <span style="font-family: 'Alfa Slab One', serif; line-height: 1; color: #2A1A0F; font-size: 40px"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}">--</span></span>
+            <span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17; font-size: 14px; line-height: 1; max-width: 118px; overflow: hidden; white-space: nowrap"><span data-unit="{{unit}}" data-default=""></span></span>
+            <span class="wx-cap" style="font-size: 12px; letter-spacing: 0.1em; color: #5E4630; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 118px; margin-top: 4px" data-cap="{{caption}}" data-default=""></span>
+          </div>
+        </div>
+  </div>
+</template>
+<template data-rg-widget="belt" data-rg-label="Gun belt" data-rg-size="small" data-rg-width="132" data-rg-height="62">
+  <div data-need="{{value}}" style="display: flex; flex-direction: column; gap: 9px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0">
+      <span class="wx-cap" style="font-size: 13px; color: #5E4630; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="{{caption}}" data-default=""></span>
+      <span style="font-family: 'Alfa Slab One', serif; line-height: 1; color: #2A1A0F; font-size: 20px; flex: none; white-space: nowrap"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="{{unit}}" data-default=""></span></span></span>
+    </div>
+    <div data-belt="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-count="8" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)"></div>
+  </div>
+</template>
+<template data-rg-widget="belt" data-rg-label="Gun belt" data-rg-size="large" data-rg-width="392" data-rg-height="36">
+  <div data-need="{{value}}" style="display: flex; align-items: flex-end; gap: 10px; height: 36px">
+    <span class="wx-cap" style="flex: none; width: 100px; font-size: 13px; line-height: 28px; color: #5E4630; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="{{caption}}" data-default=""></span>
+    <div style="flex: 1; min-width: 0"><div data-belt="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-count="16" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)"></div></div>
+    <span style="font-family: 'Alfa Slab One', serif; line-height: 1; color: #2A1A0F; flex: none; width: 76px; text-align: right; font-size: 20px; line-height: 28px; white-space: nowrap"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="{{unit}}" data-default=""></span></span></span>
+  </div>
+</template>
+<template data-rg-widget="belt" data-rg-label="Gun belt" data-rg-size="medium" data-rg-width="196" data-rg-height="62">
+  <div data-need="{{value}}" style="display: flex; flex-direction: column; gap: 9px">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0">
+      <span class="wx-cap" style="font-size: 13px; color: #5E4630; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="{{caption}}" data-default=""></span>
+      <span style="font-family: 'Alfa Slab One', serif; line-height: 1; color: #2A1A0F; font-size: 20px; flex: none; white-space: nowrap"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17"> <span data-unit="{{unit}}" data-default=""></span></span></span>
+    </div>
+    <div data-belt="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-count="12" style="position: relative; height: 28px; display: flex; justify-content: space-between; padding: 0 4px; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 10px, #7A4A26 10px, #5E3418 19px, #3E2010 28px); border-radius: 3px; box-shadow: inset 0 0 0 1px #2A1408, 0 2px 3px rgba(60,30,10,0.4)"></div>
+  </div>
+</template>
+<template data-rg-widget="windpump" data-rg-label="Windpump" data-rg-size="small" data-rg-sources="fan" data-rg-width="104" data-rg-height="164">
+  <div data-need="{{value}}" style="display: flex; flex-direction: column; align-items: center; gap: 1px">
+            <svg aria-hidden="true" width="96" height="124" viewBox="0 0 96 124">
+              <path d="M70 39 L84 39" stroke="#2A1A0F" stroke-width="1.4"></path>
+              <path d="M74 36 L91 27 L93 52 L74 43 Z" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.9"></path>
+              <path d="M78 35 L79 45 M82 33 L83 47 M86 31 L87 49 M90 29 L91 51" stroke="#2A1A0F" stroke-width="0.5" opacity="0.6"></path>
+              <path d="M44 46 L28 118 M52 46 L68 118 M48 46 V118" stroke="#2A1A0F" stroke-width="1.6" fill="none"></path>
+              <path d="M41 62 H55 M37 80 H59 M33 98 H63 M41 62 L59 80 M55 62 L37 80 M37 80 L63 98 M59 80 L33 98 M33 98 L66 114 M63 98 L30 114" stroke="#2A1A0F" stroke-width="0.7" fill="none"></path>
+              <path d="M18 119 H78" stroke="#2A1A0F" stroke-width="1.2"></path>
+              <path d="M22 121 H30 M38 121 H50 M60 121 H74" stroke="#2A1A0F" stroke-width="0.6" opacity="0.6"></path>
+              <g data-rotor="{{value}}">
+                <polygon points="60.5,38.9 81.3,35.9 81.4,42.3 60.5,40.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="60.1,43.2 80.6,47.5 78.6,53.6 59.5,44.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="58.2,47.2 76.1,58.2 72.1,63.3 57.1,48.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="55.2,50.2 68.2,66.8 62.7,70.1 53.7,51.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="51.2,52.1 57.8,72.0 51.5,73.3 49.5,52.4" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="46.9,52.5 46.2,73.5 39.9,72.5 45.2,52.2" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="42.7,51.3 34.9,70.8 29.3,67.8 41.2,50.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="39.2,48.8 25.2,64.5 20.9,59.7 38.0,47.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="36.7,45.3 18.2,55.2 15.8,49.2 36.0,43.7" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.5,41.1 14.7,44.1 14.6,37.7 35.5,39.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="35.9,36.8 15.4,32.5 17.4,26.4 36.5,35.1" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="37.8,32.8 19.9,21.8 23.9,16.7 38.9,31.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="40.8,29.8 27.8,13.2 33.3,9.9 42.3,28.9" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="44.8,27.9 38.2,8.0 44.5,6.7 46.5,27.6" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="49.1,27.5 49.8,6.5 56.1,7.5 50.8,27.8" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="53.3,28.7 61.1,9.2 66.7,12.2 54.8,29.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="56.8,31.2 70.8,15.5 75.1,20.3 58.0,32.5" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon><polygon points="59.3,34.7 77.8,24.8 80.2,30.8 60.0,36.3" fill="#CDB384" stroke="#2A1A0F" stroke-width="0.6"></polygon>
+                <circle cx="48" cy="40" r="34" fill="none" stroke="#2A1A0F" stroke-width="1.4"></circle>
+                <circle cx="48" cy="40" r="23" fill="none" stroke="#2A1A0F" stroke-width="0.9"></circle>
+                <circle cx="48" cy="40" r="12" fill="none" stroke="#2A1A0F" stroke-width="1.1"></circle>
+                <path d="M52.4 40.8 L59.8 42.1 M49.5 44.2 L52.1 51.3 M45.1 43.4 L40.3 49.2 M43.6 39.2 L36.2 37.9 M46.5 35.8 L43.9 28.7 M50.9 36.6 L55.7 30.8 " stroke="#2A1A0F" stroke-width="0.7"></path>
+              </g>
+              <circle cx="48" cy="40" r="4.5" fill="#2A1A0F"></circle>
+              <circle cx="47" cy="39" r="1.5" fill="#CDB384" opacity="0.6"></circle>
+            </svg>
+            <span style="font-family: 'Alfa Slab One', serif; line-height: 1; color: #2A1A0F; font-size: 20px" data-num="{{value}}" data-places="0">--</span>
+            <span class="wx-cap" style="font-size: 12px; letter-spacing: 0.1em; color: #5E4630; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0" data-cap="{{caption}}" data-default=""></span>
+  </div>
+</template>
+<template data-rg-widget="bottle" data-rg-label="Whiskey bottle" data-rg-size="medium" data-rg-default-for="memory disk" data-rg-width="128" data-rg-height="210">
+  <div data-need="{{value}}" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 2px">
+    <svg data-bottle="{{value}}" data-max="{{max}}" aria-hidden="true" width="88" height="160" viewBox="0 0 80 150" style="overflow: visible; filter: drop-shadow(3px 4px 3px rgba(60,30,8,0.45))">
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="url(#wx-amber) #5A2A08" opacity="0.28"></path>
+              <path data-whiskey clip-path="url(#wx-bottle)" d="" fill="url(#wx-whiskey) #B8661A"></path>
+              <path data-surface clip-path="url(#wx-bottle)" d="" fill="none" stroke="#F4C46A" stroke-width="1.4" opacity="0.9"></path>
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="none" stroke="#2A1204" stroke-width="1.4"></path>
+              <path d="M19 86 C17 104 17 120 20 134" fill="none" stroke="#FFF4DC" stroke-width="3" opacity="0.32" stroke-linecap="round"></path>
+              <path d="M37 18 V38" stroke="#FFF4DC" stroke-width="1.6" opacity="0.3" stroke-linecap="round"></path>
+              <rect x="35" y="1" width="10" height="13" rx="1.5" fill="#8A6238" stroke="#2A1204" stroke-width="0.8"></rect>
+              <rect x="33" y="13" width="14" height="5" fill="#8E2B17" stroke="#2A1204" stroke-width="0.6"></rect>
+              <rect x="20" y="50" width="40" height="30" fill="#EEE0C0" stroke="#2A1A0F" stroke-width="1"></rect>
+              <rect x="23" y="53" width="34" height="24" fill="none" stroke="#2A1A0F" stroke-width="0.5"></rect>
+              <text x="40" y="62" text-anchor="middle" font-family="Special Elite, monospace" font-size="6" fill="#8E2B17" data-cap="{{caption}}" data-default="" data-short="9"></text>
+              <text x="40" y="74.5" text-anchor="middle" font-family="Alfa Slab One, serif" font-size="12" fill="#2A1A0F"><tspan data-pct="{{value}}" data-max="{{max}}">--</tspan>%</text>
+            </svg>
+    <span class="wx-cap" style="font-family: Rye, serif; font-size: 16px; color: #2A1A0F; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="{{caption}}" data-default=""></span>
+    <span style="font-size: 12px; color: #5E4630; white-space: nowrap"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-plain>--</span> of <span data-num="{{max}}" data-places="0" data-unit-of="{{unit}}" data-plain>--</span> <span data-unit="{{unit}}" data-default=""></span></span>
+  </div>
+</template>
+<template data-rg-widget="bottle" data-rg-label="Whiskey bottle" data-rg-size="small" data-rg-default-for="memory disk" data-rg-width="112" data-rg-height="190">
+  <div data-need="{{value}}" style="display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 2px">
+    <svg data-bottle="{{value}}" data-max="{{max}}" aria-hidden="true" width="88" height="160" viewBox="0 0 80 150" style="overflow: visible; filter: drop-shadow(3px 4px 3px rgba(60,30,8,0.45))">
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="url(#wx-amber) #5A2A08" opacity="0.28"></path>
+              <path data-whiskey clip-path="url(#wx-bottle)" d="" fill="url(#wx-whiskey) #B8661A"></path>
+              <path data-surface clip-path="url(#wx-bottle)" d="" fill="none" stroke="#F4C46A" stroke-width="1.4" opacity="0.9"></path>
+              <path d="M34.0 14.0 L34.0 40.0 L29.3 41.3 L25.3 43.0 L21.8 45.3 L19.0 48.0 L16.8 51.3 L15.3 55.0 L14.3 59.3 L14.0 64.0 L14.0 136.0 L14.7 139.3 L16.7 141.3 L20.0 142.0 L60.0 142.0 L63.3 141.3 L65.3 139.3 L66.0 136.0 L66.0 64.0 L65.7 59.3 L64.8 55.0 L63.2 51.3 L61.0 48.0 L58.2 45.3 L54.8 43.0 L50.7 41.3 L46.0 40.0 L46.0 14.0 Z" fill="none" stroke="#2A1204" stroke-width="1.4"></path>
+              <path d="M19 86 C17 104 17 120 20 134" fill="none" stroke="#FFF4DC" stroke-width="3" opacity="0.32" stroke-linecap="round"></path>
+              <path d="M37 18 V38" stroke="#FFF4DC" stroke-width="1.6" opacity="0.3" stroke-linecap="round"></path>
+              <rect x="35" y="1" width="10" height="13" rx="1.5" fill="#8A6238" stroke="#2A1204" stroke-width="0.8"></rect>
+              <rect x="33" y="13" width="14" height="5" fill="#8E2B17" stroke="#2A1204" stroke-width="0.6"></rect>
+              <rect x="20" y="50" width="40" height="30" fill="#EEE0C0" stroke="#2A1A0F" stroke-width="1"></rect>
+              <rect x="23" y="53" width="34" height="24" fill="none" stroke="#2A1A0F" stroke-width="0.5"></rect>
+              <text x="40" y="62" text-anchor="middle" font-family="Special Elite, monospace" font-size="6" fill="#8E2B17" data-cap="{{caption}}" data-default="" data-short="9"></text>
+              <text x="40" y="74.5" text-anchor="middle" font-family="Alfa Slab One, serif" font-size="12" fill="#2A1A0F"><tspan data-pct="{{value}}" data-max="{{max}}">--</tspan>%</text>
+            </svg>
+    <span class="wx-cap" style="font-family: Rye, serif; font-size: 16px; color: #2A1A0F; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="{{caption}}" data-default=""></span>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Reading" data-rg-size="small" data-rg-width="132" data-rg-height="56">
+  <div data-need="{{value}}" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 2px">
+    <span style="font-family: 'Alfa Slab One', serif; line-height: 1; color: #2A1A0F; font-size: 28px; white-space: nowrap"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><span style="font-family: 'Special Elite', monospace; font-size: 12px; color: #8E2B17; font-size: 13px"> <span data-unit="{{unit}}" data-default=""></span></span></span>
+    <span class="wx-cap" style="font-size: 12px; letter-spacing: 0.1em; color: #5E4630; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" data-cap="{{caption}}" data-default=""></span>
+  </div>
+</template>
 <script type="application/json" id="rg-template-options">
 [
     {"id": "sky", "label": "Sky", "type": "choice", "var": "--sky", "default": "sunset", "choices": [{"value": "sunset", "label": "Sunset"}, {"value": "noon", "label": "High Noon"}, {"value": "moon", "label": "Moonlight"}]},
@@ -686,7 +917,9 @@
     return clamp01(val / (max > 0 ? max : fallback));
   }
   // A clock given in MHz is shown, and scaled, in GHz.
-  function inGhz(el, v, id) { return el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[id] || '')); }
+  function isMhz(v, id) { return /^mhz$/i.test(String(v[id] || '')); }
+  // A widget of a custom layout (built by rg-Sens from the templates below the page).
+  function built(el) { return el.closest('.rg-item') !== null; }
 
   // 13 -> 13th
   function ordinal(n) {
@@ -798,23 +1031,25 @@
     var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
 
     // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
-    var hm = /(\d{1,2}):(\d{2})/.exec(known(v['0']) ? String(v['0']) : '');
-    each('[data-clock]', function (el) { text(el, hm ? hm[1] + ':' + hm[2] : '--:--'); });
-    each('[data-date]', function (el) {    // Friday, 13th of November
-      var day = num(v['2']);
-      var rest = [isFinite(day) ? ordinal(Math.round(day)) : '', known(v['3']) ? String(v['3']) : ''].filter(Boolean).join(' of ');
-      text(el, [known(v['1']) ? String(v['1']) : '', rest].filter(Boolean).join(', ') || '\u00a0');
+    each('[data-clock]', function (el) {
+      var t = v[el.getAttribute('data-clock')], hm = /(\d{1,2}):(\d{2})/.exec(known(t) ? String(t) : '');
+      text(el, hm ? hm[1] + ':' + hm[2] : '--:--');
+    });
+    each('[data-date]', function (el) {    // Friday, 13th of November: the ids of day name, day and month
+      var ids = el.getAttribute('data-date').split(' '), day = num(v[ids[1]]);
+      var rest = [isFinite(day) ? ordinal(Math.round(day)) : '', known(v[ids[2]]) ? String(v[ids[2]]) : ''].filter(Boolean).join(' of ');
+      text(el, [known(v[ids[0]]) ? String(v[ids[0]]) : '', rest].filter(Boolean).join(', ') || '\u00a0');
     });
 
     each('[data-num]', function (el) {
       var id = el.getAttribute('data-num'), n = num(v[id]);
-      if (inGhz(el, v, +id + 1)) n /= 1000;
+      if ((el.hasAttribute('data-ghz') || built(el)) && isMhz(v, el.getAttribute('data-unit-of'))) n /= 1000;
       var shown = fmt(n, +el.getAttribute('data-places'));
       text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
     });
     each('[data-unit]', function (el) {
       var id = el.getAttribute('data-unit'), u = v[id];
-      text(el, inGhz(el, v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default'));
+      text(el, (el.hasAttribute('data-ghz') || built(el)) && isMhz(v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default'));
     });
     each('[data-cap]', function (el) {
       var c = v[el.getAttribute('data-cap')];
@@ -836,8 +1071,16 @@
     each('[data-gauge]', function (el) {
       var t = num(v[el.getAttribute('data-gauge')]);
       var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var colour = heat(isFinite(t) ? t : T_MIN);
+      // a built horseshoe reads any sensor: it fills against the sensor's own
+      // maximum, glows from a dull red up, and flickers from 72 % of it
+      if (el.hasAttribute('data-max')) {
+        f = share(t, num(v[el.getAttribute('data-max')]), 100);
+        colour = heat(50 + 50 * f);
+        t = isFinite(t) ? f * 100 : NaN;
+      }
       var end = 130 + 280 * f, a = end * Math.PI / 180, big = 280 * f > 180 ? 1 : 0;
-      var colour = heat(isFinite(t) ? t : T_MIN), shoe = el.querySelector('[data-heat]');
+      var shoe = el.querySelector('[data-heat]');
       attr(shoe, 'd', f > 0.002 ? 'M46.0 164.3 A84 84 0 ' + big + ' 1 ' +
            (100 + 84 * Math.cos(a)).toFixed(1) + ' ' + (100 + 84 * Math.sin(a)).toFixed(1) + ' L' +
            (100 + 62 * Math.cos(a)).toFixed(1) + ' ' + (100 + 62 * Math.sin(a)).toFixed(1) +
@@ -852,6 +1095,7 @@
     });
     each('[data-state]', function (el) {
       var t = num(v[el.getAttribute('data-state')]);
+      if (el.hasAttribute('data-max')) t = isFinite(t) ? share(t, num(v[el.getAttribute('data-max')]), 100) * 100 : NaN;
       text(el, t >= HOT ? 'Red hot!' : t >= WARM ? 'Warm' : 'Cool');
       flag(el, 'hot', t >= HOT);
       flag(el, 'warm', t >= WARM && t < HOT);
@@ -863,7 +1107,7 @@
     each('[data-belt]', function (el) {
       var val = num(v[el.getAttribute('data-belt')]), max = num(v[el.getAttribute('data-max')]);
       var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
-      if (scale.indexOf('clock') > 0 && /^mhz$/i.test(String(v[el.getAttribute('data-unit-of')] || ''))) { val /= 1000; max /= 1000; }
+      if ((scale.indexOf('clock') > 0 || built(el)) && isMhz(v, el.getAttribute('data-unit-of'))) { val /= 1000; max /= 1000; }
       var count = el.children.length;
       var lit = val > 0 ? Math.max(1, Math.round(share(val, max, fallback) * count)) : 0;
       if (el.getAttribute('data-lit') === String(lit)) return;
@@ -887,7 +1131,10 @@
       text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
     });
 
-    latest.down = num(v['65']); latest.up = num(v['69']);
+    // The chart names its two sensors; without one (a custom layout) nothing is sampled.
+    var chart = document.querySelector('[data-chart]');
+    latest.down = chart ? num(v[chart.getAttribute('data-down')]) : NaN;
+    latest.up = chart ? num(v[chart.getAttribute('data-up')]) : NaN;
 
     // Hide what has no data. With nothing bound at all, show the whole design.
     each('[data-need]', function (el) {

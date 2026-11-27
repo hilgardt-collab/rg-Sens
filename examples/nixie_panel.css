@@ -1,0 +1,209 @@
+/* Nixie Lab Sensor Panel: stylesheet for nixie_panel.html (rg-Sens CSS
+   Template displayer). Finishes, fonts, the grid of groups and the classes
+   the page's script switches; the tubes themselves are drawn once in the
+   HTML's <defs>. Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: IBM Plex Sans Condensed and Oswald, both SIL Open Font
+   License (OFL.txt in each folder). Keep the fonts folder next to this file;
+   without it the page falls back to system fonts. */
+@font-face { font-family: "IBM Plex Sans Condensed"; font-weight: 500; font-style: normal;
+  src: local("IBM Plex Sans Condensed Medium"), url("fonts/ibm-plex-sans-condensed/IBMPlexSansCondensed-Medium.ttf") format("truetype"); }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-weight: 600; font-style: normal;
+  src: local("IBM Plex Sans Condensed SemiBold"), url("fonts/ibm-plex-sans-condensed/IBMPlexSansCondensed-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "Oswald"; font-weight: 200 700; font-style: normal;
+  src: url("fonts/oswald/Oswald%5Bwght%5D.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Finish: aluminium (Brushed Aluminium), black (Black Anodised) or steel. */
+  --finish: aluminium;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar-graph tube full scale when a sensor has no maximum of its own.
+     Clocks are in GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Scope full scale in the network sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  /* Brushed Aluminium */
+  --plate: #C2C6CA;
+  --bevel-hi: #F4F6F7;
+  --bevel-lo: #7E8286;
+  --ink: #1C1F22;
+  --engrave: 0 1px 0 rgba(255,255,255,0.75), 0 -1px 0 rgba(0,0,0,0.2);
+  --eye-text: #0E5E2A;
+  --phosphor: #5CFF8A;
+  --phosphor-hot: #F2FFF4;
+  --crt: #0E2A1A;
+  --crt-edge: #030605;
+  --brush: 1;
+  --sheen: 1;
+  /* the rack space left between two front panels in one column */
+  --gap: 51.5px;
+}
+:root[data-rg-columns]:not([data-rg-columns="1"]) { --gap: 22px; }
+:root[data-finish="black"] {
+  --plate: #26282C; --bevel-hi: #55595F; --bevel-lo: #08090A; --ink: #E8E6DE;
+  --engrave: 0 -1px 0 rgba(0,0,0,0.85), 0 1px 0 rgba(255,255,255,0.06);
+  --eye-text: #9CFFB4; --brush: 0.3; --sheen: 0.4;
+}
+:root[data-finish="steel"] {
+  --plate: #8C9197; --bevel-hi: #D8DCE0; --bevel-lo: #4E5257; --ink: #121416;
+  --engrave: 0 1px 0 rgba(255,255,255,0.5), 0 -1px 0 rgba(0,0,0,0.25);
+  --eye-text: #0A4A20; --phosphor: #FFB040; --phosphor-hot: #FFF6E4; --crt: #2A1A06; --crt-edge: #060402;
+  --brush: 0.55; --sheen: 0.8;
+}
+html, body { margin: 0; background: #121314; }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+@keyframes nx-flicker { 0%,100% { opacity: 1; } 47% { opacity: 1; } 50% { opacity: .88; } 53% { opacity: 1; } }
+@keyframes nx-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+@keyframes nx-breathe { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(.97); } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still-motion * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative;
+  overflow: hidden; background: #121314; font-family: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  font-variant-numeric: tabular-nums; color: var(--ink); padding: 14px 10px; display: flex; flex-direction: column;
+  gap: var(--gap); }
+
+/* The rack: one bay per column, each with its two steel rails and their
+   square cage-nut holes. CSS backgrounds, so they run down any height. */
+.rack { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); grid-template-rows: 100%; grid-auto-rows: 0; overflow: hidden; }
+.rack i { min-height: 0; background:
+  linear-gradient(180deg, rgba(5,5,5,0) 4px, #050505 4px, #050505 11.2px, #2A2A2A 11.2px, #2A2A2A 12px, rgba(5,5,5,0) 12px) 6px 0 / 8px 16px repeat-y,
+  linear-gradient(180deg, rgba(5,5,5,0) 4px, #050505 4px, #050505 11.2px, #2A2A2A 11.2px, #2A2A2A 12px, rgba(5,5,5,0) 12px) calc(100% - 6px) 0 / 8px 16px repeat-y,
+  linear-gradient(90deg, #3A3C40, #8E9298 40%, #5E6268 60%, #2A2C30) 0 0 / 20px 100% no-repeat,
+  linear-gradient(90deg, #3A3C40, #8E9298 40%, #5E6268 60%, #2A2C30) 100% 0 / 20px 100% no-repeat; }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over, so every
+   front panel stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: var(--gap) 20px; align-content: stretch; }
+
+/* A front panel: brushed metal, bevelled edges, a knurled screw per corner.
+   A stretched one keeps its heading at the top and centres the rest. */
+.plate { position: relative; z-index: 1; min-width: 0; box-sizing: border-box; border-radius: 3px;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, rgba(0,0,0,0.05) 1px, rgba(0,0,0,0.05) 2px), var(--plate);
+  box-shadow: inset 0 2px 0 var(--bevel-hi), inset 0 -3px 0 var(--bevel-lo), inset 2px 0 0 rgba(255,255,255,0.18), inset -2px 0 0 rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.8), 0 10px 18px rgba(0,0,0,0.7);
+  padding: 12px 34px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.plate.console { padding: 14px 34px; gap: 10px; }
+.plate.fans { padding: 12px 30px; }
+.plate.fans .head { padding: 0 4px; }
+.plate.foot { padding: 10px 34px; flex-direction: row; align-items: center; justify-content: space-between; }
+.brush { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; opacity: var(--brush); }
+.sheen { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; opacity: var(--sheen);
+  background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 24%, rgba(0,0,0,0) 72%, rgba(0,0,0,0.16) 100%),
+    linear-gradient(100deg, rgba(255,255,255,0) 16%, rgba(255,255,255,0.22) 36%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 62%, rgba(255,255,255,0.12) 82%, rgba(255,255,255,0) 92%); }
+.screw { position: absolute; width: 14px; height: 14px; border-radius: 50%; box-shadow: 1px 2px 3px rgba(0,0,0,0.6);
+  background: radial-gradient(circle at 36% 30%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.15) 42%, rgba(0,0,0,0.3) 100%), repeating-conic-gradient(#5A5E64 0deg, #5A5E64 10deg, #AEB2B8 10deg, #AEB2B8 20deg); }
+.screw.tl { top: 12px; left: 8px; } .screw.bl { bottom: 12px; left: 8px; }
+.screw.tr { top: 12px; right: 8px; } .screw.br { bottom: 12px; right: 8px; }
+.screw.ml { top: 50%; margin-top: -7px; left: 8px; } .screw.mr { top: 50%; margin-top: -7px; right: 8px; }
+
+/* Engraved lettering. */
+.head { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.head h1, .head h2 { margin: 0; font-weight: 600; font-size: 14px; letter-spacing: 0.24em; text-shadow: var(--engrave); white-space: nowrap; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; }
+.head h1 { font-size: 15px; letter-spacing: 0.22em; }
+.head span { font-weight: 500; font-size: 10px; letter-spacing: 0.18em; text-shadow: var(--engrave); white-space: nowrap; }
+.head h1 + span { font-size: 11px; }
+.eng { font-weight: 600; font-size: 11px; letter-spacing: 0.18em; text-shadow: var(--engrave); white-space: nowrap; }
+.body { position: relative; width: 100%; max-width: 420px; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.console .body { gap: 10px; }
+.row { position: relative; width: 100%; display: flex; align-items: center; justify-content: space-between; }
+.row.rev { flex-direction: row-reverse; }
+.row.mid { justify-content: center; gap: 4px; }
+
+/* A dark window in the metal, lit warm by the tubes behind it. */
+.win { position: relative; display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px; border-radius: 4px;
+  background: radial-gradient(ellipse 70% 60% at 50% 55%, rgba(255,106,16,0.16) 0%, rgba(255,106,16,0) 70%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 2px),
+    linear-gradient(180deg, #16120E 0%, #080605 100%);
+  box-shadow: inset 0 4px 10px rgba(0,0,0,0.95), inset 0 0 0 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.18), 0 -1px 0 rgba(0,0,0,0.4); }
+.win.clockwin { align-items: center; gap: 4px; padding: 10px 12px; }
+.win.bars { align-items: stretch; gap: 14px; }
+.win.up { padding: 4px 8px; }
+.nixie { display: block; flex: none; }
+.lit { animation: nx-flicker 3.7s linear infinite; }
+.colon { animation: nx-pulse 2s steps(2, jump-none) infinite; }
+.neon { font-weight: 600; font-size: 16px; color: #FF9A3A; text-shadow: 0 0 6px #FF7A1E; padding-bottom: 14px; white-space: nowrap; }
+.neon.sm { font-size: 10px; letter-spacing: 0.12em; text-shadow: 0 0 5px #FF7A1E; padding-bottom: 4px; }
+.col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.col.wide { gap: 8px; }
+
+/* Jewel pilot lamps: green, amber from 72 degrees, red from 85. */
+.lampline { display: flex; align-items: center; gap: 8px; }
+.lamp { flex: none; width: 14px; height: 14px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, #FFFFFF 0%, #C8FFB0 22%, #30C83A 60%, #0A4A10 100%);
+  box-shadow: 0 0 0 2px #2A2A2A, 0 0 0 3.5px #B8BCC2, 0 0 0 4.5px #3A3C40, 0 2px 3px 3px rgba(0,0,0,0.5); }
+.lamp.warm { background: radial-gradient(circle at 38% 30%, #FFFFFF 0%, #FFE8A8 22%, #FFB020 60%, #5A3804 100%); }
+.lamp.hot, .lamp.red { background: radial-gradient(circle at 38% 30%, #FFFFFF 0%, #FF9A8A 22%, #E0241A 60%, #5A0604 100%); }
+.lamp.red { width: 16px; height: 16px; }
+
+/* Bar-graph tubes. */
+.bt { display: block; }
+.btv { font-family: Oswald, sans-serif; font-size: 15px; line-height: 1; color: #FF9A3A; text-shadow: 0 0 6px #FF7A1E; }
+.btc { font-weight: 600; font-size: 9px; letter-spacing: 0.14em; color: #D8D2C4; white-space: nowrap; }
+.breathe { transform-box: fill-box; transform-origin: 50% 100%; animation: nx-breathe 1.9s ease-in-out infinite; }
+.breathe.b2 { animation-duration: 2.27s; }
+.breathe.b3 { animation-duration: 2.64s; }
+.eyeglow { transform-box: view-box; transform-origin: 0px 0px; animation: nx-breathe 2.6s ease-in-out infinite; }
+.pulse { animation: nx-pulse 1.4s ease-in-out infinite; }
+
+/* Counting tubes and magic eyes: centred rows, so two fans or a missing
+   eye leave no hole. */
+.fanrow, .eyerow { position: relative; width: 100%; display: flex; justify-content: center; gap: 4px; }
+.eyerow { gap: 6px; }
+.fanrow > .col { flex: 0 1 95px; }
+.eyerow > .col { flex: 0 1 126px; }
+.cap9 { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-size: 9px; letter-spacing: 0.16em; text-shadow: var(--engrave); white-space: nowrap; }
+.cap11 { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-size: 11px; letter-spacing: 0.2em; text-shadow: var(--engrave); white-space: nowrap; }
+.pct { font-family: Oswald, sans-serif; font-size: 22px; line-height: 1; color: var(--eye-text); text-shadow: var(--engrave); }
+.sub { font-weight: 500; font-size: 11px; opacity: 0.8; white-space: nowrap; }
+
+/* The scope follows the finish's phosphor. */
+.scope { position: relative; display: block; flex: none; }
+.ph { stroke: var(--phosphor); }
+.ph-hot { stroke: var(--phosphor-hot); }
+.ph-dot { fill: var(--phosphor-hot); }
+.chlab { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 11px; letter-spacing: 0.16em; text-shadow: var(--engrave); }
+
+/* ---- custom layouts: groups built from the prototypes -------------------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). */
+:root:has(.rg-items) { --gap: 22px; }
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.plate:has(.rg-items) { min-height: 0; }
+.plate .rg-items { position: relative; align-self: stretch; }
+.rg-fit { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.w { position: relative; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.w .cap9, .w .cap11 { text-align: center; }
+/* a neon column lying down: the compact and the long bar */
+.htube { position: relative; height: 14px; border-radius: 7px; background: #0C0907; overflow: hidden;
+  box-shadow: inset 0 0 0 0.7px rgba(255,255,255,0.3), 0 1px 0 rgba(255,255,255,0.3), 0 -1px 0 rgba(0,0,0,0.4); }
+.htube > i { position: absolute; left: 4px; top: 4px; bottom: 4px; width: 0; border-radius: 2px;
+  background: linear-gradient(90deg, #E8502A 0%, #FF8A3A 88%, #FFE0B8 100%); box-shadow: 0 0 5px 1px rgba(255,90,10,0.85); }
+.htube::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; border-radius: 7px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.05) 35%, rgba(255,255,255,0) 60%, rgba(255,255,255,0.12) 100%); }
+.wbar { align-items: stretch; gap: 5px; }
+.wbar .line { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; min-width: 0; }
+.wbar .val { font-family: Oswald, sans-serif; font-size: 14px; line-height: 1; text-shadow: var(--engrave); white-space: nowrap; }
+.wbar .val small { font-size: 10px; }
+.wbar.long { display: grid; grid-template-columns: 96px minmax(0, 1fr) 84px; align-items: center; gap: 10px; }
+.wbar.long .val { text-align: right; font-size: 15px; }
+.wbar .cap11 { text-align: left; }
+.w .win { align-items: center; justify-content: center; }
+.w .win.tall { flex-direction: column; align-items: center; gap: 4px; }

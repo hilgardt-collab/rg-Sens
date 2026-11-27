@@ -326,6 +326,120 @@ function updateGauge(percent) {
 </html>
 ```
 
+## Custom Layouts: Groups and Widgets Chosen in the Dialog
+
+A template normally arranges its own groups. One that also declares its
+building blocks lets the user decide how many groups there are and which
+widget each sensor is shown with (Panel Properties › Display › Layout ›
+"My own groups and widgets"). The groups and items are the ones under
+Content, the same as for every other combo panel:
+
+- **Group page:** title, the group style when the template has more than
+  one, and a board: the group's grid of square cells, where a small widget
+  takes 1 x 1, a medium one 2 x 2 and a large one 4 x 4. Drag a box to any
+  free cells; drag its right or bottom edge, or the marked corner, to give
+  it any other block of cells (a bar at 4 x 1, a column at 1 x 3). A group
+  shows at most 6 widgets.
+- **Item page:** the source as always, plus Widget, Size and Colour.
+
+The grid is fitted to the room the group has and every widget is scaled to
+its cells, so any widget can be shown in any size and any placement fits
+(four small ones beside a large one is a 5 x 4 grid). A widget in a block
+the user shaped is drawn from whichever of its kind's prototypes fills that
+block best, so give a kind prototypes of different proportions (a compact
+bar, a long one) and state each one's `data-rg-width` / `data-rg-height`.
+
+The Bindings tab is greyed out while a custom layout is on: every sensor is
+bound by its widget. What the template shows outside its groups keeps the
+binding it had.
+
+Left on "The template's own layout", or with a template that declares no
+prototypes, nothing changes: the page is loaded exactly as written.
+
+### What the template declares
+
+```html
+<meta name="rg-group-size" content="480x345+60">   <!-- room the tallest group needs, + what sits outside the groups -->
+
+<div class="groups">
+<!--rg-groups 0-71 90-->       <!-- the template's own groups; the placeholders they use -->
+  <section>...</section>
+<!--/rg-groups-->
+</div>
+
+<template data-rg-group="section" data-rg-label="Section">
+  <section class="section"><h2>{{title}}</h2><!--rg-items--></section>
+</template>
+
+<template data-rg-widget="dial" data-rg-label="Dial" data-rg-size="large">
+  <svg data-gauge="{{value}}" data-max="{{max}}">...</svg>
+  <span data-cap="{{caption}}"></span>
+</template>
+```
+
+| Declaration | Meaning |
+|---|---|
+| `<!--rg-groups N-M ...-->` … `<!--/rg-groups-->` | The region a custom layout replaces. The numbers are the placeholders used inside it; their rows leave the Bindings tab while a custom layout is on. |
+| `<template data-rg-group="id">` | A group shell. `{{title}}` is the group's title, `<!--rg-items-->` where its widgets go. `{{index}}` counts the groups drawn from 1 and `{{parity}}` is `odd` or `even`, for designs whose groups alternate. The first shell is the default. A shell is laid out at the group's real size and is not scaled: put fixed-size artwork in a widget. |
+| `<template data-rg-widget="kind" data-rg-size="large\|medium\|small">` | A widget, as drawn for that size. One drawing is enough: it is scaled to whatever size the user picks. Further drawings of the same kind are used for the sizes nearest theirs; the first one is the size the kind starts in. |
+| `data-rg-width="330" data-rg-height="190"` | The size the widget is drawn at, in design pixels. It is laid out at exactly that size and scaled, whole, to its cells. |
+| `data-rg-label` | The name shown in the dialog. |
+| `data-rg-sources="fan clock"` | The sources the widget is made for: offered first for those, not at all for others. A clock is offered only widgets made for it. |
+| `data-rg-default-for="memory disk"` | The sources the widget is the first choice for in a fresh layout, while it stays on offer for every source. |
+| `data-rg-group="poster"` | The group shell a group gets when this is its first widget (and the group's style is Automatic). |
+| `data-rg-colors="red yellow blue black"` | The colours the widget can be drawn in. `{{color}}` in its markup becomes the chosen one (usually a class name of the template). Left on Automatic, the colours take turns through the group, in the order listed. |
+| `rg-group-size` | `WxH+E`: the room one group gets and the extra height outside the groups. `rg-layouts` is recomputed from it for the number of groups. |
+
+Inside a widget, `{{field}}` is replaced by a placeholder number of its own
+(1000 and up), bound to that field of the widget's sensor: `{{value}}`,
+`{{caption}}`, `{{unit}}`, `{{max}}`, `{{min}}`, or any field the source
+publishes (`{{time}}`, `{{day_name}}`). It is a bare number, so it goes
+where a hand-written template puts one (`data-bar="{{value}}"`); wrap it in
+braces again for text (`{{{{value:.1}}}}`). `{{value:.1}}` asks for one
+decimal; `{{slot}}` is the sensor's slot name, for ids. The script must read
+ids from attributes, never from constants (`v['65']`), and must not assume
+that a unit is the value's number plus one.
+
+rg-Sens builds each group's widgets as
+
+```html
+<div class="rg-items" style="grid-template-columns:repeat(5,...);grid-template-rows:repeat(4,...)">
+  <div class="rg-item rg-size-large rg-widget-dial" style="grid-column:2/span 4;grid-row:1/span 4">
+    <div class="rg-fit" style="width:330px;height:190px"> the prototype </div>
+  </div>
+</div>
+```
+
+and the bridge script scales each `.rg-fit` to its `.rg-item`. The rules for
+these classes have no specificity (`:where`), so the template's stylesheet
+can restyle them. The grid must get a definite box from the group shell, or
+its cells collapse to their content: give the shell's flex or grid ancestors
+`min-height: 0`, and equal, clipped rows to the groups themselves:
+
+```css
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.section:has(.rg-items), .section:has(.rg-items) > div { min-height: 0; overflow: hidden; }
+```
+
+A fresh custom layout gives the first item of each group, and every
+temperature, the template's first general widget kind at medium (2 x 2), and
+the other items its second kind as 2 x 1 blocks, which stack beside it; an
+item whose source has a widget made for it gets that widget. So declare the
+showpiece (a dial) first and the bar second, and draw them for those boxes.
+
+Every item's Widget list ends with "Not shown": a sensor that only feeds
+something outside the groups (a footer's uptime) is drawn in no group, which
+is also its default; a group with nothing to draw is left out.
+`examples/bauhaus_panel.html` is the worked example; every example panel
+but Steampunk (one composed picture) declares prototypes.
+
+To look at a layout without the app:
+
+```bash
+cargo run --example webkit_leak -- template=examples/bauhaus_panel.html \
+    layout=layout.json feed=values.json size=480x1500 snapshot=out.png duration=8
+```
+
 ## Troubleshooting
 
 ### Placeholders not updating

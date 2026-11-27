@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1060 1440x800 2880x470">
+<!-- custom layouts: the room a group gets, plus the footer strip -->
+<meta name="rg-group-size" content="480x304+92">
+<title>Hi-Fi Sensor Panel</title>
+<!--
+  1970s hi-fi sensor panel for the rg-Sens CSS Template displayer, drawn for
+  480x1920 portrait: a stack of components in a lacquered walnut cabinet.
+  Brushed aluminium faceplates with chrome screws, a receiver with a tuner
+  dial for the time of day, two backlit VU meters, LED ladders behind smoked
+  acrylic, cassettes whose reels turn with the fans, faders, and a network
+  equaliser. A sibling of the other example panels: the same placeholders
+  0-73 and the same setup. No maker's name or logo is shown; keep it so.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two meters, the fans (the counters and the handwriting
+  on the cassettes) and the faders; set them on the sensors.
+
+  Anything left unbound is hidden: a ladder, a meter, a counter, a cassette
+  with neither of its fans, a whole component. The processor's power ladder
+  has no rg-Sens source and stays hidden unless you bind a sensor to it by
+  hand on the Bindings tab. With nothing bound at all the whole stack is
+  shown switched off.
+
+  A meter reads 20 to 100 degrees over 100 degrees of arc; its PEAK lamp
+  lights from 85. A ladder has 16 LEDs (10 green, 3 amber, 3 red) against the
+  sensor's own maximum, else the full scale set in the options. The first
+  cassette holds fans 1 and 2, the second fans 3 and 4; each hub is one fan.
+
+  The equaliser keeps the last minute (20 samples of 3 seconds) in the page:
+  inbound as columns of 14 LEDs, outbound as a white line on each column, on
+  one shared scale. It starts empty and survives a reload of the template,
+  not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of hifi_panel.css): finish
+  (Silver and Walnut, Black Face, Champagne), how the design fits the panel,
+  the layout, the frame rate, and the full scale of the ladders and of the
+  equaliser.
+
+  Size: the design is drawn for 480x1920, but its six components re-arrange
+  to suit the panel: one column of six, two of three, three of two or six
+  side by side (the rg-layouts list gives the size each needs). In one column
+  the components keep their height and the walnut between them takes the
+  slack; in a grid the faceplates stretch to their cells. Meters and
+  cassettes keep their size; ladders, the tuner dial, the faders and the
+  equaliser widen with their faceplate. The Layout option fixes the column
+  count; the Fit option can crop, letterbox or distort instead.
+
+  The walnut, the brushed streaks and the paper grain of the backlit faces
+  are noise filters, which are costly to redraw; each carries data-rg-bake,
+  so rg-Sens draws it once into a bitmap.
+
+  Motion: the reels turn with RPM, the needles swing to a new reading and
+  quiver, the tuner pointer glows and the equaliser columns bounce, at
+  the frame rate set in the options. 0 turns motion off, as do the panel's
+  Animation switch and the system's reduced-motion setting.
+
+  Custom layouts: the templates at the end are the parts a layout of the
+  user's own groups is built from (two faceplates; clock, VU meter, LED
+  ladder, cassette, fader and counter widgets).
+
+  Fonts: Michroma (wordmark, clock), Barlow Condensed (labels, numbers) and
+  Caveat (the handwriting on the cassettes), loaded from the fonts folder
+  next to this file; copy that folder along with the template. Nothing is
+  fetched from the network.
+-->
+<link rel="stylesheet" href="hifi_panel.css">
+</head>
+<body>
+<div class="panel">
+
+  <!-- ===== the cabinet: lacquered walnut, and every shared drawing ===== -->
+  <svg class="wood" aria-hidden="true" width="100%" height="100%">
+    <defs>
+      <!-- wavy vertical grain: fine stripes bent by a slow displacement field -->
+      <filter id="hf-walnut" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.22 0.0016" numOctaves="3" seed="7" result="lines"></feTurbulence>
+        <feTurbulence type="fractalNoise" baseFrequency="0.004 0.0025" numOctaves="2" seed="3" result="warp"></feTurbulence>
+        <feDisplacementMap in="lines" in2="warp" scale="60" xChannelSelector="R" yChannelSelector="G" result="bent"></feDisplacementMap>
+        <feColorMatrix in="bent" type="matrix" values="0 0 0 0 0.09  0 0 0 0 0.045  0 0 0 0 0.015  0 0 0 2.6 -1.05"></feColorMatrix>
+      </filter>
+      <filter id="hf-figure" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.0015" numOctaves="4" seed="11"></feTurbulence>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.62  0 0 0 0 0.36  0 0 0 0 0.16  0 0 0 1.5 -0.62"></feColorMatrix>
+      </filter>
+      <filter id="hf-pores" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.2 0.08" numOctaves="2" seed="5"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1.6 0 0 0 0.95"></feColorMatrix></filter>
+      <!-- brushed aluminium: long horizontal streaks of light and dark -->
+      <filter id="hf-brush" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.0015 0.9" numOctaves="3" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1.1 0 0 0 -0.5"></feColorMatrix></filter>
+      <filter id="hf-brushD" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.002 1.1" numOctaves="2" seed="9"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.1 0 0 0 -0.55"></feColorMatrix></filter>
+      <filter id="hf-paper" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="13"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.2  0 0 0 0 0.05  0.55 0 0 0 -0.22"></feColorMatrix></filter>
+      <linearGradient id="hf-shellg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3C3B40" stop-opacity="0.96"></stop><stop offset="0.5" stop-color="#1E1E22" stop-opacity="0.94"></stop><stop offset="1" stop-color="#0E0E11" stop-opacity="0.98"></stop></linearGradient>
+      <linearGradient id="hf-glassg" x1="0" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"></stop><stop offset="0.38" stop-color="#FFFFFF" stop-opacity="0.08"></stop><stop offset="0.39" stop-color="#FFFFFF" stop-opacity="0"></stop><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"></stop></linearGradient>
+      <radialGradient id="hf-tape" cx="0.5" cy="0.5" r="0.5"><stop offset="0.3" stop-color="#2A1A10"></stop><stop offset="0.85" stop-color="#4A2E1C"></stop><stop offset="1" stop-color="#6A4630"></stop></radialGradient>
+      <radialGradient id="hf-hubg" cx="0.38" cy="0.32" r="0.7"><stop offset="0" stop-color="#FFFFFF"></stop><stop offset="0.6" stop-color="#E2DFD8"></stop><stop offset="1" stop-color="#A6A29A"></stop></radialGradient>
+
+      <!-- a meter's scale: 100 degrees of arc about a pivot below the window, red for the last 15 of 80 -->
+      <g id="hf-vu-scale">
+        <path class="m-s" d="M21.4 85.7 A100 100 0 0 1 174.6 85.7" stroke-width="1.3"></path>
+        <path class="m-red" d="M150.9 62.8 A102 102 0 0 1 176.1 84.4" stroke-width="5"></path>
+        <path class="m-s" stroke-width="1.6" d="M21.4 85.7L13.7 79.3M55.7 59.4L51.5 50.3M98.0 50.0L98.0 40.0M140.3 59.4L144.5 50.3"></path>
+        <path class="m-s" stroke-width="1" d="M28.8 77.8L25.4 74.2M37.1 70.7L34.1 66.7M46.1 64.5L43.5 60.2M65.9 55.3L64.2 50.6M76.4 52.4L75.3 47.5M87.1 50.6L86.6 45.6M108.9 50.6L109.4 45.6M119.6 52.4L120.7 47.5M130.1 55.3L131.8 50.6"></path>
+        <path class="m-red" stroke-width="1" d="M149.9 64.5L152.5 60.2M158.9 70.7L161.9 66.7M167.2 77.8L170.6 74.2"></path>
+        <path class="m-red" stroke-width="1.6" d="M174.6 85.7L182.3 79.3"></path>
+      </g>
+      <!-- a needle (pivot 98,150) and the black cover over its base -->
+      <g id="hf-vu-needle">
+        <line x1="102.5" y1="154" x2="102.5" y2="40" stroke="#2A1A08" stroke-width="3.2" opacity="0.1"></line>
+        <line x1="102.5" y1="154" x2="102.5" y2="40" stroke="#2A1A08" stroke-width="1.4" opacity="0.14"></line>
+        <line x1="98" y1="150" x2="98" y2="36" stroke="#111" stroke-width="1.3"></line>
+        <line x1="98" y1="36" x2="98" y2="50" stroke="#B81E12" stroke-width="1.8"></line>
+      </g>
+      <g id="hf-vu-cover">
+        <path d="M54 112 Q98 82 142 112 Z" fill="#141414"></path>
+        <path d="M62 108 Q98 86 134 108" fill="none" stroke="#FFF" stroke-width="0.8" opacity="0.18"></path>
+        <path d="M10 112 Q98 120 186 112" fill="none" stroke="#FFF" stroke-width="1" opacity="0.25"></path>
+      </g>
+      <!-- a reel hub: six teeth and one mark -->
+      <g id="hf-hub">
+        <circle r="12" fill="url(#hf-hubg) #ECEAE4"></circle>
+        <circle r="6.5" fill="#141416"></circle>
+        <path fill="#E6E3DC" d="M-1.2 -6.5h2.4v3h-2.4z" id="hf-tooth"></path>
+        <use href="#hf-tooth" transform="rotate(60)"></use><use href="#hf-tooth" transform="rotate(120)"></use><use href="#hf-tooth" transform="rotate(180)"></use><use href="#hf-tooth" transform="rotate(240)"></use><use href="#hf-tooth" transform="rotate(300)"></use>
+        <rect x="-1" y="-12" width="2" height="5" fill="#9A968E"></rect>
+        <circle r="12" fill="none" stroke="#7A766E" stroke-width="0.6"></circle>
+      </g>
+      <!-- a cassette: smoked shell with a window, a lined paper label, the head opening -->
+      <g id="hf-shell">
+        <path d="M8 10 H188 V116 H8 Z M50 58 H146 Q152 58 152 64 V84 Q152 90 146 90 H50 Q44 90 44 84 V64 Q44 58 50 58 Z" fill="url(#hf-shellg) #222" fill-rule="evenodd"></path>
+        <path d="M10 12 H186" stroke="#FFF" stroke-width="0.8" opacity="0.25"></path>
+        <rect x="16" y="16" width="164" height="34" rx="2" fill="#EFE6D0"></rect>
+        <path d="M22 34 H174 M22 44 H174" stroke="#B8AE96" stroke-width="0.6"></path>
+        <path d="M50 58 H146 Q152 58 152 64 V84 Q152 90 146 90 H50 Q44 90 44 84 V64 Q44 58 50 58 Z" fill="url(#hf-glassg) rgba(0,0,0,0)" stroke="#000" stroke-width="1.2"></path>
+        <path d="M51 59.5 H145" stroke="#FFF" stroke-width="0.6" opacity="0.35"></path>
+        <path d="M40 116 L48 98 H148 L156 116 Z" fill="#232326"></path>
+        <path d="M48 98.5 H148" stroke="#FFF" stroke-width="0.5" opacity="0.18"></path>
+        <circle cx="62" cy="108" r="4" fill="#020202"></circle><circle cx="134" cy="108" r="4" fill="#020202"></circle>
+        <circle cx="14" cy="104" r="2.2" fill="url(#hf-hubg) #999"></circle><circle cx="182" cy="104" r="2.2" fill="url(#hf-hubg) #999"></circle>
+      </g>
+      <!-- a fader's engraved scale, 0 to 100 -->
+      <g id="hf-fscale">
+        <path class="f-e" d="M18 9.5h12M82 9.5h-12M18 24.3h7M82 24.3h-7M18 39.1h7M82 39.1h-7M18 53.9h7M82 53.9h-7M18 68.7h7M82 68.7h-7M18 83.5h12M82 83.5h-12M18 98.3h7M82 98.3h-7M18 113.1h7M82 113.1h-7M18 127.9h7M82 127.9h-7M18 142.7h7M82 142.7h-7M18 157.5h12M82 157.5h-12"></path>
+        <path class="f-t" d="M18 8.5h12M82 8.5h-12M18 23.3h7M82 23.3h-7M18 38.1h7M82 38.1h-7M18 52.9h7M82 52.9h-7M18 67.7h7M82 67.7h-7M18 82.5h12M82 82.5h-12M18 97.3h7M82 97.3h-7M18 112.1h7M82 112.1h-7M18 126.9h7M82 126.9h-7M18 141.7h7M82 141.7h-7M18 156.5h12M82 156.5h-12"></path>
+        <g text-anchor="end"><g class="f-et" transform="translate(0 1)"><text class="f-et" x="14" y="12">100</text><text class="f-et" x="14" y="49">75</text><text class="f-et" x="14" y="86">50</text><text class="f-et" x="14" y="123">25</text><text class="f-et" x="14" y="160">0</text></g>
+        <text x="14" y="12">100</text><text x="14" y="49">75</text><text x="14" y="86">50</text><text x="14" y="123">25</text><text x="14" y="160">0</text></g>
+      </g>
+    </defs>
+    <rect data-rg-bake width="100%" height="100%" filter="url(#hf-figure)" opacity="0.7"></rect>
+    <rect data-rg-bake width="100%" height="100%" filter="url(#hf-walnut)"></rect>
+    <rect data-rg-bake width="100%" height="100%" filter="url(#hf-pores)" opacity="0.18"></rect>
+  </svg>
+  <div class="lacquer" aria-hidden="true"></div>
+
+  <!-- the six components: one, two, three or six columns, by the panel's shape -->
+  <div class="groups">
+  <!--rg-groups 0-72-->
+  <!-- ===== RECEIVER: clock + tuner dial ===== -->
+  <header class="unit receiver">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="brand"><h1>System Sensors</h1><span><span class="legend">STEREO MONITOR</span><i class="lamp"></i></span></div>
+    <div class="time">
+      <span class="clock" data-clock="0">--:--</span>
+      <div class="date"><span class="day" data-day="1">&nbsp;</span><span class="daymon" data-daymon="2 3">&nbsp;</span></div>
+    </div>
+    <div class="trim tuner"><div><div class="dial" data-tuner="0 72"><svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg><svg class="scale" role="img" aria-label="Time of day dial"></svg><i class="ptr" hidden></i><i class="glass"></i></div></div></div>
+    <div class="knobs" aria-hidden="true"><div class="knob"><i><b style="--a: 14deg"></b></i><span>BASS</span></div><div class="knob"><i><b style="--a: 27deg"></b></i><span>TREBLE</span></div><div class="knob"><i><b style="--a: 0deg"></b></i><span>BALANCE</span></div><div class="knob"><i><b style="--a: -54deg"></b></i><span>LOUDNESS</span></div><div class="knob"><i><b style="--a: 49deg"></b></i><span>VOLUME</span></div></div>
+  </header>
+
+  <!-- ===== AMPLIFIER: two VU meters ===== -->
+  <section class="unit" data-all>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="head"><h2>Thermal Amplifier</h2><span class="legend" data-unit="6" data-default="°C" data-upper>°C</span></div>
+    <div class="pair">
+      <div class="vu" data-need="5">
+        <div class="trim meter"><div class="win">
+          <i class="face"></i><svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg>
+          <svg width="190" height="118" viewBox="3 3 190 118" role="img" aria-label="CPU temperature" data-vu="5">
+            <use href="#hf-vu-scale"></use>
+            <text x="5.9" y="80.1">20</text><text x="49.4" y="49.8" text-anchor="middle">40</text><text x="98" y="39" text-anchor="middle">60</text><text x="146.6" y="49.8" text-anchor="middle">80</text><text class="red" x="190.1" y="80.1" text-anchor="end">100</text>
+            <text class="mk" x="98" y="78" text-anchor="middle">TEMP</text>
+            <g data-needle transform="rotate(-50 98 150)"><use href="#hf-vu-needle"></use></g><use href="#hf-vu-cover"></use>
+          </svg>
+          <span class="cap" data-cap="4" data-default="CPU" data-upper></span><i class="glass"></i>
+        </div></div>
+        <div class="vu-foot"><span class="legend peak"><i data-peak="5"></i>PEAK</span><span class="big"><span data-num="5" data-places="0">--</span><small> <span data-unit="6" data-default="°C"></span></small></span></div>
+      </div>
+      <div class="vu" data-need="21">
+        <div class="trim meter"><div class="win">
+          <i class="face"></i><svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg>
+          <svg width="190" height="118" viewBox="3 3 190 118" role="img" aria-label="GPU temperature" data-vu="21">
+            <use href="#hf-vu-scale"></use>
+            <text x="5.9" y="80.1">20</text><text x="49.4" y="49.8" text-anchor="middle">40</text><text x="98" y="39" text-anchor="middle">60</text><text x="146.6" y="49.8" text-anchor="middle">80</text><text class="red" x="190.1" y="80.1" text-anchor="end">100</text>
+            <text class="mk" x="98" y="78" text-anchor="middle">TEMP</text>
+            <g data-needle transform="rotate(-50 98 150)"><use href="#hf-vu-needle"></use></g><use href="#hf-vu-cover"></use>
+          </svg>
+          <span class="cap" data-cap="20" data-default="GPU" data-upper></span><i class="glass"></i>
+        </div></div>
+        <div class="vu-foot"><span class="legend peak"><i data-peak="21"></i>PEAK</span><span class="big"><span data-num="21" data-places="0">--</span><small> <span data-unit="22" data-default="°C"></span></small></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PEAK LEVEL UNIT: LED ladders behind smoked acrylic ===== -->
+  <section class="unit pad14" data-all>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="head"><h2>Peak Levels</h2><span class="legend">CPU · GPU</span></div>
+    <div class="trim"><div class="smoke levels">
+      <div class="lvl" data-need="9"><span class="lab amber">CPU LOAD</span><div class="leds" data-leds="9" data-max="11" data-unit-of="10" data-ghz data-scale="100" role="img" aria-label="CPU LOAD"></div><span class="val"><span data-num="9" data-places="0" data-unit-of="10" data-ghz>--</span><small> <span data-unit="10" data-ghz data-default=""></span></small></span></div>
+      <div class="lvl" data-need="13"><span class="lab amber">CPU CLOCK</span><div class="leds" data-leds="13" data-max="15" data-unit-of="14" data-ghz data-scale="--cpu-clock-max" role="img" aria-label="CPU CLOCK"></div><span class="val"><span data-num="13" data-places="2" data-unit-of="14" data-ghz>--</span><small> <span data-unit="14" data-ghz data-default=""></span></small></span></div>
+      <div class="lvl" data-need="17"><span class="lab amber">CPU POWER</span><div class="leds" data-leds="17" data-max="19" data-unit-of="18" data-ghz data-scale="--cpu-power-max" role="img" aria-label="CPU POWER"></div><span class="val"><span data-num="17" data-places="0" data-unit-of="18" data-ghz>--</span><small> <span data-unit="18" data-ghz data-default=""></span></small></span></div>
+      <div class="lvl" data-need="25"><span class="lab blue">GPU LOAD</span><div class="leds" data-leds="25" data-max="27" data-unit-of="26" data-ghz data-scale="100" role="img" aria-label="GPU LOAD"></div><span class="val"><span data-num="25" data-places="0" data-unit-of="26" data-ghz>--</span><small> <span data-unit="26" data-ghz data-default=""></span></small></span></div>
+      <div class="lvl" data-need="29"><span class="lab blue">GPU CLOCK</span><div class="leds" data-leds="29" data-max="31" data-unit-of="30" data-ghz data-scale="--gpu-clock-max" role="img" aria-label="GPU CLOCK"></div><span class="val"><span data-num="29" data-places="2" data-unit-of="30" data-ghz>--</span><small> <span data-unit="30" data-ghz data-default=""></span></small></span></div>
+      <div class="lvl" data-need="33"><span class="lab blue">GPU POWER</span><div class="leds" data-leds="33" data-max="35" data-unit-of="34" data-ghz data-scale="--gpu-power-max" role="img" aria-label="GPU POWER"></div><span class="val"><span data-num="33" data-places="0" data-unit-of="34" data-ghz>--</span><small> <span data-unit="34" data-ghz data-default=""></span></small></span></div>
+    </div></div>
+  </section>
+
+  <!-- ===== COOLING DECK: two cassettes, a fan to each reel ===== -->
+  <section class="unit" data-all>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="head"><h2>Cooling Deck</h2><span class="legend" data-unit="38" data-default="RPM" data-upper>RPM</span></div>
+    <div class="pair">
+      <div class="deck" data-all>
+        <div class="trim tape"><div class="win">
+          <svg width="190" height="118" viewBox="3 3 190 118" role="img" aria-label="Cassette">
+            <circle cx="70" cy="74" r="30" fill="url(#hf-tape) #3A2416"></circle><circle cx="126" cy="74" r="20" fill="url(#hf-tape) #3A2416"></circle>
+            <g transform="translate(70 74)"><g data-reel="37"><use href="#hf-hub"></use></g></g>
+            <g transform="translate(126 74)"><g data-reel="41"><use href="#hf-hub"></use></g></g>
+            <use href="#hf-shell"></use>
+            <rect x="16" y="16" width="164" height="7" fill="#C8361E"></rect>
+            <text class="hand" x="98" y="42" text-anchor="middle" data-caps="36 40"></text>
+            <text class="tiny" x="24" y="21.5">SIDE A</text><text class="tiny" x="172" y="21.5" text-anchor="end">C-90</text>
+          </svg>
+          <svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg><i class="glass"></i>
+        </div></div>
+        <div class="counters"><div class="ctr" data-need="37"><div class="drum" data-counter="37"></div><span class="lab" data-cap="36" data-default="FAN 1" data-upper></span></div><div class="ctr" data-need="41"><div class="drum" data-counter="41"></div><span class="lab" data-cap="40" data-default="FAN 2" data-upper></span></div></div>
+      </div>
+      <div class="deck" data-all>
+        <div class="trim tape"><div class="win">
+          <svg width="190" height="118" viewBox="3 3 190 118" role="img" aria-label="Cassette">
+            <circle cx="70" cy="74" r="22" fill="url(#hf-tape) #3A2416"></circle><circle cx="126" cy="74" r="28" fill="url(#hf-tape) #3A2416"></circle>
+            <g transform="translate(70 74)"><g data-reel="45"><use href="#hf-hub"></use></g></g>
+            <g transform="translate(126 74)"><g data-reel="49"><use href="#hf-hub"></use></g></g>
+            <use href="#hf-shell"></use>
+            <rect x="16" y="16" width="164" height="7" fill="#1E5AA8"></rect>
+            <text class="hand" x="98" y="42" text-anchor="middle" data-caps="44 48"></text>
+            <text class="tiny" x="24" y="21.5">SIDE B</text><text class="tiny" x="172" y="21.5" text-anchor="end">C-90</text>
+          </svg>
+          <svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg><i class="glass"></i>
+        </div></div>
+        <div class="counters"><div class="ctr" data-need="45"><div class="drum" data-counter="45"></div><span class="lab" data-cap="44" data-default="FAN 3" data-upper></span></div><div class="ctr" data-need="49"><div class="drum" data-counter="49"></div><span class="lab" data-cap="48" data-default="FAN 4" data-upper></span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== MEMORY MIXER: three faders ===== -->
+  <section class="unit pad14 gap10" data-all>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="head"><h2>Memory Mixer</h2><span class="legend">% IN USE</span></div>
+    <div class="faders">
+      <div class="fader" data-need="53">
+        <div class="slot" data-fader="53" data-max="55">
+          <svg width="100" height="166" aria-hidden="true"><use href="#hf-fscale"></use></svg>
+          <i class="groove"></i><i class="strip"></i><i class="shade"></i><i class="cap"></i>
+        </div>
+        <span class="big"><span data-pct="53" data-max="55">--</span><small>%</small></span>
+        <span class="name" data-cap="52" data-default="MEMORY" data-upper></span>
+        <span class="sub"><span data-num="53" data-places="1" data-plain>--</span> / <span data-num="55" data-places="0" data-plain>--</span> <span data-unit="54" data-default=""></span></span>
+      </div>
+      <div class="fader" data-need="57">
+        <div class="slot" data-fader="57" data-max="59">
+          <svg width="100" height="166" aria-hidden="true"><use href="#hf-fscale"></use></svg>
+          <i class="groove"></i><i class="strip"></i><i class="shade"></i><i class="cap"></i>
+        </div>
+        <span class="big"><span data-pct="57" data-max="59">--</span><small>%</small></span>
+        <span class="name" data-cap="56" data-default="VIDEO" data-upper></span>
+        <span class="sub"><span data-num="57" data-places="1" data-plain>--</span> / <span data-num="59" data-places="0" data-plain>--</span> <span data-unit="58" data-default=""></span></span>
+      </div>
+      <div class="fader" data-need="61">
+        <div class="slot" data-fader="61" data-max="63">
+          <svg width="100" height="166" aria-hidden="true"><use href="#hf-fscale"></use></svg>
+          <i class="groove"></i><i class="strip"></i><i class="shade"></i><i class="cap"></i>
+        </div>
+        <span class="big"><span data-pct="61" data-max="63">--</span><small>%</small></span>
+        <span class="name" data-cap="60" data-default="DISK" data-upper></span>
+        <span class="sub"><span data-num="61" data-places="0" data-plain>--</span> / <span data-num="63" data-places="0" data-plain>--</span> <span data-unit="62" data-default=""></span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== NETWORK EQUALISER ===== -->
+  <section class="unit" data-all>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="head"><h2>Network Equaliser</h2><span class="legend" data-unit="66" data-default="MB/S" data-upper>MB/S</span></div>
+    <div class="io">
+      <span data-need="65">IN <b data-num="65" data-places="1">--</b></span>
+      <span data-need="69">OUT <b data-num="69" data-places="1">--</b></span>
+    </div>
+    <div class="trim"><div class="smoke eq">
+      <div class="eq-cols" data-eq="65 69" role="img" aria-label="Network traffic over the last minute"></div>
+      <div class="eq-legend"><span>−60 S</span><span>BARS IN · LINES OUT</span><span>NOW</span></div>
+    </div></div>
+  </section>
+  <!--/rg-groups-->
+  </div>
+
+  <!-- ===== FOOTER STRIP ===== -->
+  <footer class="unit foot">
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i>
+    <span class="legend"><i class="jack"></i>PHONES</span>
+    <div data-need="73"><span class="legend">UPTIME</span><div class="drum s" data-uptime="73"></div></div>
+    <span class="legend">POWER<i class="switch"></i></span>
+  </footer>
+</div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout).
+     rg-Sens builds the groups from these in place of the ones between the
+     rg-groups markers; a field name in double braces (value, caption, unit,
+     max, time ...) becomes a placeholder bound to the widget's own sensor. -->
+<template data-rg-group="unit" data-rg-label="Faceplate">
+  <section class="unit" data-all>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="head"><h2>{{title}}</h2></div>
+    <!--rg-items-->
+  </section>
+</template>
+<template data-rg-group="receiver" data-rg-label="Receiver">
+  <section class="unit receiver" data-all>
+    <svg class="brush" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brush)" opacity="0.55"></rect><rect data-rg-bake width="100%" height="100%" filter="url(#hf-brushD)" opacity="0.35"></rect></svg><i class="sheen"></i><i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>
+    <div class="brand"><h1>{{title}}</h1><span><span class="legend">STEREO MONITOR</span><i class="lamp"></i></span></div>
+    <!--rg-items-->
+    <div class="knobs" aria-hidden="true"><div class="knob"><i><b style="--a: 14deg"></b></i><span>BASS</span></div><div class="knob"><i><b style="--a: 27deg"></b></i><span>TREBLE</span></div><div class="knob"><i><b style="--a: 0deg"></b></i><span>BALANCE</span></div><div class="knob"><i><b style="--a: -54deg"></b></i><span>LOUDNESS</span></div><div class="knob"><i><b style="--a: 49deg"></b></i><span>VOLUME</span></div></div>
+  </section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock and tuner" data-rg-size="large" data-rg-sources="clock" data-rg-group="receiver" data-rg-width="404" data-rg-height="188">
+  <div class="time">
+    <span class="clock" data-clock="{{time}}">--:--</span>
+    <div class="date"><span class="day" data-day="{{day_name}}">&nbsp;</span><span class="daymon" data-daymon="{{day}} {{month_name}}">&nbsp;</span></div>
+  </div>
+  <div class="trim tuner"><div><div class="dial" data-tuner="{{time}} {{hour}}"><svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg><svg class="scale" role="img" aria-label="Time of day dial"></svg><i class="ptr" hidden></i><i class="glass"></i></div></div></div>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock and tuner" data-rg-size="medium" data-rg-sources="clock" data-rg-group="receiver" data-rg-width="404" data-rg-height="62">
+  <div class="time">
+    <span class="clock" data-clock="{{time}}">--:--</span>
+    <div class="date"><span class="day" data-day="{{day_name}}">&nbsp;</span><span class="daymon" data-daymon="{{day}} {{month_name}}">&nbsp;</span></div>
+  </div>
+</template>
+<template data-rg-widget="vu" data-rg-label="VU meter" data-rg-size="medium" data-rg-width="196" data-rg-height="154">
+  <div class="vu" data-need="{{value}}">
+    <div class="trim meter"><div class="win">
+      <i class="face"></i><svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg>
+      <svg width="190" height="118" viewBox="3 3 190 118" role="img" aria-label="Meter" data-vu="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-ghz>
+        <use href="#hf-vu-scale"></use>
+        <text data-tick x="5.9" y="80.1">0</text><text data-tick x="49.4" y="49.8" text-anchor="middle">25</text><text data-tick x="98" y="39" text-anchor="middle">50</text><text data-tick x="146.6" y="49.8" text-anchor="middle">75</text><text data-tick class="red" x="190.1" y="80.1" text-anchor="end">100</text>
+        <text class="mk u" x="98" y="78" text-anchor="middle" data-unit="{{unit}}" data-ghz data-default="" data-upper></text>
+        <g data-needle transform="rotate(-50 98 150)"><use href="#hf-vu-needle"></use></g><use href="#hf-vu-cover"></use>
+      </svg>
+      <span class="cap" data-cap="{{caption}}" data-default="" data-upper></span><i class="glass"></i>
+    </div></div>
+    <div class="vu-foot"><span class="legend peak"><i data-peak="{{value}}" data-max="{{max}}"></i>PEAK</span><span class="big"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-ghz>--</span><small> <span data-unit="{{unit}}" data-ghz data-default=""></span></small></span></div>
+  </div>
+</template>
+<template data-rg-widget="vu" data-rg-label="VU meter" data-rg-size="small" data-rg-width="196" data-rg-height="124">
+  <div class="trim meter" data-need="{{value}}"><div class="win">
+      <i class="face"></i><svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg>
+      <svg width="190" height="118" viewBox="3 3 190 118" role="img" aria-label="Meter" data-vu="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-ghz>
+        <use href="#hf-vu-scale"></use>
+        <text data-tick x="5.9" y="80.1">0</text><text data-tick x="49.4" y="49.8" text-anchor="middle">25</text><text data-tick x="98" y="39" text-anchor="middle">50</text><text data-tick x="146.6" y="49.8" text-anchor="middle">75</text><text data-tick class="red" x="190.1" y="80.1" text-anchor="end">100</text>
+        <text class="mk u" x="98" y="78" text-anchor="middle" data-unit="{{unit}}" data-ghz data-default="" data-upper></text>
+        <g data-needle transform="rotate(-50 98 150)"><use href="#hf-vu-needle"></use></g><use href="#hf-vu-cover"></use>
+      </svg>
+      <span class="cap" data-cap="{{caption}}" data-default="" data-upper></span><span class="read"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-ghz>--</span></span><i class="glass"></i>
+    </div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="LED ladder" data-rg-size="small" data-rg-colors="amber blue" data-rg-width="125" data-rg-height="48">
+  <div class="bar stacked sm trim" data-need="{{value}}"><div class="smoke"><span class="lab {{color}}" data-cap="{{caption}}" data-default="" data-upper></span><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-ghz>--</span><small> <span data-unit="{{unit}}" data-ghz data-default=""></span></small></span><div class="leds" data-leds="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-ghz data-scale="100"></div></div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="LED ladder" data-rg-size="large" data-rg-colors="amber blue" data-rg-width="390" data-rg-height="32">
+  <div class="bar lvl trim" data-need="{{value}}"><div class="smoke"><span class="lab {{color}}" data-cap="{{caption}}" data-default="" data-upper></span><div class="leds" data-leds="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-ghz data-scale="100"></div><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-ghz>--</span><small> <span data-unit="{{unit}}" data-ghz data-default=""></span></small></span></div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="LED ladder" data-rg-size="medium" data-rg-colors="amber blue" data-rg-width="200" data-rg-height="96">
+  <div class="bar stacked tall trim" data-need="{{value}}"><div class="smoke"><span class="lab {{color}}" data-cap="{{caption}}" data-default="" data-upper></span><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-ghz>--</span><small> <span data-unit="{{unit}}" data-ghz data-default=""></span></small></span><div class="leds" data-leds="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-ghz data-scale="100"></div></div></div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Cassette" data-rg-size="medium" data-rg-sources="fan" data-rg-width="196" data-rg-height="170">
+  <div class="deck" data-need="{{value}}">
+    <div class="trim tape"><div class="win">
+          <svg width="190" height="118" viewBox="3 3 190 118" role="img" aria-label="Cassette">
+            <circle cx="70" cy="74" r="26" fill="url(#hf-tape) #3A2416"></circle><circle cx="126" cy="74" r="24" fill="url(#hf-tape) #3A2416"></circle>
+            <g transform="translate(70 74)"><g data-reel="{{value}}"><use href="#hf-hub"></use></g></g>
+            <g transform="translate(126 74)"><g data-reel="{{value}}"><use href="#hf-hub"></use></g></g>
+            <use href="#hf-shell"></use>
+            <rect x="16" y="16" width="164" height="7" fill="#C8361E"></rect>
+            <text class="hand" x="98" y="42" text-anchor="middle" data-caps="{{caption}}"></text>
+            <text class="tiny" x="24" y="21.5">SIDE A</text><text class="tiny" x="172" y="21.5" text-anchor="end">C-90</text>
+          </svg>
+          <svg class="paper" aria-hidden="true"><rect data-rg-bake width="100%" height="100%" filter="url(#hf-paper)"></rect></svg><i class="glass"></i>
+        </div></div>
+    <div class="counters" style="justify-content: center; gap: 8px; align-items: flex-start"><div class="ctr" data-need="{{value}}"><div class="drum" data-counter="{{value}}"></div><span class="lab" data-cap="{{caption}}" data-default="" data-upper></span></div></div>
+  </div>
+</template>
+<template data-rg-widget="fader" data-rg-label="Fader" data-rg-default-for="memory disk" data-rg-size="medium" data-rg-width="110" data-rg-height="246">
+  <div class="fader" data-need="{{value}}">
+        <div class="slot" data-fader="{{value}}" data-max="{{max}}">
+          <svg width="100" height="166" aria-hidden="true"><use href="#hf-fscale"></use></svg>
+          <i class="groove"></i><i class="strip"></i><i class="shade"></i><i class="cap"></i>
+        </div>
+        <span class="big"><span data-pct="{{value}}" data-max="{{max}}">--</span><small>%</small></span>
+        <span class="name" data-cap="{{caption}}" data-default="" data-upper></span>
+        <span class="sub"><span data-num="{{value}}" data-places="1" data-plain>--</span> / <span data-num="{{max}}" data-places="0" data-plain>--</span> <span data-unit="{{unit}}" data-default=""></span></span>
+      </div>
+</template>
+<template data-rg-widget="fader" data-rg-label="Fader" data-rg-default-for="memory disk" data-rg-size="small" data-rg-width="100" data-rg-height="222">
+  <div class="fader" data-need="{{value}}">
+        <div class="slot" data-fader="{{value}}" data-max="{{max}}">
+          <svg width="100" height="166" aria-hidden="true"><use href="#hf-fscale"></use></svg>
+          <i class="groove"></i><i class="strip"></i><i class="shade"></i><i class="cap"></i>
+        </div>
+        <span class="big"><span data-pct="{{value}}" data-max="{{max}}">--</span><small>%</small></span>
+        <span class="name" data-cap="{{caption}}" data-default="" data-upper></span>
+      </div>
+</template>
+<template data-rg-widget="counter" data-rg-label="Counter" data-rg-size="small" data-rg-width="104" data-rg-height="46">
+  <div class="ctr solo" data-need="{{value}}"><div style="display: flex; align-items: center; gap: 5px"><div class="drum" data-counter="{{value}}" data-unit-of="{{unit}}" data-ghz data-places="1"></div><span class="legend" data-unit="{{unit}}" data-ghz data-default="" data-upper></span></div><span class="lab" data-cap="{{caption}}" data-default="" data-upper></span></div>
+</template>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "finish", "label": "Finish", "type": "choice", "var": "--finish", "default": "silver", "choices": [{"value": "silver", "label": "Silver & Walnut"}, {"value": "black", "label": "Black Face"}, {"value": "champagne", "label": "Champagne"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Equaliser full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100, HOT = 85;
+  var SAMPLES = 20, SAMPLE_MS = 3000;   // one minute of history
+  var EQ_ROWS = 14, LADDER = 16;
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+  // The finish is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-finish', (css.getPropertyValue('--finish') || 'silver').trim() || 'silver');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function prop(el, name, value) { if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value); }
+  function html(el, markup) { if (el.getAttribute('data-drawn') !== markup) { el.innerHTML = markup; el.setAttribute('data-drawn', markup); } }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  // A clock given in MHz is shown, and scaled, in GHz: an element marked
+  // data-ghz, whose unit is the placeholder named by data-unit-of (or by
+  // data-unit, on the unit itself).
+  function inGhz(el, v) {
+    var id = el.getAttribute('data-unit-of') || el.getAttribute('data-unit');
+    return el.hasAttribute('data-ghz') && /^mhz$/i.test(String(v[id] || '').trim());
+  }
+  // How far up its scale a reading is: against the sensor's own maximum
+  // (data-max), else the fixed 20 to 100 degrees of the temperature meters.
+  function level(el, v, id) {
+    var t = num(v[id]);
+    if (!isFinite(t)) return 0;
+    if (!el.hasAttribute('data-max')) return clamp01((t - T_MIN) / (T_MAX - T_MIN));
+    return share(t, num(v[el.getAttribute('data-max')]), 100);    // MHz over MHz needs no conversion
+  }
+
+  // ------------------------------------------------------- built once
+  // LED ladders: 16 lenses each.
+  each('[data-leds]', function (el) { el.innerHTML = new Array(LADDER + 1).join('<i></i>'); });
+  // The equaliser: 20 columns, each a stack that bounces at its own pace
+  // (0.7 to 1.2 s), the lit strip inside it, and the outbound line.
+  each('[data-eq]', function (el) {
+    var cols = '';
+    for (var i = 0; i < SAMPLES; i++) {
+      cols += '<div class="eq-col"><i style="animation-duration:' + (0.7 + (i * 7 % 11) / 20).toFixed(2) + 's;animation-delay:-' +
+              ((i * 3 % 7) / 10).toFixed(1) + 's"><i data-n="0"></i></i><b data-o="0"></b></div>';
+    }
+    el.innerHTML = cols;
+  });
+  // The tuner dial: hours 0 to 24 with a label every two hours and a tick
+  // every half hour, drawn in the window's own pixels so it can be any width.
+  function drawTuners() {
+    each('[data-tuner] .scale', function (svg) {
+      var W = svg.clientWidth || 394, k = (W - 28) / 24;
+      var major = '', minor = '', labels = '';
+      for (var i = 0; i <= 48; i++) {
+        var x = (14 + i * k / 2).toFixed(1);
+        if (i % 4 === 0) major += 'M' + x + ' 40V56';
+        else minor += 'M' + x + ' ' + (i % 2 ? 50 : 46) + 'V56';
+      }
+      for (var h = 0; h <= 24; h += 2) {
+        var hx = (14 + h * k).toFixed(1);
+        labels += '<text x="' + hx + '" y="72" text-anchor="middle" font-weight="700" font-size="13">' + h + '</text>' +
+                  '<text x="' + hx + '" y="88" text-anchor="middle" font-weight="500" font-size="9" opacity="0.65">' +
+                  (h % 24 === 0 ? 'MID' : h === 12 ? 'NOON' : h < 12 ? 'AM' : 'PM') + '</text>';
+      }
+      html(svg, '<text x="10" y="16" font-weight="600" font-size="10" letter-spacing="1.5">HOURS</text>' +
+        '<text x="' + (W - 10) + '" y="16" text-anchor="end" font-weight="600" font-size="10" letter-spacing="1.5">24 H</text>' +
+        '<path stroke-width="1.4" d="' + major + '"></path><path stroke-width="0.8" d="' + minor + '"></path>' +
+        '<path stroke-width="1" d="M14 56.5H' + (W - 14) + '"></path>' + labels);
+    });
+  }
+  window.addEventListener('resize', drawTuners);
+  window.addEventListener('rg-layout', function () { setTimeout(drawTuners, 0); });
+  drawTuners();
+
+  // A mechanical counter: one drum per character. Letters sit between the
+  // drums, a decimal gets a pale drum of its own.
+  function drum(el, chars) {
+    var out = '', dec = false;
+    for (var i = 0; i < chars.length; i++) {
+      var c = chars.charAt(i);
+      if (c === '.') { dec = true; continue; }
+      out += '<b' + (dec ? ' class="dec"' : /\d/.test(c) ? '' : ' class="u"') + '>' + c + '</b>';
+    }
+    html(el, out);
+  }
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var STORE = 'rg-hifi-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+    }
+  } catch (e) { /* no storage: the equaliser starts dark */ }
+
+  // The value the top LED stands for, shared by bars and lines: the option,
+  // else the peak of the last minute in steps (1, 2, 4, 8, 16 ...), so the
+  // columns do not rescale each time the peak moves a little.
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+  function drawEq() {
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    var n = hist.down.length;
+    each('[data-eq]', function (el) {
+      each('.eq-col', function (col, i) {
+        var at = i - (SAMPLES - n);            // the newest sample is the last column
+        var lit = at >= 0 ? Math.round(clamp01(hist.down[at] / full) * EQ_ROWS) : 0;
+        var out = at >= 0 ? Math.round(clamp01(hist.up[at] / full) * EQ_ROWS) : 0;
+        var strip = col.firstChild.firstChild, line = col.lastChild;
+        attr(strip, 'data-n', String(lit)); prop(strip, '--n', String(lit));
+        attr(line, 'data-o', String(out)); prop(line, '--o', String(out));
+      }, el);
+    });
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawEq();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawEq();
+
+  // ------------------------------------------------------- values
+  var moving = false;                   // set by the motion ticker below
+  function setNeedle(el, angle) { attr(el, 'transform', 'rotate(' + angle.toFixed(1) + ' 98 150)'); }
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
+    function hoursMinutes(id) { return /(\d{1,2}):(\d{2})/.exec(known(v[id]) ? String(v[id]) : ''); }
+    each('[data-clock]', function (el) {
+      var hm = hoursMinutes(el.getAttribute('data-clock'));
+      text(el, hm ? hm[1] + ':' + hm[2] : '--:--');
+    });
+    each('[data-day]', function (el) {       // FRIDAY
+      var d = v[el.getAttribute('data-day')];
+      text(el, known(d) ? String(d).toUpperCase() : ' ');
+    });
+    each('[data-daymon]', function (el) {    // 13 NOVEMBER: the ids of the day and the month name
+      var ids = el.getAttribute('data-daymon').split(' '), day = num(v[ids[0]]);
+      text(el, [isFinite(day) ? String(Math.round(day)) : '', known(v[ids[1]]) ? String(v[ids[1]]).toUpperCase() : '']
+        .filter(Boolean).join(' ') || ' ');
+    });
+    // Tuner pointer at hour + minute / 60: the ids of the time and of the
+    // 24-hour hour (without it, AM / PM in the time is honoured).
+    each('[data-tuner]', function (el) {
+      var ids = el.getAttribute('data-tuner').split(' '), hm = hoursMinutes(ids[0]), hour = num(v[ids[1]]);
+      if (!isFinite(hour) && hm) {
+        hour = +hm[1];
+        if (/pm/i.test(String(v[ids[0]])) && hour < 12) hour += 12;
+        if (/am/i.test(String(v[ids[0]])) && hour === 12) hour = 0;
+      }
+      var at = isFinite(hour) ? Math.min(Math.max(hour + (hm ? +hm[2] / 60 : 0), 0), 24) : NaN;
+      var ptr = el.querySelector('.ptr');
+      hide(ptr, !isFinite(at));
+      if (isFinite(at)) prop(el, '--h', at.toFixed(2));
+    });
+
+    each('[data-num]', function (el) {
+      var n = num(v[el.getAttribute('data-num')]);
+      if (inGhz(el, v)) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "412 / 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var u = v[el.getAttribute('data-unit')];
+      var shown = inGhz(el, v) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? shown.toUpperCase() : shown);
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      var name = known(c) ? String(c) : el.getAttribute('data-default');
+      text(el, el.hasAttribute('data-upper') ? name.toUpperCase() : name);
+    });
+    // The handwriting on a cassette: its fans' captions.
+    each('[data-caps]', function (el) {
+      var names = el.getAttribute('data-caps').split(' ').map(function (id) { return v[id]; }).filter(known).map(String);
+      var shown = names.join('  ·  ');
+      text(el, shown);
+      attr(el, 'font-size', (shown.length > 20 ? Math.max(16 * 20 / shown.length, 8) : 16).toFixed(1));
+    });
+
+    // VU meters: the needle sweeps 100 degrees. A meter with a maximum of
+    // its own (data-max) is numbered 0 to that maximum.
+    each('[data-vu]', function (el) {
+      var f = level(el, v, el.getAttribute('data-vu'));
+      if (el.hasAttribute('data-max')) {
+        var max = num(v[el.getAttribute('data-max')]);
+        if (!(max > 0)) max = 100;
+        if (inGhz(el, v)) max /= 1000;
+        each('[data-tick]', function (t, i) { text(t, fmt(max * i / 4, max < 10 ? 1 : 0).replace(/,/g, '')); }, el);
+      }
+      var needle = el.querySelector('[data-needle]');
+      needle._to = -50 + 100 * f;
+      if (!moving) { needle._at = needle._to; setNeedle(needle, needle._to); }
+    });
+    // PEAK lamps: lit from 85 degrees, or from 85 % of the sensor's maximum.
+    each('[data-peak]', function (el) {
+      var id = el.getAttribute('data-peak');
+      flag(el, 'on', isFinite(num(v[id])) && level(el, v, id) >= (HOT - (el.hasAttribute('data-max') ? 0 : T_MIN)) / (el.hasAttribute('data-max') ? 100 : T_MAX - T_MIN));
+    });
+
+    // LED ladders: against the sensor's own maximum, else the limit in the
+    // stylesheet (a number, or the name of a custom property).
+    each('[data-leds]', function (el) {
+      var val = num(v[el.getAttribute('data-leds')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (inGhz(el, v)) { val /= 1000; max /= 1000; }
+      var lit = Math.round(share(val, max, fallback) * LADDER);
+      for (var i = 0; i < el.children.length; i++) flag(el.children[i], 'on', i < lit);
+    });
+
+    // Counters: four drums of whole numbers; a counter that allows a
+    // decimal (data-places) shows one for readings under 1000.
+    each('[data-counter]', function (el) {
+      var n = num(v[el.getAttribute('data-counter')]), chars = '0000';
+      if (inGhz(el, v)) n /= 1000;
+      if (isFinite(n)) {
+        n = Math.max(n, 0);
+        if (el.hasAttribute('data-places') && n < 999.95 && Math.round(n * 10) % 10 !== 0) {
+          var whole = Math.floor(Math.round(n * 10) / 10), tenth = Math.round(n * 10) % 10;
+          chars = ('00' + whole).slice(-3) + '.' + tenth;
+        } else {
+          chars = String(Math.round(n));
+          while (chars.length < 4) chars = '0' + chars;
+        }
+      }
+      drum(el, chars);
+    });
+    each('[data-uptime]', function (el) {    // 04d07h
+      var sec = num(v[el.getAttribute('data-uptime')]), chars = '00d00h';
+      function two(n) { return (n < 10 ? '0' : '') + n; }
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        chars = d > 0 ? two(d) + 'd' + two(hr) + 'h' : two(hr) + 'h' + two(mn) + 'm';
+      }
+      drum(el, chars);
+    });
+    each('[data-reel]', function (el) {
+      var rpm = num(v[el.getAttribute('data-reel')]);
+      el._rpm = isFinite(rpm) ? rpm : 0;
+    });
+
+    // Faders: the cap sits at the share in use.
+    each('[data-fader]', function (el) {
+      prop(el, '--f', share(num(v[el.getAttribute('data-fader')]), num(v[el.getAttribute('data-max')]), 100).toFixed(3));
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    // The equaliser samples inbound and outbound every three seconds.
+    var eq = document.querySelector('[data-eq]');
+    if (eq) {
+      var ids = eq.getAttribute('data-eq').split(' ');
+      latest.down = num(v[ids[0]]); latest.up = num(v[ids[1]]);
+    }
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-all]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, last = 0;
+  var EPOCH = 1700000000000;
+  // A needle's mechanical quiver: up to 1.2 degrees around the reading.
+  var QUIVER = [[0, 0], [0.3, 1.2], [0.55, -0.8], [0.8, 0.6], [1, 0]];
+  function quiver(phase) {
+    for (var i = 1; i < QUIVER.length; i++) {
+      if (phase <= QUIVER[i][0]) {
+        var a = QUIVER[i - 1], b = QUIVER[i], k = (phase - a[0]) / (b[0] - a[0]);
+        k = k * k * (3 - 2 * k);
+        return a[1] + (b[1] - a[1]) * k;
+      }
+    }
+    return 0;
+  }
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a cached list revives cancelled animations.
+    var anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;         // delays stay in effect
+    // Reels: one turn every 2400 / RPM seconds, but never more than about 22
+    // degrees a frame. A hub's six teeth repeat every 60 degrees, so a
+    // bigger step would read as standing still or turning backwards.
+    each('[data-reel]', function (el) {
+      var rpm = el._rpm || 0;
+      if (rpm <= 0) return;
+      el._a = ((el._a || 0) + Math.min(360 / 2400 * rpm * dt * speed, 22 * (1 - Math.exp(-rpm / 1200)))) % 360;
+      el.setAttribute('transform', 'rotate(' + el._a.toFixed(1) + ')');
+    });
+    // Needles: swing to the reading in about 300 ms, then quiver around it
+    // (2.6 s and 3.3 s turn about, so two meters never move together).
+    each('[data-needle]', function (el, n) {
+      var to = el._to === undefined ? -50 : el._to;
+      el._at = el._at === undefined ? to : el._at + (to - el._at) * (1 - Math.exp(-dt / 0.11));
+      var period = n % 2 ? 3300 : 2600;
+      setNeedle(el, el._at + (to > -50 ? quiver(t % period / period) : 0));
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    moving = on;
+    root.classList.toggle('still-motion', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) {
+      each('[data-needle]', function (el) { if (el._to !== undefined) { el._at = el._to; setNeedle(el, el._to); } });
+      return;
+    }
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // everything in its switched-off state before the first values arrive
+})();
+</script>
+</body>
+</html>

@@ -160,3 +160,20 @@ html, body { margin: 0; background: var(--wall); }
 .col.side.now { fill: var(--accent-side); }
 .col.top.now { fill: var(--accent); }
 .col.face.now { fill: var(--accent); animation: br-blink 1.6s steps(2, jump-none) infinite; }
+
+/* ---- custom layouts: groups built from the templates after the page -----
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). The groups share the
+   height equally; a slab hands what is left under its heading to the grid,
+   the opening shares its height with the clock slab beneath it. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > .slab:has(.rg-items) { min-height: 0; overflow: hidden; }
+.groups > .hall:has(.rg-items) { min-height: 0; }
+.slab > .rg-items { position: relative; flex: 1 1 0; margin: 0; }
+.hall > .rg-items { flex: 1 1 0; min-height: 128px; }
+.hall .rg-item { overflow: visible; }     /* the clock slab's extruded side */
+.rg-fit { display: flex; flex-direction: column; justify-content: center; }
+.rg-fit > * { box-sizing: border-box; width: 100%; }
+.br-cap { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-cap.br-cap2 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

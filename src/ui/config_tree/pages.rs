@@ -18,6 +18,7 @@ use gtk4::{
 use rg_sens_types::combo::GroupTitleConfig;
 use rg_sens_types::schema::Schema;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 fn page_box() -> GtkBox {
@@ -87,6 +88,12 @@ fn dropdown_row(container: &GtkBox, label: &str, names: &[String], selected: usi
     row.append(&dd);
     container.append(&row);
     dd
+}
+
+/// Which page a CSS template's custom layout rows are for.
+enum CssRows {
+    Group(usize),
+    Item(String),
 }
 
 impl State {
@@ -788,7 +795,605 @@ impl State {
             page.append(title_editor.widget());
             self.group_editors.borrow_mut().insert(group, title_editor);
         }
+        page.append(&self.css_layout_rows(CssRows::Group(group)));
         page
+    }
+
+    /// The rows a CSS template's custom layout adds to a Group or Item
+    /// page. The pages are built once and kept, while the layout can be
+    /// switched on, the template changed or a source swapped elsewhere in
+    /// the dialog, so the rows are rebuilt each time the page is shown.
+    fn css_layout_rows(self: &Rc<Self>, target: CssRows) -> GtkBox {
+        let holder = GtkBox::new(Orientation::Vertical, 10);
+        let weak = Rc::downgrade(self);
+        holder.connect_map(move |holder| {
+            if let Some(s) = weak.upgrade() {
+                s.fill_css_layout_rows(holder, &target);
+            }
+        });
+        holder
+    }
+
+    fn fill_css_layout_rows(self: &Rc<Self>, holder: &GtkBox, target: &CssRows) {
+        use crate::ui::css_template_layout::SIZES;
+        use rg_sens_types::display_configs::{CssWidgetChoice, CSS_LAYOUT_MAX_ITEMS};
+
+        while let Some(child) = holder.first_child() {
+            holder.remove(&child);
+        }
+        let Some((cfg, spec)) = self.css_layout() else {
+            return;
+        };
+        if !spec.usable() {
+            return;
+        }
+        holder.append(&heading("Layout"));
+        if !cfg.layout.custom {
+            holder.append(&hint(
+                "The template arranges its own groups. Choose \"My own groups and widgets\" \
+                 under Display to set titles and place widgets here.",
+            ));
+            return;
+        }
+        match target {
+            CssRows::Group(group) => {
+                let group = *group;
+                let current = cfg.layout.groups.get(group).cloned().unwrap_or_default();
+                let row = GtkBox::new(Orientation::Horizontal, 8);
+                let label = Label::new(Some("Title:"));
+                label.set_width_chars(14);
+                label.set_xalign(0.0);
+                let entry = Entry::new();
+                entry.set_placeholder_text(Some(&format!("Group {}", group + 1)));
+                entry.set_text(&current.title);
+                entry.set_hexpand(true);
+                row.append(&label);
+                row.append(&entry);
+                holder.append(&row);
+                {
+                    // Applied once typing pauses: an edit reloads the
+                    // display editor and the page.
+                    let weak = Rc::downgrade(self);
+                    let typed = Rc::new(std::cell::Cell::new(0u32));
+                    entry.connect_changed(move |entry| {
+                        typed.set(typed.get().wrapping_add(1));
+                        let (weak, typed, at) = (weak.clone(), typed.clone(), typed.get());
+                        let entry = entry.downgrade();
+                        gtk4::glib::timeout_add_local_once(
+                            std::time::Duration::from_millis(350),
+                            move || {
+                                let (Some(s), Some(entry)) = (weak.upgrade(), entry.upgrade())
+                                else {
+                                    return;
+                                };
+                                if typed.get() != at {
+                                    return;
+                                }
+                                let title = entry.text().to_string();
+                                s.edit_css_layout(move |layout| {
+                                    if let Some(g) = layout.groups.get_mut(group) {
+                                        g.title = title;
+                                    }
+                                });
+                            },
+                        );
+                    });
+                }
+
+                if spec.groups.len() > 1 {
+                    let mut ids = vec![String::new()];
+                    let mut names = vec!["Automatic (follows the first widget)".to_string()];
+                    for proto in &spec.groups {
+                        ids.push(proto.id.clone());
+                        names.push(proto.label.clone());
+                    }
+                    let selected = ids.iter().position(|id| *id == current.style).unwrap_or(0);
+                    let style = dropdown_row(holder, "Style:", &names, selected);
+                    let weak = Rc::downgrade(self);
+                    style.connect_selected_notify(move |d| {
+                        let Some(s) = weak.upgrade() else { return };
+                        let id = ids.get(d.selected() as usize).cloned().unwrap_or_default();
+                        s.edit_css_layout(move |layout| {
+                            if let Some(g) = layout.groups.get_mut(group) {
+                                g.style = id;
+                            }
+                        });
+                    });
+                }
+                holder.append(&self.css_layout_board(holder, group, &cfg, &spec));
+                let count = cfg.layout.item_counts.get(group).copied().unwrap_or(0) as usize;
+                let drawn = (1..=count)
+                    .filter(|i| {
+                        cfg.layout
+                            .widgets
+                            .get(&format!("group{}_{}", group + 1, i))
+                            .is_none_or(|w| w.kind != crate::ui::css_template_layout::HIDDEN)
+                    })
+                    .count();
+                holder.append(&hint(&if drawn > CSS_LAYOUT_MAX_ITEMS {
+                    format!(
+                        "A group shows at most {CSS_LAYOUT_MAX_ITEMS} widgets; this one has \
+                         {drawn}, so the last {} are not drawn. Move them to another group \
+                         or set their widget to \"Not shown\".",
+                        drawn - CSS_LAYOUT_MAX_ITEMS
+                    )
+                } else if drawn == 0 {
+                    "Every item of this group is \"Not shown\", so the group is not drawn."
+                        .to_string()
+                } else {
+                    format!("Showing {drawn} of at most {CSS_LAYOUT_MAX_ITEMS} widgets.")
+                }));
+            }
+            CssRows::Item(slot) => {
+                let source = self
+                    .combo_source
+                    .borrow()
+                    .as_ref()
+                    .and_then(|cs| cs.slots.get(slot))
+                    .map(|s| s.source_id.clone())
+                    .unwrap_or_default();
+                let current = cfg.layout.widgets.get(slot).cloned().unwrap_or_default();
+                // Another widget or size offers other sizes and colours.
+                let refill: Rc<dyn Fn(&Rc<State>)> = {
+                    let (holder, slot) = (holder.downgrade(), slot.clone());
+                    Rc::new(move |s| {
+                        let (holder, slot) = (holder.clone(), slot.clone());
+                        s.defer(move |s| {
+                            if let Some(holder) = holder.upgrade() {
+                                s.fill_css_layout_rows(&holder, &CssRows::Item(slot));
+                            }
+                        });
+                    })
+                };
+                let kinds = spec.kinds_for(&source);
+                let names: Vec<String> = kinds.iter().map(|(_, l)| l.clone()).collect();
+                let selected = kinds
+                    .iter()
+                    .position(|(k, _)| *k == current.kind)
+                    .unwrap_or(0);
+                let widget = dropdown_row(holder, "Widget:", &names, selected);
+                widget.set_tooltip_text(Some(
+                    "How the template draws this item; the list follows the item's source",
+                ));
+                {
+                    let weak = Rc::downgrade(self);
+                    let (slot, refill) = (slot.clone(), refill.clone());
+                    widget.connect_selected_notify(move |d| {
+                        let Some(s) = weak.upgrade() else { return };
+                        let Some((kind, _)) = kinds.get(d.selected() as usize).cloned() else {
+                            return;
+                        };
+                        let key = slot.clone();
+                        s.edit_css_layout(move |layout| {
+                            layout.widgets.insert(
+                                key,
+                                CssWidgetChoice {
+                                    kind,
+                                    ..Default::default()
+                                },
+                            );
+                        });
+                        refill(&s);
+                    });
+                }
+
+                // Every widget scales to the cells it is given.
+                if current.kind != crate::ui::css_template_layout::HIDDEN {
+                    let mut names: Vec<String> = SIZES.iter().map(|(_, l)| l.to_string()).collect();
+                    let shown = spec.size_of(&current);
+                    let mut selected = SIZES.iter().position(|(id, _)| *id == shown).unwrap_or(0);
+                    // A block shaped on the board is its own entry; picking
+                    // a size above goes back to that size's square.
+                    if current.span.is_some() {
+                        let (w, h) = spec.block_of(&current);
+                        selected = names.len();
+                        names.push(format!("Custom ({w} x {h})"));
+                    }
+                    let size = dropdown_row(holder, "Size:", &names, selected);
+                    size.set_tooltip_text(Some(
+                        "The cells the widget takes on its group's grid. Place it, or drag \
+                         its edges to any other shape (a bar at 4 x 1), on the board on the \
+                         group's page",
+                    ));
+                    let weak = Rc::downgrade(self);
+                    let (slot, refill) = (slot.clone(), refill.clone());
+                    size.connect_selected_notify(move |d| {
+                        let Some(s) = weak.upgrade() else { return };
+                        let Some((id, _)) = SIZES.get(d.selected() as usize).copied() else {
+                            return;
+                        };
+                        let key = slot.clone();
+                        s.edit_css_layout(move |layout| {
+                            let widget = layout.widgets.entry(key).or_default();
+                            widget.size = id.to_string();
+                            widget.span = None;
+                        });
+                        refill(&s);
+                    });
+                }
+
+                // The template's colours for this widget, if it has any.
+                let colors = spec.colors_of(&current).to_vec();
+                if !colors.is_empty() {
+                    let mut names = vec!["Automatic (the colours take turns)".to_string()];
+                    names.extend(colors.iter().map(|c| {
+                        let mut chars = c.chars();
+                        chars
+                            .next()
+                            .map(|f| f.to_uppercase().chain(chars).collect::<String>())
+                            .unwrap_or_default()
+                            .replace(['-', '_'], " ")
+                    }));
+                    let selected = colors
+                        .iter()
+                        .position(|c| *c == current.color)
+                        .map_or(0, |at| at + 1);
+                    let color = dropdown_row(holder, "Colour:", &names, selected);
+                    let weak = Rc::downgrade(self);
+                    let slot = slot.clone();
+                    color.connect_selected_notify(move |d| {
+                        let Some(s) = weak.upgrade() else { return };
+                        let picked = match d.selected() as usize {
+                            0 => String::new(),
+                            at => colors.get(at - 1).cloned().unwrap_or_default(),
+                        };
+                        let key = slot.clone();
+                        s.edit_css_layout(move |layout| {
+                            layout.widgets.entry(key).or_default().color = picked;
+                        });
+                    });
+                }
+            }
+        }
+    }
+
+    /// The group's widgets on its grid of square cells: drag a box to put
+    /// it anywhere free, drag its right or bottom edge (or that corner) to
+    /// give it any block of cells. The page scales the grid, and each
+    /// widget, to the room the group has.
+    fn css_layout_board(
+        self: &Rc<Self>,
+        holder: &GtkBox,
+        group: usize,
+        cfg: &rg_sens_types::display_configs::CssTemplateDisplayConfig,
+        spec: &crate::ui::css_template_layout::LayoutSpec,
+    ) -> GtkBox {
+        use crate::ui::css_template_layout::{overlap, place, size_for, HIDDEN, MAX_SPAN};
+        use rg_sens_types::display_configs::CSS_LAYOUT_MAX_ITEMS;
+        use std::cell::Cell;
+
+        const PAD: f64 = 6.0;
+        const MAX_UNIT: f64 = 38.0;
+        /// How near an edge, in pixels, a press resizes instead of moves.
+        const EDGE: f64 = 9.0;
+
+        struct BoardItem {
+            slot: String,
+            label: String,
+            kind: String,
+            /// (column, row, columns, rows) as the page places it now.
+            cell: (u32, u32, u32, u32),
+        }
+        #[derive(Clone, Copy, PartialEq)]
+        enum Drag {
+            Idle,
+            /// `grab` is the cell of the box the pointer took hold of;
+            /// `to` where the box would land.
+            Move {
+                item: usize,
+                grab: (u32, u32),
+                to: (u32, u32),
+            },
+            /// `wide` / `high`: which of the two the pointer changes.
+            Resize {
+                item: usize,
+                wide: bool,
+                high: bool,
+                to: (u32, u32),
+            },
+        }
+
+        let labels: HashMap<String, String> = self
+            .combo_source
+            .borrow()
+            .as_ref()
+            .map(|cs| {
+                combo_slot_kinds(cs)
+                    .into_iter()
+                    .map(|k| {
+                        let caption = cs
+                            .slots
+                            .get(&k.prefix)
+                            .map(|s| s.caption_override.clone())
+                            .filter(|c| !c.is_empty());
+                        (k.prefix, caption.unwrap_or(k.label))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let kind_labels: HashMap<String, String> = spec.kinds().into_iter().collect();
+        let count = cfg.layout.item_counts.get(group).copied().unwrap_or(0) as usize;
+        let mut drawn: Vec<(String, rg_sens_types::display_configs::CssWidgetChoice)> = Vec::new();
+        for index in 0..count {
+            let slot = format!("group{}_{}", group + 1, index + 1);
+            let choice = cfg.layout.widgets.get(&slot).cloned().unwrap_or_default();
+            if choice.kind != HIDDEN && drawn.len() < CSS_LAYOUT_MAX_ITEMS {
+                drawn.push((slot, choice));
+            }
+        }
+        let placement = place(
+            &drawn
+                .iter()
+                .map(|(_, c)| (spec.block_of(c), c.pos))
+                .collect::<Vec<_>>(),
+        );
+        let items: Vec<BoardItem> = drawn
+            .into_iter()
+            .zip(&placement.cells)
+            .map(|((slot, choice), cell)| BoardItem {
+                label: labels.get(&slot).cloned().unwrap_or_else(|| slot.clone()),
+                kind: kind_labels.get(&choice.kind).cloned().unwrap_or_default(),
+                slot,
+                cell: *cell,
+            })
+            .collect();
+        // Room to grow: a large widget's worth to the right, a row below.
+        let (cols, rows) = (
+            (placement.cols + 4).clamp(8, 16),
+            (placement.rows + 2).clamp(4, 16),
+        );
+        let items = Rc::new(items);
+        let drag = Rc::new(Cell::new(Drag::Idle));
+
+        let unit = move |width: f64| ((width - 2.0 * PAD) / cols as f64).min(MAX_UNIT);
+        // The cell of every box as the drag would leave it, and whether
+        // that is a place the dragged box can be (on the board, on nothing).
+        let outcome = {
+            let (items, drag) = (items.clone(), drag.clone());
+            Rc::new(move || -> (Vec<(u32, u32, u32, u32)>, bool) {
+                let mut cells: Vec<(u32, u32, u32, u32)> = items.iter().map(|i| i.cell).collect();
+                let moved = match drag.get() {
+                    Drag::Move { item, to, .. } => {
+                        (cells[item].0, cells[item].1) = to;
+                        item
+                    }
+                    Drag::Resize { item, to, .. } => {
+                        (cells[item].2, cells[item].3) = to;
+                        item
+                    }
+                    Drag::Idle => return (cells, true),
+                };
+                let block = cells[moved];
+                let clear = cells
+                    .iter()
+                    .enumerate()
+                    .all(|(i, other)| i == moved || !overlap(block, *other));
+                (
+                    cells,
+                    clear && block.0 + block.2 <= cols && block.1 + block.3 <= rows,
+                )
+            })
+        };
+
+        let area = gtk4::DrawingArea::new();
+        area.set_content_height((rows as f64 * MAX_UNIT + 2.0 * PAD) as i32);
+        area.set_hexpand(true);
+        {
+            let (items, outcome, drag) = (items.clone(), outcome.clone(), drag.clone());
+            area.set_draw_func(move |area, cr, width, _| {
+                let fg = area.color();
+                let (r, g, b) = (fg.red() as f64, fg.green() as f64, fg.blue() as f64);
+                let u = unit(width as f64);
+                // the cells
+                cr.set_source_rgba(r, g, b, 0.12);
+                cr.set_line_width(1.0);
+                for c in 0..=cols {
+                    cr.move_to(PAD + c as f64 * u + 0.5, PAD);
+                    cr.line_to(PAD + c as f64 * u + 0.5, PAD + rows as f64 * u);
+                }
+                for row in 0..=rows {
+                    cr.move_to(PAD, PAD + row as f64 * u + 0.5);
+                    cr.line_to(PAD + cols as f64 * u, PAD + row as f64 * u + 0.5);
+                }
+                cr.stroke().ok();
+
+                let layout = pangocairo::functions::create_layout(cr);
+                let mut font = pango::FontDescription::new();
+                font.set_size(8 * pango::SCALE);
+                layout.set_font_description(Some(&font));
+                layout.set_ellipsize(pango::EllipsizeMode::End);
+                let active = match drag.get() {
+                    Drag::Move { item, .. } | Drag::Resize { item, .. } => Some(item),
+                    Drag::Idle => None,
+                };
+                let (cells, valid) = outcome();
+                for (i, (item, (c, row, wide, high))) in items.iter().zip(&cells).enumerate() {
+                    let (x, y) = (PAD + *c as f64 * u + 2.0, PAD + *row as f64 * u + 2.0);
+                    let (bw, bh) = (*wide as f64 * u - 4.0, *high as f64 * u - 4.0);
+                    let lifted = active == Some(i);
+                    cr.save().ok();
+                    cr.rectangle(x, y, bw, bh);
+                    if lifted && !valid {
+                        cr.set_source_rgba(0.85, 0.2, 0.2, 0.3);
+                    } else {
+                        cr.set_source_rgba(r, g, b, if lifted { 0.25 } else { 0.1 });
+                    }
+                    cr.fill_preserve().ok();
+                    cr.set_source_rgba(r, g, b, if lifted { 0.95 } else { 0.5 });
+                    cr.set_line_width(if lifted { 2.0 } else { 1.0 });
+                    cr.stroke().ok();
+                    // the corner that resizes
+                    cr.set_source_rgba(r, g, b, 0.5);
+                    cr.move_to(x + bw - 1.0, y + bh - 9.0);
+                    cr.line_to(x + bw - 1.0, y + bh - 1.0);
+                    cr.line_to(x + bw - 9.0, y + bh - 1.0);
+                    cr.close_path();
+                    cr.fill().ok();
+                    cr.rectangle(x, y, bw, bh);
+                    cr.clip();
+                    cr.set_source_rgba(r, g, b, 0.95);
+                    layout.set_width(((bw - 10.0).max(1.0) * pango::SCALE as f64) as i32);
+                    layout.set_text(&item.label);
+                    cr.move_to(x + 4.0, y + 3.0);
+                    pangocairo::functions::show_layout(cr, &layout);
+                    if *high > 1 {
+                        cr.set_source_rgba(r, g, b, 0.6);
+                        layout.set_text(&item.kind);
+                        cr.move_to(x + 4.0, y + 17.0);
+                        pangocairo::functions::show_layout(cr, &layout);
+                    }
+                    cr.restore().ok();
+                }
+            });
+        }
+
+        let gesture = gtk4::GestureDrag::new();
+        {
+            let (drag, items) = (drag.clone(), items.clone());
+            let weak_area = area.downgrade();
+            gesture.connect_drag_begin(move |_, x, y| {
+                let Some(area) = weak_area.upgrade() else {
+                    return;
+                };
+                let u = unit(area.width() as f64);
+                let at = (
+                    ((x - PAD) / u).floor().max(0.0) as u32,
+                    ((y - PAD) / u).floor().max(0.0) as u32,
+                );
+                let hit = items
+                    .iter()
+                    .position(|i| overlap(i.cell, (at.0, at.1, 1, 1)));
+                drag.set(match hit {
+                    Some(item) => {
+                        let (c, r, w, h) = items[item].cell;
+                        let wide = x >= PAD + (c + w) as f64 * u - EDGE;
+                        let high = y >= PAD + (r + h) as f64 * u - EDGE;
+                        if wide || high {
+                            Drag::Resize {
+                                item,
+                                wide,
+                                high,
+                                to: (w, h),
+                            }
+                        } else {
+                            Drag::Move {
+                                item,
+                                grab: (at.0 - c, at.1 - r),
+                                to: (c, r),
+                            }
+                        }
+                    }
+                    None => Drag::Idle,
+                });
+                area.queue_draw();
+            });
+        }
+        {
+            let (drag, items) = (drag.clone(), items.clone());
+            let weak_area = area.downgrade();
+            gesture.connect_drag_update(move |gesture, dx, dy| {
+                let (Some(area), Some((sx, sy))) = (weak_area.upgrade(), gesture.start_point())
+                else {
+                    return;
+                };
+                let u = unit(area.width() as f64);
+                let (x, y) = ((sx + dx - PAD) / u, (sy + dy - PAD) / u);
+                match drag.get() {
+                    Drag::Move { item, grab, .. } => {
+                        let to = (
+                            (x.floor() - grab.0 as f64).max(0.0) as u32,
+                            (y.floor() - grab.1 as f64).max(0.0) as u32,
+                        );
+                        drag.set(Drag::Move { item, grab, to });
+                    }
+                    Drag::Resize {
+                        item, wide, high, ..
+                    } => {
+                        // Each edge snaps to the cell line nearest the pointer.
+                        let (c, r, w, h) = items[item].cell;
+                        let snap = |edge: f64, from: u32| {
+                            (edge - from as f64).round().clamp(1.0, MAX_SPAN as f64) as u32
+                        };
+                        let to = (
+                            if wide { snap(x, c) } else { w },
+                            if high { snap(y, r) } else { h },
+                        );
+                        drag.set(Drag::Resize {
+                            item,
+                            wide,
+                            high,
+                            to,
+                        });
+                    }
+                    Drag::Idle => return,
+                }
+                area.queue_draw();
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            let (weak_area, weak_holder) = (area.downgrade(), holder.downgrade());
+            let items = items.clone();
+            gesture.connect_drag_end(move |_, _, _| {
+                let (cells, valid) = outcome();
+                let was = drag.replace(Drag::Idle);
+                let (Some(s), Some(area)) = (weak.upgrade(), weak_area.upgrade()) else {
+                    return;
+                };
+                area.queue_draw();
+                let changed = items.iter().zip(&cells).any(|(i, c)| i.cell != *c);
+                if was == Drag::Idle || !valid || !changed {
+                    return;
+                }
+                // Every box gets the cell it is in now, so the ones that
+                // were placed automatically stay where the user saw them.
+                let resized = match was {
+                    Drag::Resize { item, .. } => Some(item),
+                    _ => None,
+                };
+                let placed: Vec<(String, (u32, u32, u32, u32), bool)> = items
+                    .iter()
+                    .zip(cells)
+                    .enumerate()
+                    .map(|(i, (item, cell))| (item.slot.clone(), cell, resized == Some(i)))
+                    .collect();
+                s.edit_css_layout(move |layout| {
+                    for (slot, (c, r, w, h), resized) in placed {
+                        let widget = layout.widgets.entry(slot).or_default();
+                        widget.pos = Some((c, r));
+                        if !resized {
+                            continue;
+                        }
+                        // A square the sizes cover is that size again.
+                        match size_for(w).filter(|_| w == h) {
+                            Some(id) => {
+                                widget.size = id.to_string();
+                                widget.span = None;
+                            }
+                            None => widget.span = Some((w, h)),
+                        }
+                    }
+                });
+                let holder = weak_holder.clone();
+                s.defer(move |s| {
+                    if let Some(holder) = holder.upgrade() {
+                        s.fill_css_layout_rows(&holder, &CssRows::Group(group));
+                    }
+                });
+            });
+        }
+        area.add_controller(gesture);
+
+        let board = GtkBox::new(Orientation::Vertical, 4);
+        let frame = gtk4::Frame::new(None);
+        frame.set_child(Some(&area));
+        board.append(&frame);
+        board.append(&hint(
+            "Drag a box to any free cells. Drag its right or bottom edge, or the marked \
+             corner, to give it any block of cells (a bar at 4 x 1). The page fits the \
+             grid, and each widget, to the room the group has.",
+        ));
+        board
     }
 
     /// The item itself: caption and order, which source feeds it and how it
@@ -945,10 +1550,14 @@ impl State {
                 detach(&w);
                 page.append(&w);
             }
+            // A CSS template's item is shown through its bindings, or
+            // through the widget chosen in the Layout rows below.
+            None if self.displayer_type() == "css_template" => {}
             None => page.append(&hint(
                 "This displayer has no per-item display settings; its mappings are under Display.",
             )),
         }
+        page.append(&self.css_layout_rows(CssRows::Item(slot.to_string())));
         page
     }
 

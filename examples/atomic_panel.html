@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1100 1440x815 2880x500">
+<meta name="rg-group-size" content="480x290+175">
+<title>Atomic Sensor Panel</title>
+<!--
+  Mid-century "atomic age" sensor panel for the rg-Sens CSS Template
+  displayer, drawn for 480x1920 portrait: atomic-print wallpaper, a brass and
+  teak starburst wall clock, and cards of boomerang laminate edged in ribbed
+  chrome trim that hold oven-thermostat dials, spinning atoms, martini
+  glasses and a teak television. A sibling of the other example panels: the
+  same placeholders 0-73 and the same setup.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the atoms and the glasses; set them on the sensors.
+
+  Anything left unbound is hidden: a bar, an atom, a glass, a whole card. The
+  processor's power bar has no rg-Sens source and stays hidden unless you bind
+  a sensor to it by hand on the Bindings tab.
+
+  A thermostat's knob turns over 270 degrees from 20 to 100 degrees; the
+  note beside it reads "Cool cat", "Toasty" (from 72) or "Sizzling!" (from
+  85). A glass fills to the share of its pool that is in use, and the olive
+  sinks with the level. The clock's hands follow the bound time; its red
+  second hand steps with the system's seconds while motion is on.
+
+  The television keeps the last minute (36 samples) in the page: inbound as a
+  glowing line, outbound as a dashed one, on one shared scale. It starts
+  empty and survives a reload of the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of atomic_panel.css): palette
+  (Mint, Flamingo, Butterscotch), how the design fits the panel, the layout,
+  the frame rate, and the full scale of the bars and of the television.
+
+  Size: the design is drawn for 480x1920, but its six groups (the wall clock
+  and the five cards) re-arrange to suit the panel: one column of six, two of
+  three, three of two or six side by side (the rg-layouts list gives the size
+  each needs), and the cards then stretch to the panel's exact shape. The
+  wallpaper repeats over any size; the clock and the television keep their
+  size and sit in the middle of their cells.
+
+  Custom layouts: the template elements at the end of the body are the
+  building blocks (two group styles and the clock, dial, bar, atom, glass,
+  television and reading widgets) that "My own groups and widgets" builds
+  groups from; see the guide's "Custom Layouts" section.
+
+  Paper grit and teak grain are noise filters, which are costly to redraw;
+  they carry data-rg-bake, so rg-Sens draws each once into a bitmap.
+
+  Motion: the atoms turn with RPM, the second hand steps, the television
+  flickers faintly and its newest sample pulses, at --motion-fps frames a
+  second. 0 turns motion off, as do the panel's Animation switch and the
+  system's reduced-motion setting.
+
+  Fonts: Pacifico (script titles, the footer badge), Righteous (numbers, the
+  clock) and Josefin Sans (labels), loaded from the fonts folder next to this
+  file; copy that folder along with the template. Nothing is fetched from the
+  network.
+-->
+<link rel="stylesheet" href="atomic_panel.css">
+</head>
+<body>
+<div class="panel">
+
+  <!-- ===== wallpaper, and every shared drawing (never hidden) ===== -->
+  <svg class="wall" aria-hidden="true" width="100%" height="100%">
+    <defs>
+      <pattern id="am-paper" patternUnits="userSpaceOnUse" width="120" height="120">
+        <g class="s-star" stroke-width="1.2" stroke-linecap="round" opacity="0.45" fill="none">
+          <path d="M30 14 V34 M20 24 H40 M23 17 L37 31 M37 17 L23 31"></path>
+          <path d="M92 76 V88 M86 82 H98"></path>
+        </g>
+        <circle class="f-star" cx="30" cy="24" r="2" opacity="0.6"></circle>
+        <path class="f-boom" d="M70 30 Q86 16 102 30 Q88 26 80 40 Z" opacity="0.28"></path>
+        <path class="s-boom" d="M18 84 Q34 70 50 84 Q36 80 28 94 Z" fill="none" stroke-width="1.2" opacity="0.35"></path>
+        <g class="f-ink" opacity="0.25"><circle cx="62" cy="62" r="1.6"></circle><circle cx="104" cy="108" r="1.6"></circle></g>
+        <circle class="f-star" cx="8" cy="52" r="1.2" opacity="0.5"></circle>
+      </pattern>
+      <pattern id="am-laminate" patternUnits="userSpaceOnUse" width="140" height="110">
+        <path class="f-boom1" d="M12 28 Q32 6 54 24 Q36 20 24 42 Z" opacity="0.7"></path>
+        <path class="f-boom2" d="M84 70 Q104 50 126 66 Q108 62 96 84 Z" opacity="0.6"></path>
+        <path class="s-ink" d="M70 18 Q86 8 100 20 M20 80 Q34 70 46 82" fill="none" stroke-width="1" opacity="0.35"></path>
+        <g class="f-fleck"><rect x="60" y="40" width="5" height="1.4" transform="rotate(30 60 40)"></rect><rect x="112" y="22" width="4" height="1.2" transform="rotate(-20 112 22)"></rect><rect x="30" y="58" width="4" height="1.2" transform="rotate(70 30 58)"></rect><rect x="74" y="96" width="5" height="1.3" transform="rotate(-40 74 96)"></rect><rect x="128" y="92" width="3" height="1.2"></rect><rect x="6" y="104" width="4" height="1.2" transform="rotate(50 6 104)"></rect></g>
+        <g fill="#FFFFFF" opacity="0.7"><rect x="48" y="66" width="3" height="1"></rect><rect x="100" y="40" width="3" height="1" transform="rotate(60 100 40)"></rect><rect x="16" y="12" width="3" height="1"></rect></g>
+        <g class="f-ink" opacity="0.3"><circle cx="66" cy="78" r="0.9"></circle><circle cx="118" cy="8" r="0.9"></circle><circle cx="40" cy="98" r="0.9"></circle><circle cx="92" cy="30" r="0.9"></circle></g>
+      </pattern>
+      <filter id="am-grit" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" seed="3"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.22  0 0 0 0 0.12  -1.1 0 0 0 0.7"></feColorMatrix></filter>
+      <filter id="am-teakGrain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.28" numOctaves="3" seed="5" result="l"></feTurbulence>
+        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.006" numOctaves="2" seed="2" result="w"></feTurbulence>
+        <feDisplacementMap in="l" in2="w" scale="18" xChannelSelector="R" yChannelSelector="G" result="b"></feDisplacementMap>
+        <feColorMatrix in="b" type="matrix" values="0 0 0 0 0.25  0 0 0 0 0.12  0 0 0 0 0.04  0 0 0 2.2 -0.95" result="g"></feColorMatrix>
+        <feComposite in="g" in2="SourceAlpha" operator="in"></feComposite>
+      </filter>
+      <filter id="am-blur3" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"></feGaussianBlur></filter>
+      <filter id="am-blur6" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"></feGaussianBlur></filter>
+      <!-- shadows cast by the moving parts (regions in the drawing's own units) -->
+      <filter id="am-castHands" filterUnits="userSpaceOnUse" x="0" y="0" width="300" height="296"><feDropShadow dx="3" dy="5" stdDeviation="3" flood-color="#281400" flood-opacity="0.45"></feDropShadow></filter>
+      <filter id="am-castKnob" filterUnits="userSpaceOnUse" x="40" y="40" width="130" height="130"><feDropShadow dx="2" dy="5" stdDeviation="3" flood-color="#000" flood-opacity="0.4"></feDropShadow></filter>
+      <filter id="am-castAtom" filterUnits="userSpaceOnUse" x="-50" y="-50" width="100" height="100"><feDropShadow dx="1" dy="3" stdDeviation="2" flood-color="#000" flood-opacity="0.3"></feDropShadow></filter>
+      <filter id="am-traceGlow" filterUnits="userSpaceOnUse" x="20" y="50" width="250" height="120"><feDropShadow dx="0" dy="0" stdDeviation="3" style="flood-color: var(--trace-in)" flood-opacity="1"></feDropShadow></filter>
+      <linearGradient id="am-brass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF2C2"></stop><stop offset="0.3" stop-color="#D8B058"></stop><stop offset="0.55" stop-color="#8A6420"></stop><stop offset="0.8" stop-color="#E8C878"></stop><stop offset="1" stop-color="#7A5618"></stop></linearGradient>
+      <radialGradient id="am-brassBall" cx="0.36" cy="0.3" r="0.75"><stop offset="0" stop-color="#FFF8DC"></stop><stop offset="0.35" stop-color="#E2BA5E"></stop><stop offset="1" stop-color="#6E4C12"></stop></radialGradient>
+      <linearGradient id="am-teak" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C8844A"></stop><stop offset="0.5" stop-color="#A2602C"></stop><stop offset="1" stop-color="#7A421A"></stop></linearGradient>
+      <linearGradient id="am-chrome" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"></stop><stop offset="0.25" stop-color="#C9CCD0"></stop><stop offset="0.48" stop-color="#6E7276"></stop><stop offset="0.52" stop-color="#3A3C40"></stop><stop offset="0.78" stop-color="#A6AAAE"></stop><stop offset="1" stop-color="#F2F3F4"></stop></linearGradient>
+      <radialGradient id="am-face" cx="0.42" cy="0.36" r="0.75"><stop offset="0" stop-color="#FFFDF6"></stop><stop offset="0.7" style="stop-color: var(--enamel)"></stop><stop offset="1" style="stop-color: var(--enamel-edge)"></stop></radialGradient>
+      <radialGradient id="am-knobFace" cx="0.38" cy="0.3" r="0.8"><stop offset="0" stop-color="#FFFFFF"></stop><stop offset="0.45" style="stop-color: var(--knob)"></stop><stop offset="1" style="stop-color: var(--knob-shade)"></stop></radialGradient>
+      <linearGradient id="am-grip" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color: var(--knob-shade)"></stop><stop offset="0.4" stop-color="#FFFFFF"></stop><stop offset="0.6" style="stop-color: var(--knob)"></stop><stop offset="1" style="stop-color: var(--knob-shade)"></stop></linearGradient>
+      <radialGradient id="am-screen" cx="0.5" cy="0.45" r="0.65"><stop offset="0" style="stop-color: var(--screen-1)"></stop><stop offset="1" style="stop-color: var(--screen-2)"></stop></radialGradient>
+      <radialGradient id="am-vignette" cx="0.5" cy="0.5" r="0.72"><stop offset="0.62" stop-color="#000" stop-opacity="0"></stop><stop offset="1" stop-color="#000" stop-opacity="0.6"></stop></radialGradient>
+      <linearGradient id="am-glassHi" x1="0" y1="0" x2="0.8" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"></stop><stop offset="0.4" stop-color="#FFFFFF" stop-opacity="0.06"></stop><stop offset="0.41" stop-color="#FFFFFF" stop-opacity="0"></stop></linearGradient>
+      <pattern id="am-scan" patternUnits="userSpaceOnUse" width="4" height="3"><rect x="0" y="0" width="4" height="1" fill="#000" opacity="0.35"></rect></pattern>
+      <pattern id="am-cloth" patternUnits="userSpaceOnUse" width="4" height="4"><rect x="0" y="0" width="4" height="4" fill="#C8B48A"></rect><path d="M0 0 L4 4 M4 0 L0 4" stroke="#000" stroke-width="0.6" opacity="0.25"></path></pattern>
+
+      <!-- starburst clock: 24 brass rays, and what lies under and over the teak grain -->
+      <path id="am-rays" d="M148.2 102.0 L149.0 8.0 L151.0 8.0 L151.8 102.0 Z M160.2 103.1 L177.7 41.6 L179.2 41.9 L163.6 104.1 Z M171.5 107.3 L219.2 26.3 L220.8 27.2 L174.5 109.1 Z M181.3 114.2 L227.2 69.7 L228.3 70.8 L183.8 116.7 Z M188.9 123.5 L270.8 77.2 L271.7 78.8 L190.7 126.5 Z M193.9 134.4 L256.1 118.8 L256.4 120.3 L194.9 137.8 Z M196.0 146.2 L290.0 147.0 L290.0 149.0 L196.0 149.8 Z M194.9 158.2 L256.4 175.7 L256.1 177.2 L193.9 161.6 Z M190.7 169.5 L271.7 217.2 L270.8 218.8 L188.9 172.5 Z M183.8 179.3 L228.3 225.2 L227.2 226.3 L181.3 181.8 Z M174.5 186.9 L220.8 268.8 L219.2 269.7 L171.5 188.7 Z M163.6 191.9 L179.2 254.1 L177.7 254.4 L160.2 192.9 Z M151.8 194.0 L151.0 288.0 L149.0 288.0 L148.2 194.0 Z M139.8 192.9 L122.3 254.4 L120.8 254.1 L136.4 191.9 Z M128.5 188.7 L80.8 269.7 L79.2 268.8 L125.5 186.9 Z M118.7 181.8 L72.8 226.3 L71.7 225.2 L116.2 179.3 Z M111.1 172.5 L29.2 218.8 L28.3 217.2 L109.3 169.5 Z M106.1 161.6 L43.9 177.2 L43.6 175.7 L105.1 158.2 Z M104.0 149.8 L10.0 149.0 L10.0 147.0 L104.0 146.2 Z M105.1 137.8 L43.6 120.3 L43.9 118.8 L106.1 134.4 Z M109.3 126.5 L28.3 78.8 L29.2 77.2 L111.1 123.5 Z M116.2 116.7 L71.7 70.8 L72.8 69.7 L118.7 114.2 Z M125.5 109.1 L79.2 27.2 L80.8 26.3 L128.5 107.3 Z M136.4 104.1 L120.8 41.9 L122.3 41.6 L139.8 103.1 Z"></path>
+      <path id="am-spindle" d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z"></path>
+      <path id="am-spindleHi" d="M149 98 C147.5 88 147.5 78 149.5 68" fill="none" stroke="#FFE2B8" stroke-width="0.8" opacity="0.45"></path>
+      <g id="am-sunBack">
+        <g transform="translate(9 12)" opacity="0.28" filter="url(#am-blur6)" fill="#3A2410"><use href="#am-rays"></use><circle cx="150" cy="148" r="50"></circle></g>
+        <use href="#am-rays" fill="url(#am-brass) #C9A048"></use>
+        <g fill="url(#am-brassBall) #C9A048"><circle cx="150.0" cy="6.0" r="5"></circle><circle cx="221.0" cy="25.0" r="5"></circle><circle cx="273.0" cy="77.0" r="5"></circle><circle cx="292.0" cy="148.0" r="5"></circle><circle cx="273.0" cy="219.0" r="5"></circle><circle cx="221.0" cy="271.0" r="5"></circle><circle cx="150.0" cy="290.0" r="5"></circle><circle cx="79.0" cy="271.0" r="5"></circle><circle cx="27.0" cy="219.0" r="5"></circle><circle cx="8.0" cy="148.0" r="5"></circle><circle cx="27.0" cy="77.0" r="5"></circle><circle cx="79.0" cy="25.0" r="5"></circle></g>
+        <g fill="url(#am-teak) #A2602C"><use href="#am-spindle" transform="rotate(15 150 148)"></use><use href="#am-spindle" transform="rotate(45 150 148)"></use><use href="#am-spindle" transform="rotate(75 150 148)"></use><use href="#am-spindle" transform="rotate(105 150 148)"></use><use href="#am-spindle" transform="rotate(135 150 148)"></use><use href="#am-spindle" transform="rotate(165 150 148)"></use><use href="#am-spindle" transform="rotate(195 150 148)"></use><use href="#am-spindle" transform="rotate(225 150 148)"></use><use href="#am-spindle" transform="rotate(255 150 148)"></use><use href="#am-spindle" transform="rotate(285 150 148)"></use><use href="#am-spindle" transform="rotate(315 150 148)"></use><use href="#am-spindle" transform="rotate(345 150 148)"></use></g>
+        <circle cx="150" cy="148" r="48" fill="url(#am-brass) #C9A048"></circle>
+        <circle cx="150" cy="148" r="44" fill="url(#am-teak) #A2602C"></circle>
+      </g>
+      <g id="am-sunTop">
+        <use href="#am-spindleHi" transform="rotate(15 150 148)"></use><use href="#am-spindleHi" transform="rotate(45 150 148)"></use><use href="#am-spindleHi" transform="rotate(75 150 148)"></use><use href="#am-spindleHi" transform="rotate(105 150 148)"></use><use href="#am-spindleHi" transform="rotate(135 150 148)"></use><use href="#am-spindleHi" transform="rotate(165 150 148)"></use><use href="#am-spindleHi" transform="rotate(195 150 148)"></use><use href="#am-spindleHi" transform="rotate(225 150 148)"></use><use href="#am-spindleHi" transform="rotate(255 150 148)"></use><use href="#am-spindleHi" transform="rotate(285 150 148)"></use><use href="#am-spindleHi" transform="rotate(315 150 148)"></use><use href="#am-spindleHi" transform="rotate(345 150 148)"></use>
+        <circle cx="150" cy="148" r="44" fill="url(#am-glassHi)" opacity="0.6"></circle>
+        <g fill="url(#am-brassBall) #C9A048"><circle cx="150.0" cy="112.0" r="3.4"></circle><circle cx="168.0" cy="116.8" r="2"></circle><circle cx="181.2" cy="130.0" r="2"></circle><circle cx="186.0" cy="148.0" r="3.4"></circle><circle cx="181.2" cy="166.0" r="2"></circle><circle cx="168.0" cy="179.2" r="2"></circle><circle cx="150.0" cy="184.0" r="3.4"></circle><circle cx="132.0" cy="179.2" r="2"></circle><circle cx="118.8" cy="166.0" r="2"></circle><circle cx="114.0" cy="148.0" r="3.4"></circle><circle cx="118.8" cy="130.0" r="2"></circle><circle cx="132.0" cy="116.8" r="2"></circle></g>
+      </g>
+      <path id="am-hourHand" d="M147 156 L148 108 C142 100 146 92 150 86 C154 92 158 100 152 108 L153 156 Z" fill="url(#am-brass) #C9A048" stroke="#5A3C0C" stroke-width="0.8"></path>
+      <path id="am-minuteHand" d="M148 160 L149 64 C145 58 147 50 150 44 C153 50 155 58 151 64 L152 160 Z" fill="url(#am-brass) #C9A048" stroke="#5A3C0C" stroke-width="0.8"></path>
+      <g id="am-secondHand" class="f-accent"><path d="M149.4 170 V40 H150.6 V170 Z"></path><circle cx="150" cy="58" r="4"></circle></g>
+
+      <!-- thermostat: bezel, enamel face, bands and ticks; and its knob -->
+      <g id="am-dial">
+        <circle cx="106" cy="110" r="92" fill="#000" opacity="0.28" filter="url(#am-blur6)"></circle>
+        <circle cx="100" cy="100" r="94" fill="url(#am-chrome) #A6AAAE"></circle>
+        <circle cx="100" cy="100" r="86" fill="url(#am-face) #F8F0DC"></circle>
+        <circle cx="100" cy="100" r="86" fill="none" stroke="#000" stroke-width="1.5" opacity="0.25"></circle>
+        <g fill="none" stroke-width="9"><path class="s-cool" d="M47.1 151.8 A74 74 0 0 1 58.2 38.9"></path><path class="s-a2" d="M59.5 38.0 A74 74 0 0 1 147.5 43.2"></path><path class="s-warm" d="M148.6 44.2 A74 74 0 0 1 173.6 92.0"></path><path class="s-hot" d="M173.7 93.5 A74 74 0 0 1 152.9 151.8"></path></g>
+        <path class="s-ink" stroke-width="1.8" d="M56.2 143.8 L51.9 148.1 M42.7 76.3 L37.2 74.0 M100.0 38.0 L100.0 32.0 M157.3 76.3 L162.8 74.0 M143.8 143.8 L148.1 148.1"></path>
+        <path class="s-ink" stroke-width="1" d="M45.3 129.2 L41.8 131.1 M39.2 112.1 L35.3 112.9 M38.3 93.9 L34.3 93.5 M52.1 60.7 L49.0 58.1 M65.6 48.4 L63.3 45.1 M82.0 40.7 L80.8 36.8 M118.0 40.7 L119.2 36.8 M134.4 48.4 L136.7 45.1 M147.9 60.7 L151.0 58.1 M161.7 93.9 L165.7 93.5 M160.8 112.1 L164.7 112.9 M154.7 129.2 L158.2 131.1"></path>
+      </g>
+      <g id="am-knob">
+        <circle cx="100" cy="100" r="33" fill="url(#am-knobFace) #F2EAD6"></circle>
+        <rect x="91" y="64" width="18" height="72" rx="9" fill="url(#am-grip) #F2EAD6"></rect>
+        <path class="f-accent" d="M100 58 L106 70 H94 Z"></path>
+        <rect class="f-accent" x="98.5" y="70" width="3" height="20" rx="1.5"></rect>
+      </g>
+      <ellipse id="am-dialShine" cx="80" cy="50" rx="40" ry="16" fill="#FFFFFF" opacity="0.35" transform="rotate(-30 80 50)"></ellipse>
+
+      <!-- atom: three chrome orbits with an electron each, and the nucleus -->
+      <g id="am-orbit"><ellipse rx="40" ry="14" fill="none" stroke="url(#am-chrome) #A6AAAE" stroke-width="2.6"></ellipse><ellipse rx="40" ry="14" fill="none" stroke="#FFFFFF" stroke-width="0.8" opacity="0.7" transform="translate(0 -0.8)"></ellipse></g>
+      <g id="am-orbits">
+        <g><use href="#am-orbit"></use><circle class="f-a2" cx="34.6" cy="7.0" r="5"></circle><circle cx="33.0" cy="5.2" r="2" fill="#FFFFFF" opacity="0.85"></circle></g>
+        <g transform="rotate(60)"><use href="#am-orbit"></use><circle class="f-a2" cx="-30.6" cy="9.0" r="5"></circle><circle cx="-32.2" cy="7.2" r="2" fill="#FFFFFF" opacity="0.85"></circle></g>
+        <g transform="rotate(120)"><use href="#am-orbit"></use><circle class="f-a2" cx="-13.7" cy="-13.2" r="5"></circle><circle cx="-15.3" cy="-15.0" r="2" fill="#FFFFFF" opacity="0.85"></circle></g>
+      </g>
+      <ellipse id="am-atomShadow" cx="4" cy="38" rx="26" ry="4" fill="#000" opacity="0.18" filter="url(#am-blur3)"></ellipse>
+      <g id="am-nucleus">
+        <g fill="#000" opacity="0.25"><circle cx="-3" cy="-1" r="6"></circle><circle cx="5" cy="-1" r="6"></circle><circle cx="1" cy="6" r="6"></circle><circle cx="-4" cy="6" r="6"></circle><circle cx="6" cy="5" r="6"></circle></g>
+        <circle class="f-accent" cx="-4" cy="-3" r="6"></circle><circle class="f-cool" cx="4" cy="-3" r="6"></circle><circle class="f-accent" cx="0" cy="4" r="6"></circle><circle class="f-cool" cx="-5" cy="4" r="6"></circle><circle class="f-a2" cx="5" cy="3" r="6"></circle>
+        <g fill="#FFFFFF" opacity="0.8"><circle cx="-6" cy="-5" r="2"></circle><circle cx="2" cy="-5" r="2"></circle><circle cx="-2" cy="2" r="2"></circle><circle cx="-7" cy="2" r="2"></circle><circle cx="3" cy="1" r="2"></circle></g>
+      </g>
+
+      <!-- martini glass: behind the drink, the pick, the olive, and the glass itself -->
+      <g id="am-glassBack">
+        <ellipse cx="60" cy="150" rx="30" ry="4" fill="#000" opacity="0.22" filter="url(#am-blur3)"></ellipse>
+        <path d="M10 20 L102 20 L56 86 Z" fill="#FFFFFF" opacity="0.16"></path>
+      </g>
+      <path id="am-pick" d="M78 22 L46 78" stroke="#8A5A2A" stroke-width="1.6" stroke-linecap="round"></path>
+      <g id="am-olive"><ellipse rx="7" ry="6" fill="#6E8A2A" transform="rotate(-30)"></ellipse><ellipse rx="2.6" ry="2.2" fill="#D23A2A"></ellipse><circle cx="-3" cy="-3" r="1.6" fill="#FFFFFF" opacity="0.7"></circle></g>
+      <g id="am-glassFront">
+        <path d="M10 20 L102 20 L56 86 Z" fill="none" stroke="#FFFFFF" stroke-width="1.6" opacity="0.9"></path>
+        <path d="M10 20 L102 20 L56 86 Z" fill="none" stroke="#000" stroke-width="0.6" opacity="0.25" transform="translate(0.8 0.8)"></path>
+        <ellipse cx="56" cy="20" rx="46" ry="4.5" fill="none" stroke="#FFFFFF" stroke-width="1.4" opacity="0.95"></ellipse>
+        <path d="M16 24 L48 72" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" opacity="0.6"></path>
+        <rect x="54" y="86" width="4" height="56" fill="#FFFFFF" opacity="0.5"></rect>
+        <rect x="54.6" y="86" width="1.2" height="56" fill="#FFFFFF" opacity="0.9"></rect>
+        <ellipse cx="56" cy="143" rx="26" ry="5" fill="#FFFFFF" opacity="0.35" stroke="#FFFFFF" stroke-width="1.2"></ellipse>
+        <ellipse cx="48" cy="142" rx="10" ry="1.6" fill="#FFFFFF" opacity="0.8"></ellipse>
+      </g>
+
+      <!-- television: the cabinet under the teak grain, and everything over the screen -->
+      <g id="am-tvBack">
+        <ellipse cx="200" cy="206" rx="170" ry="6" fill="#000" opacity="0.22" filter="url(#am-blur3)"></ellipse>
+        <path d="M196 36 L128 2 M196 36 L268 4" stroke="url(#am-chrome) #A6AAAE" stroke-width="2.4" stroke-linecap="round"></path>
+        <circle cx="128" cy="2" r="3.5" fill="url(#am-brassBall) #C9A048"></circle><circle cx="268" cy="4" r="3.5" fill="url(#am-brassBall) #C9A048"></circle>
+        <ellipse cx="196" cy="38" rx="16" ry="7" fill="url(#am-chrome) #A6AAAE"></ellipse>
+        <path d="M54 176 L44 208 H50 L64 176 Z M338 176 L348 208 H342 L328 176 Z" fill="url(#am-teak) #7A421A"></path>
+        <rect x="43" y="203" width="8" height="5" fill="url(#am-brass) #C9A048"></rect><rect x="341" y="203" width="8" height="5" fill="url(#am-brass) #C9A048"></rect>
+        <rect x="8" y="40" width="376" height="140" rx="20" fill="url(#am-teak) #A2602C"></rect>
+      </g>
+      <g id="am-tvCase">
+        <rect x="9" y="41" width="374" height="138" rx="19" fill="none" stroke="#FFE2B8" stroke-width="1" opacity="0.4"></rect>
+        <rect x="8" y="160" width="376" height="20" rx="10" fill="#000" opacity="0.12"></rect>
+        <rect x="20" y="52" width="246" height="116" rx="24" fill="#141414"></rect>
+      </g>
+      <g id="am-tvFront">
+        <rect x="27" y="58" width="232" height="104" rx="20" fill="url(#am-scan)"></rect>
+        <rect x="27" y="58" width="232" height="104" rx="20" fill="url(#am-glassHi)"></rect>
+        <rect x="27" y="58" width="232" height="104" rx="20" fill="url(#am-vignette)"></rect>
+        <rect x="278" y="54" width="94" height="74" rx="10" fill="url(#am-cloth) #C8B48A"></rect>
+        <rect x="278" y="54" width="94" height="74" rx="10" fill="none" stroke="#000" stroke-width="2" opacity="0.35"></rect>
+        <path d="M284 66 H366 M284 78 H366 M284 90 H366 M284 102 H366 M284 114 H366" stroke="url(#am-brass) #C9A048" stroke-width="1.6" opacity="0.8"></path>
+        <circle cx="302" cy="153" r="13" fill="#000" opacity="0.3"></circle>
+        <circle cx="300" cy="150" r="13" fill="url(#am-chrome) #A6AAAE"></circle>
+        <circle cx="300" cy="150" r="9" fill="url(#am-knobFace) #F2EAD6"></circle>
+        <rect class="f-ink" x="299" y="141" width="2" height="7" transform="rotate(40 300 150)"></rect>
+        <circle cx="352" cy="153" r="13" fill="#000" opacity="0.3"></circle>
+        <circle cx="350" cy="150" r="13" fill="url(#am-chrome) #A6AAAE"></circle>
+        <circle cx="350" cy="150" r="9" fill="url(#am-knobFace) #F2EAD6"></circle>
+        <rect class="f-ink" x="349" y="141" width="2" height="7" transform="rotate(-60 350 150)"></rect>
+      </g>
+      <path id="am-sparkle" d="M0.0 -14.0 L0.8 -2.0 L6.4 -6.4 L2.0 -0.8 L14.0 0.0 L2.0 0.8 L6.4 6.4 L0.8 2.0 L0.0 14.0 L-0.8 2.0 L-6.4 6.4 L-2.0 0.8 L-14.0 0.0 L-2.0 -0.8 L-6.4 -6.4 L-0.8 -2.0 Z" fill="url(#am-brass) #C9A048"></path>
+    </defs>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#am-grit)" opacity="0.35"></rect>
+    <rect x="0" y="0" width="100%" height="100%" fill="url(#am-paper)"></rect>
+  </svg>
+  <div class="ambient" aria-hidden="true"></div>
+
+  <!-- ===== the diner sign ===== -->
+  <header class="strip">
+    <h1>System Sensors</h1>
+    <span>★ ATOMIC MONITOR ★</span>
+  </header>
+
+  <div class="groups">
+  <!--rg-groups 0-71-->
+  <!-- ===== STARBURST CLOCK ===== -->
+  <section class="hero">
+    <div class="sun" role="img" aria-label="Starburst wall clock">
+      <svg aria-hidden="true" width="300" height="296" viewBox="0 0 300 296"><use href="#am-sunBack"></use></svg>
+      <svg aria-hidden="true" width="300" height="296"><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(15 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(45 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(75 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(105 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(135 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(165 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(195 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(225 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(255 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(285 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(315 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(345 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><circle data-rg-bake cx="150" cy="148" r="44" filter="url(#am-teakGrain)" opacity="0.6"></circle></svg>
+      <svg aria-hidden="true" width="300" height="296" viewBox="0 0 300 296"><use href="#am-sunTop"></use><g data-hands="0" filter="url(#am-castHands)"><use href="#am-hourHand" data-hand="hour"></use><use href="#am-minuteHand" data-hand="minute"></use><use href="#am-secondHand" data-hand="second"></use><circle cx="150" cy="148" r="7" fill="url(#am-brassBall) #C9A048"></circle></g></svg>
+    </div>
+    <div class="now"><span class="time" data-clock="0">--:--</span><i></i><span class="date" data-date="1 2 3">&nbsp;</span></div>
+  </section>
+
+  <!-- ===== PROCESSOR: thermostat dial on laminate ===== -->
+  <section class="card" data-section>
+    <div class="top">
+      <svg class="lam" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#am-grit)" opacity="0.25"></rect><rect x="0" y="0" width="100%" height="100%" fill="url(#am-laminate)"></rect></svg><div class="gloss" aria-hidden="true"></div>
+      <div class="head"><h2>Processor</h2><span class="tag">CPU</span></div>
+      <div class="body dialrow">
+        <svg class="dial" data-need="5" data-dial="5" data-lo="20" data-hi="100" role="img" aria-label="CPU temperature" width="170" height="170" viewBox="0 0 200 200">
+          <use href="#am-dial"></use><g data-nums></g><text class="dunit" x="100" y="176" text-anchor="middle" data-unit="6" data-default="°C">°C</text>
+          <g filter="url(#am-castKnob)"><use href="#am-knob" data-knob transform="rotate(-135 100 100)"></use></g>
+          <use href="#am-dialShine"></use>
+        </svg>
+        <div class="read">
+          <div class="temp" data-need="5"><b><span data-num="5" data-places="0">--</span>°</b><span class="state" data-state="5">Cool cat</span></div>
+          <div class="stat" data-need="9"><div><span class="lbl">Load</span><span class="val"><span data-num="9" data-places="0" data-unit-of="10">--</span><small> <span data-unit="10" data-default="%">%</span></small></span></div><div class="track"><i class="first" data-bar="9" data-max="11" data-unit-of="10" data-scale="100"></i></div></div>
+          <div class="stat" data-need="13"><div><span class="lbl">Clock</span><span class="val"><span data-num="13" data-places="2" data-unit-of="14">--</span><small> <span data-unit="14" data-default="GHz">GHz</span></small></span></div><div class="track"><i class="second" data-bar="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max"></i></div></div>
+          <div class="stat" data-need="17"><div><span class="lbl">Power</span><span class="val"><span data-num="17" data-places="0" data-unit-of="18">--</span><small> <span data-unit="18" data-default="W">W</span></small></span></div><div class="track"><i class="third" data-bar="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max"></i></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== GRAPHICS: the same, mirrored ===== -->
+  <section class="card flip" data-section>
+    <div class="top">
+      <svg class="lam" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#am-grit)" opacity="0.25"></rect><rect x="0" y="0" width="100%" height="100%" fill="url(#am-laminate)"></rect></svg><div class="gloss" aria-hidden="true"></div>
+      <div class="head"><h2>Graphics</h2><span class="tag">GPU</span></div>
+      <div class="body dialrow">
+        <svg class="dial" data-need="21" data-dial="21" data-lo="20" data-hi="100" role="img" aria-label="GPU temperature" width="170" height="170" viewBox="0 0 200 200">
+          <use href="#am-dial"></use><g data-nums></g><text class="dunit" x="100" y="176" text-anchor="middle" data-unit="22" data-default="°C">°C</text>
+          <g filter="url(#am-castKnob)"><use href="#am-knob" data-knob transform="rotate(-135 100 100)"></use></g>
+          <use href="#am-dialShine"></use>
+        </svg>
+        <div class="read">
+          <div class="temp" data-need="21"><b><span data-num="21" data-places="0">--</span>°</b><span class="state" data-state="21">Cool cat</span></div>
+          <div class="stat" data-need="25"><div><span class="lbl">Load</span><span class="val"><span data-num="25" data-places="0" data-unit-of="26">--</span><small> <span data-unit="26" data-default="%">%</span></small></span></div><div class="track"><i class="first" data-bar="25" data-max="27" data-unit-of="26" data-scale="100"></i></div></div>
+          <div class="stat" data-need="29"><div><span class="lbl">Clock</span><span class="val"><span data-num="29" data-places="2" data-unit-of="30">--</span><small> <span data-unit="30" data-default="GHz">GHz</span></small></span></div><div class="track"><i class="second" data-bar="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max"></i></div></div>
+          <div class="stat" data-need="33"><div><span class="lbl">Power</span><span class="val"><span data-num="33" data-places="0" data-unit-of="34">--</span><small> <span data-unit="34" data-default="W">W</span></small></span></div><div class="track"><i class="third" data-bar="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max"></i></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== COOLING: spinning atoms ===== -->
+  <section class="card fans" data-section>
+    <div class="top">
+      <svg class="lam" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#am-grit)" opacity="0.25"></rect><rect x="0" y="0" width="100%" height="100%" fill="url(#am-laminate)"></rect></svg><div class="gloss" aria-hidden="true"></div>
+      <div class="head"><h2>Cooling</h2><span class="tag">RPM</span></div>
+      <div class="body row">
+        <div class="fan" data-need="37"><svg aria-hidden="true" width="92" height="92" viewBox="-46 -46 92 92"><use href="#am-atomShadow"></use><g filter="url(#am-castAtom)"><g data-rotor="37"><use href="#am-orbits"></use></g></g><use href="#am-nucleus"></use></svg><b data-num="37" data-places="0">--</b><span data-cap="36" data-default="Fan 1"></span></div>
+        <div class="fan" data-need="41"><svg aria-hidden="true" width="92" height="92" viewBox="-46 -46 92 92"><use href="#am-atomShadow"></use><g filter="url(#am-castAtom)"><g data-rotor="41"><use href="#am-orbits"></use></g></g><use href="#am-nucleus"></use></svg><b data-num="41" data-places="0">--</b><span data-cap="40" data-default="Fan 2"></span></div>
+        <div class="fan" data-need="45"><svg aria-hidden="true" width="92" height="92" viewBox="-46 -46 92 92"><use href="#am-atomShadow"></use><g filter="url(#am-castAtom)"><g data-rotor="45"><use href="#am-orbits"></use></g></g><use href="#am-nucleus"></use></svg><b data-num="45" data-places="0">--</b><span data-cap="44" data-default="Fan 3"></span></div>
+        <div class="fan" data-need="49"><svg aria-hidden="true" width="92" height="92" viewBox="-46 -46 92 92"><use href="#am-atomShadow"></use><g filter="url(#am-castAtom)"><g data-rotor="49"><use href="#am-orbits"></use></g></g><use href="#am-nucleus"></use></svg><b data-num="49" data-places="0">--</b><span data-cap="48" data-default="Fan 4"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== MEMORY: martini glasses ===== -->
+  <section class="card mem" data-section>
+    <div class="top">
+      <svg class="lam" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#am-grit)" opacity="0.25"></rect><rect x="0" y="0" width="100%" height="100%" fill="url(#am-laminate)"></rect></svg><div class="gloss" aria-hidden="true"></div>
+      <div class="head"><h2>Memory</h2><span class="tag">ON THE ROCKS</span></div>
+      <div class="body row">
+        <div class="glass" data-need="53"><svg aria-hidden="true" width="112" height="156" viewBox="0 0 112 156" data-glass="53" data-max="55"><use href="#am-glassBack"></use><path class="drink mint" data-liquid d=""></path><ellipse data-surface cx="56" cy="86" rx="0" ry="2.6" fill="#FFFFFF" opacity="0.95"></ellipse><use href="#am-pick"></use><use href="#am-olive" data-olive transform="translate(52 68)"></use><use href="#am-glassFront"></use></svg><b><span data-pct="53" data-max="55">--</span><small>%</small></b><span class="name" data-cap="52" data-default="Memory"></span><span class="of"><span data-num="53" data-places="1" data-unit-of="54" data-plain>--</span> of <span data-num="55" data-places="0" data-unit-of="54" data-plain>--</span> <span data-unit="54" data-default="GB"></span></span></div>
+        <div class="glass" data-need="57"><svg aria-hidden="true" width="112" height="156" viewBox="0 0 112 156" data-glass="57" data-max="59"><use href="#am-glassBack"></use><path class="drink pink" data-liquid d=""></path><ellipse data-surface cx="56" cy="86" rx="0" ry="2.6" fill="#FFFFFF" opacity="0.95"></ellipse><use href="#am-pick"></use><use href="#am-olive" data-olive transform="translate(52 68)"></use><use href="#am-glassFront"></use></svg><b><span data-pct="57" data-max="59">--</span><small>%</small></b><span class="name" data-cap="56" data-default="Video"></span><span class="of"><span data-num="57" data-places="1" data-unit-of="58" data-plain>--</span> of <span data-num="59" data-places="0" data-unit-of="58" data-plain>--</span> <span data-unit="58" data-default="GB"></span></span></div>
+        <div class="glass" data-need="61"><svg aria-hidden="true" width="112" height="156" viewBox="0 0 112 156" data-glass="61" data-max="63"><use href="#am-glassBack"></use><path class="drink gold" data-liquid d=""></path><ellipse data-surface cx="56" cy="86" rx="0" ry="2.6" fill="#FFFFFF" opacity="0.95"></ellipse><use href="#am-pick"></use><use href="#am-olive" data-olive transform="translate(52 68)"></use><use href="#am-glassFront"></use></svg><b><span data-pct="61" data-max="63">--</span><small>%</small></b><span class="name" data-cap="60" data-default="Disk"></span><span class="of"><span data-num="61" data-places="0" data-unit-of="62" data-plain>--</span> of <span data-num="63" data-places="0" data-unit-of="62" data-plain>--</span> <span data-unit="62" data-default="GB"></span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== NETWORK: teak television ===== -->
+  <section class="card net" data-section>
+    <div class="top">
+      <svg class="lam" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#am-grit)" opacity="0.25"></rect><rect x="0" y="0" width="100%" height="100%" fill="url(#am-laminate)"></rect></svg><div class="gloss" aria-hidden="true"></div>
+      <div class="head"><h2>Network</h2>
+        <div class="io"><span class="lbl" data-need="65">IN <b data-num="65" data-places="1">--</b></span><span class="lbl" data-need="69">OUT <b data-num="69" data-places="1">--</b></span><span class="lbl" data-unit="66" data-default="MB/s">MB/s</span></div>
+      </div>
+      <div class="body">
+        <div class="tv" data-tv data-scale="--net-max" role="img" aria-label="Network traffic over the last minute, shown on a television">
+          <svg aria-hidden="true" width="378" height="204" viewBox="0 0 392 212"><use href="#am-tvBack"></use></svg>
+          <svg aria-hidden="true" width="378" height="204"><rect data-rg-bake x="7.7" y="38.6" width="362.6" height="135" rx="19.3" filter="url(#am-teakGrain)" opacity="0.65"></rect></svg>
+          <svg aria-hidden="true" width="378" height="204" viewBox="0 0 392 212"><use href="#am-tvCase"></use><rect class="glow" x="27" y="58" width="232" height="104" rx="20" fill="url(#am-screen) #0C1614"></rect><g filter="url(#am-traceGlow)"><path class="out" data-trace="69" data-demo="low" d=""></path><path class="in" data-trace="65" data-demo="high" d=""></path><circle class="dot" data-dot="65" r="3.4" hidden></circle></g><use href="#am-tvFront"></use></svg>
+        </div>
+        <div class="ends"><span>1 MIN AGO → NOW</span><span>VOL · CH</span></div>
+      </div>
+    </div>
+  </section>
+  <!--/rg-groups-->
+  </div>
+
+  <!-- ===== FOOTER: chrome script badge ===== -->
+  <footer class="foot" data-need="73">
+    <svg aria-hidden="true" width="30" height="30" viewBox="-15 -15 30 30"><use href="#am-sparkle"></use></svg>
+    <span class="chrome" data-uptime="73">Up --</span>
+    <svg aria-hidden="true" width="30" height="30" viewBox="-15 -15 30 30"><use href="#am-sparkle"></use></svg>
+  </footer>
+</div>
+
+<!-- ===== building blocks for custom layouts =====
+     Inert until the panel's Layout is "My own groups and widgets": rg-Sens
+     then builds one group shell for each group and one widget for each
+     sensor, in place of the groups between the rg-groups markers. In a
+     widget, a field name in double braces (value, caption, unit, max, min,
+     time ...) becomes a placeholder number bound to that field of the
+     widget's sensor; "color" becomes the chosen colour's class. -->
+<template data-rg-group="card" data-rg-label="Laminate card">
+  <section class="card" data-section>
+    <div class="top">
+      <svg class="lam" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#am-grit)" opacity="0.25"></rect><rect x="0" y="0" width="100%" height="100%" fill="url(#am-laminate)"></rect></svg><div class="gloss" aria-hidden="true"></div>
+      <div class="head"><h2>{{title}}</h2></div>
+      <!--rg-items-->
+    </div>
+  </section>
+</template>
+<template data-rg-group="wall" data-rg-label="On the wall">
+  <section class="hero"><!--rg-items--></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Starburst clock" data-rg-size="large" data-rg-sources="clock" data-rg-group="wall" data-rg-width="340" data-rg-height="330">
+  <div class="w-clock">
+    <div class="sun" role="img" aria-label="Starburst wall clock">
+      <svg aria-hidden="true" width="300" height="296" viewBox="0 0 300 296"><use href="#am-sunBack"></use></svg>
+      <svg aria-hidden="true" width="300" height="296"><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(15 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(45 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(75 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(105 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(135 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(165 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(195 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(225 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(255 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(285 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(315 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><path data-rg-bake d="M150 104 C146 92 146 78 150 62 C154 78 154 92 150 104 Z" transform="rotate(345 150 148)" filter="url(#am-teakGrain)" opacity="0.6"></path><circle data-rg-bake cx="150" cy="148" r="44" filter="url(#am-teakGrain)" opacity="0.6"></circle></svg>
+      <svg aria-hidden="true" width="300" height="296" viewBox="0 0 300 296"><use href="#am-sunTop"></use><g data-hands="{{time}}" filter="url(#am-castHands)"><use href="#am-hourHand" data-hand="hour"></use><use href="#am-minuteHand" data-hand="minute"></use><use href="#am-secondHand" data-hand="second"></use><circle cx="150" cy="148" r="7" fill="url(#am-brassBall) #C9A048"></circle></g></svg>
+    </div>
+    <div class="now"><span class="time" data-clock="{{time}}">--:--</span><i></i><span class="date" data-date="{{day_name}} {{day}} {{month_name}}">&nbsp;</span></div>
+  </div>
+</template>
+<template data-rg-widget="dial" data-rg-label="Thermostat" data-rg-size="large" data-rg-colors="first second third" data-rg-width="380" data-rg-height="170">
+  <div class="w-dial" data-need="{{value}}">
+    <svg class="dial" data-dial="{{value}}" data-min="{{min}}" data-max="{{max}}" data-unit-of="{{unit}}" role="img" aria-label="Dial" width="170" height="170" viewBox="0 0 200 200"><use href="#am-dial"></use><g data-nums></g><text class="dunit" x="100" y="176" text-anchor="middle" data-unit="{{unit}}" data-default=""></text><g filter="url(#am-castKnob)"><use href="#am-knob" data-knob transform="rotate(-135 100 100)"></use></g><use href="#am-dialShine"></use></svg>
+    <div class="read">
+      <div class="temp"><b data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</b><small data-unit="{{unit}}" data-default=""></small></div>
+      <span class="lbl" data-cap="{{caption}}" data-default=""></span>
+      <div class="track"><i class="{{color}}" data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="dial" data-rg-label="Thermostat" data-rg-size="medium" data-rg-colors="first second third" data-rg-width="180" data-rg-height="230">
+  <div class="w-dial tall" data-need="{{value}}">
+    <svg class="dial" data-dial="{{value}}" data-min="{{min}}" data-max="{{max}}" data-unit-of="{{unit}}" role="img" aria-label="Dial" width="170" height="170" viewBox="0 0 200 200"><use href="#am-dial"></use><g data-nums></g><text class="dunit" x="100" y="176" text-anchor="middle" data-unit="{{unit}}" data-default=""></text><g filter="url(#am-castKnob)"><use href="#am-knob" data-knob transform="rotate(-135 100 100)"></use></g><use href="#am-dialShine"></use></svg>
+    <div class="read">
+      <div class="temp"><b data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</b><small data-unit="{{unit}}" data-default=""></small></div>
+      <span class="lbl" data-cap="{{caption}}" data-default=""></span>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Enamel bar" data-rg-size="small" data-rg-colors="first second third" data-rg-width="150" data-rg-height="40">
+  <div class="stat w-bar" data-need="{{value}}"><div><span class="lbl" data-cap="{{caption}}" data-default=""></span><span class="val"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}">--</span><small> <span data-unit="{{unit}}" data-default=""></span></small></span></div><div class="track"><i class="{{color}}" data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Enamel bar" data-rg-size="medium" data-rg-colors="first second third" data-rg-width="196" data-rg-height="40">
+  <div class="stat w-bar" data-need="{{value}}"><div><span class="lbl" data-cap="{{caption}}" data-default=""></span><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><small> <span data-unit="{{unit}}" data-default=""></span></small></span></div><div class="track"><i class="{{color}}" data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Enamel bar" data-rg-size="large" data-rg-colors="first second third" data-rg-width="390" data-rg-height="26">
+  <div class="w-bar long" data-need="{{value}}"><span class="lbl" data-cap="{{caption}}" data-default=""></span><div class="track"><i class="{{color}}" data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><small> <span data-unit="{{unit}}" data-default=""></span></small></span></div>
+</template>
+<template data-rg-widget="atom" data-rg-label="Atom" data-rg-size="small" data-rg-sources="fan" data-rg-width="104" data-rg-height="130">
+  <div class="fan w-fan" data-need="{{value}}"><svg aria-hidden="true" width="92" height="92" viewBox="-46 -46 92 92"><use href="#am-atomShadow"></use><g filter="url(#am-castAtom)"><g data-rotor="{{value}}"><use href="#am-orbits"></use></g></g><use href="#am-nucleus"></use></svg><b data-num="{{value}}" data-places="0" data-unit-of="{{unit}}">--</b><span data-cap="{{caption}}" data-default=""></span></div>
+</template>
+<template data-rg-widget="glass" data-rg-label="Martini glass" data-rg-size="medium" data-rg-default-for="memory disk" data-rg-colors="mint pink gold" data-rg-width="124" data-rg-height="212">
+  <div class="glass w-glass" data-need="{{value}}"><svg aria-hidden="true" width="112" height="156" viewBox="0 0 112 156" data-glass="{{value}}" data-max="{{max}}"><use href="#am-glassBack"></use><path class="drink {{color}}" data-liquid d=""></path><ellipse data-surface cx="56" cy="86" rx="0" ry="2.6" fill="#FFFFFF" opacity="0.95"></ellipse><use href="#am-pick"></use><use href="#am-olive" data-olive transform="translate(52 68)"></use><use href="#am-glassFront"></use></svg><b><span data-pct="{{value}}" data-max="{{max}}">--</span><small>%</small></b><span class="name" data-cap="{{caption}}" data-default=""></span><span class="of"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-plain>--</span> of <span data-num="{{max}}" data-places="0" data-unit-of="{{unit}}" data-plain>--</span> <span data-unit="{{unit}}" data-default="GB"></span></span></div>
+</template>
+<template data-rg-widget="glass" data-rg-label="Martini glass" data-rg-size="small" data-rg-default-for="memory disk" data-rg-colors="mint pink gold" data-rg-width="116" data-rg-height="198">
+  <div class="glass w-glass" data-need="{{value}}"><svg aria-hidden="true" width="112" height="156" viewBox="0 0 112 156" data-glass="{{value}}" data-max="{{max}}"><use href="#am-glassBack"></use><path class="drink {{color}}" data-liquid d=""></path><ellipse data-surface cx="56" cy="86" rx="0" ry="2.6" fill="#FFFFFF" opacity="0.95"></ellipse><use href="#am-pick"></use><use href="#am-olive" data-olive transform="translate(52 68)"></use><use href="#am-glassFront"></use></svg><b><span data-pct="{{value}}" data-max="{{max}}">--</span><small>%</small></b><span class="name" data-cap="{{caption}}" data-default=""></span></div>
+</template>
+<template data-rg-widget="tv" data-rg-label="Television" data-rg-size="medium" data-rg-default-for="network" data-rg-width="378" data-rg-height="238">
+  <div class="w-tv" data-need="{{value}}">
+    <div><span class="lbl" data-cap="{{caption}}" data-default=""></span><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><small> <span data-unit="{{unit}}" data-default=""></span></small></span></div>
+    <div class="tv" data-tv data-max="{{max}}">
+      <svg aria-hidden="true" width="378" height="204" viewBox="0 0 392 212"><use href="#am-tvBack"></use></svg>
+          <svg aria-hidden="true" width="378" height="204"><rect data-rg-bake x="7.7" y="38.6" width="362.6" height="135" rx="19.3" filter="url(#am-teakGrain)" opacity="0.65"></rect></svg>
+          <svg aria-hidden="true" width="378" height="204" viewBox="0 0 392 212"><use href="#am-tvCase"></use><rect class="glow" x="27" y="58" width="232" height="104" rx="20" fill="url(#am-screen) #0C1614"></rect><g filter="url(#am-traceGlow)"><path class="in" data-trace="{{value}}" data-demo="high" d=""></path><circle class="dot" data-dot="{{value}}" r="3.4" hidden></circle></g><use href="#am-tvFront"></use></svg>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Reading" data-rg-size="small" data-rg-width="130" data-rg-height="62">
+  <div class="w-reading" data-need="{{value}}"><span class="val"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}">--</span><small> <span data-unit="{{unit}}" data-default=""></span></small></span><span class="lbl" data-cap="{{caption}}" data-default=""></span></div>
+</template>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "palette", "label": "Palette", "type": "choice", "var": "--palette", "default": "mint", "choices": [{"value": "mint", "label": "Mint"}, {"value": "flamingo", "label": "Flamingo"}, {"value": "butterscotch", "label": "Butterscotch"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Television full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var WARM = 72, HOT = 85;
+  var SAMPLES = 36, SAMPLE_MS = 1667;   // one minute of history
+  var SVG = 'http://www.w3.org/2000/svg';
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  // The palette is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-palette', (css.getPropertyValue('--palette') || 'mint').trim() || 'mint');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el.textContent !== value) el.textContent = value; }
+  function style(el, prop, value) { if (el.style[prop] !== value) el.style[prop] = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  // A clock given in MHz is shown, and scaled, in GHz.
+  function isMhz(v, id) { return id !== null && /^mhz$/i.test(String(v[id] || '')); }
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+  // ------------------------------------------------------- history
+  // One list of samples for each placeholder a television traces.
+  var latest = {}, hist = {}, limit = {};
+  var everMapped = false;
+  var STORE = 'rg-atomic-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist) {
+      Object.keys(saved.hist).forEach(function (id) { hist[id] = saved.hist[id].slice(-SAMPLES); });
+    }
+  } catch (e) { /* no storage: the screen starts empty */ }
+
+  // The value the top of the screen stands for. `peak` is the largest
+  // sample of the last minute, `fixed` a full scale that was given (0 when
+  // the screen is left to follow the peak).
+  function fullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    // Follow the peak in steps (1, 2, 4, 8, 16 ...), so the traces do not
+    // rescale each time the peak moves a little.
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+  // With nothing bound at all the screen shows a sample programme.
+  function demo(kind) {
+    var out = [];
+    for (var i = 0; i < SAMPLES; i++) {
+      out.push(kind === 'low' ? 1.4 + 0.7 * Math.sin(i * 0.55) + 0.4 * Math.sin(i * 1.7 + 1)
+                              : 7.2 + 3.2 * Math.sin(i * 0.42 + 0.6) + 2.1 * Math.sin(i * 1.13) + 1.2 * Math.sin(i * 2.9 + 2));
+    }
+    return out;
+  }
+  // The newest sample at the right edge of the screen; a smooth line
+  // through the samples (each one a control point, the curve passing
+  // through the midpoints).
+  function drawScreens() {
+    each('[data-tv]', function (tv) {
+      var lists = [], peak = 0, fixed = 0;
+      var scale = tv.getAttribute('data-scale');
+      if (scale) fixed = cssNum(scale, 0);
+      each('[data-trace]', function (path) {
+        var id = path.getAttribute('data-trace');
+        var list = everMapped ? (hist[id] || []) : demo(path.getAttribute('data-demo'));
+        if (!everMapped) fixed = 16;
+        else if (tv.hasAttribute('data-max') && limit[id] > 0) fixed = limit[id];
+        lists.push([path, id, list]);
+        peak = Math.max.apply(null, list.concat([peak]));
+      }, tv);
+      var full = fullScale(peak, fixed);
+      lists.forEach(function (entry) {
+        var list = entry[2], n = list.length, d = '';
+        var pts = list.map(function (val, i) { return [246 - (n - 1 - i) * 206 / (SAMPLES - 1), 152 - clamp01(val / full) * 86]; });
+        function p(q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }
+        if (n > 1) {
+          d = 'M' + p(pts[0]);
+          for (var i = 1; i < n - 1; i++) d += ' Q' + p(pts[i]) + ' ' + p([(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2]);
+          d += ' L' + p(pts[n - 1]);
+        }
+        attr(entry[0], 'd', d);
+        each('[data-dot="' + entry[1] + '"]', function (dot) {
+          hide(dot, n === 0);
+          if (n > 0) { attr(dot, 'cx', pts[n - 1][0].toFixed(1)); attr(dot, 'cy', pts[n - 1][1].toFixed(1)); }
+        }, tv);
+      });
+    });
+  }
+  function sample() {
+    var any = false;
+    each('[data-trace]', function (path) {
+      var id = path.getAttribute('data-trace');
+      if (hist[id] && hist[id].stamp === sample.round) return;      // two screens may trace one sensor
+      if (!isFinite(latest[id])) return;
+      var list = hist[id] || (hist[id] = []);
+      list.push(Math.round(latest[id] * 100) / 100);
+      if (list.length > SAMPLES) list.shift();
+      list.stamp = sample.round;
+      any = true;
+    });
+    sample.round++;
+    if (!any) return;
+    drawScreens();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  sample.round = 1;
+  setInterval(sample, SAMPLE_MS);
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+
+  // The numbers round a thermostat: five, from the bottom left clockwise.
+  function scaleLabel(n) {
+    if (Math.abs(n) >= 10000) return Math.round(n / 1000) + 'k';
+    if (Math.abs(n) >= 1000) return (Math.round(n / 100) / 10) + 'k';
+    return String(Math.round(n * 10) / 10);
+  }
+  function dialNumbers(g, lo, hi) {
+    var key = lo + '|' + hi;
+    if (g.getAttribute('data-shown') === key) return;
+    g.setAttribute('data-shown', key);
+    while (g.firstChild) g.removeChild(g.firstChild);
+    for (var i = 0; i < 5; i++) {
+      var a = (135 + i * 67.5) * Math.PI / 180, t = document.createElementNS(SVG, 'text');
+      t.setAttribute('x', (100 + 52 * Math.cos(a)).toFixed(1));
+      t.setAttribute('y', (104 + 52 * Math.sin(a)).toFixed(1));
+      t.setAttribute('text-anchor', 'middle');
+      t.textContent = scaleLabel(lo + (hi - lo) * i / 4);
+      g.appendChild(t);
+    }
+  }
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+    var first = anyMapped && !everMapped;
+    if (anyMapped) everMapped = true;
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
+    function hourMinute(id) { var t = v[id]; return /(\d{1,2}):(\d{2})/.exec(known(t) ? String(t) : ''); }
+    each('[data-clock]', function (el) {
+      var hm = hourMinute(el.getAttribute('data-clock'));
+      text(el, hm ? hm[1] + ':' + hm[2] : '--:--');
+    });
+    // Hands: ten past ten until the time is known. An afternoon hour given
+    // as "5:14 PM" points the same way as 17:14.
+    each('[data-hands]', function (el) {
+      var hm = hourMinute(el.getAttribute('data-hands')), h = hm ? +hm[1] : 10, m = hm ? +hm[2] : 10;
+      each('[data-hand="hour"]', function (hand) { attr(hand, 'transform', 'rotate(' + ((h % 12 + m / 60) * 30).toFixed(1) + ' 150 148)'); }, el);
+      each('[data-hand="minute"]', function (hand) { attr(hand, 'transform', 'rotate(' + (m * 6) + ' 150 148)'); }, el);
+    });
+    each('[data-date]', function (el) {    // Friday, 13 November: the ids of day name, day and month
+      var ids = el.getAttribute('data-date').split(' '), day = num(v[ids[1]]);
+      var rest = [isFinite(day) ? String(Math.round(day)) : '', known(v[ids[2]]) ? String(v[ids[2]]) : ''].filter(Boolean).join(' ');
+      text(el, [known(v[ids[0]]) ? String(v[ids[0]]) : '', rest].filter(Boolean).join(', ') || ' ');
+    });
+
+    each('[data-num]', function (el) {
+      var n = num(v[el.getAttribute('data-num')]);
+      if (isMhz(v, el.getAttribute('data-unit-of'))) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "of 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      text(el, isMhz(v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default'));
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      text(el, known(c) ? String(c) : el.getAttribute('data-default'));
+    });
+    each('[data-uptime]', function (el) {  // Up 4 days & 7 hours
+      var sec = num(v[el.getAttribute('data-uptime')]), shown = 'Up and at ’em';
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        shown = 'Up ' + (d > 0 ? plural(d, 'day') + ' & ' + plural(hr, 'hour')
+                       : hr > 0 ? plural(hr, 'hour') + ' & ' + plural(mn, 'minute') : plural(mn, 'minute'));
+      }
+      text(el, shown);
+    });
+
+    // Thermostats: the knob turns over 270 degrees, from the bottom left
+    // round to the bottom right. A hand-written dial has a fixed range
+    // (data-lo, data-hi); a generated one takes its sensor's limits.
+    each('[data-dial]', function (el) {
+      var val = num(v[el.getAttribute('data-dial')]), lo, hi;
+      if (el.hasAttribute('data-lo')) { lo = +el.getAttribute('data-lo'); hi = +el.getAttribute('data-hi'); }
+      else {
+        lo = num(v[el.getAttribute('data-min')]); hi = num(v[el.getAttribute('data-max')]);
+        if (isMhz(v, el.getAttribute('data-unit-of'))) { val /= 1000; lo /= 1000; hi /= 1000; }
+        if (!isFinite(lo)) lo = 0;
+        if (!(hi > lo)) hi = lo + 100;
+      }
+      var f = isFinite(val) ? clamp01((val - lo) / (hi - lo)) : 0;
+      each('[data-knob]', function (knob) { attr(knob, 'transform', 'rotate(' + (-135 + f * 270).toFixed(1) + ' 100 100)'); }, el);
+      each('[data-nums]', function (g) { dialNumbers(g, lo, hi); }, el);
+    });
+    each('[data-state]', function (el) {
+      var t = num(v[el.getAttribute('data-state')]);
+      text(el, t >= HOT ? 'Sizzling!' : t >= WARM ? 'Toasty' : 'Cool cat');
+      flag(el, 'hot', t >= HOT);
+      flag(el, 'warm', t >= WARM && t < HOT);
+    });
+
+    // Bars: against the sensor's own maximum, else the limit in the
+    // stylesheet (a number, or the name of a custom property). The fill is
+    // never shorter than its own round ends.
+    each('[data-bar]', function (el) {
+      var val = num(v[el.getAttribute('data-bar')]), max = num(v[el.getAttribute('data-max')]);
+      var scale = el.getAttribute('data-scale'), fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (isMhz(v, el.getAttribute('data-unit-of'))) { val /= 1000; max /= 1000; }
+      style(el, 'width', 'max(14px, calc(' + (share(val, max, fallback) * 100).toFixed(1) + '% - 2px))');
+    });
+    each('[data-rotor]', function (el) {
+      var rpm = num(v[el.getAttribute('data-rotor')]);
+      fanRpm[el.getAttribute('data-rotor')] = isFinite(rpm) ? rpm : 0;
+    });
+    // Martini glasses: the bowl narrows from the rim (y 20, 46 either side)
+    // to the stem (y 86); the drink fills it to the share in use, and the
+    // olive rides the pick just under the surface.
+    each('[data-glass]', function (el) {
+      var f = share(num(v[el.getAttribute('data-glass')]), num(v[el.getAttribute('data-max')]), 100);
+      var y = 86 - f * 62, half = (86 - y) / 66 * 46;
+      each('[data-liquid]', function (p) {
+        attr(p, 'd', f > 0 ? 'M' + (56 + half).toFixed(1) + ' ' + y.toFixed(1) + ' L56 86 L' + (56 - half).toFixed(1) + ' ' + y.toFixed(1) + ' Z' : '');
+      }, el);
+      each('[data-surface]', function (s) {
+        attr(s, 'cy', y.toFixed(1)); attr(s, 'rx', Math.max(half - 1, 0).toFixed(1));
+        hide(s, f <= 0);
+      }, el);
+      each('[data-olive]', function (o) {
+        var oy = Math.min(Math.max(y + 6, 60), 74);
+        attr(o, 'transform', 'translate(' + (78 - (oy - 22) * 32 / 56).toFixed(1) + ' ' + oy.toFixed(1) + ')');
+      }, el);
+    });
+    each('[data-pct]', function (el) {
+      var val = num(v[el.getAttribute('data-pct')]), max = num(v[el.getAttribute('data-max')]);
+      text(el, isFinite(val) ? String(Math.round(share(val, max, 100) * 100)) : '--');
+    });
+
+    // Televisions: remember the latest reading of each traced sensor.
+    each('[data-tv]', function (tv) {
+      each('[data-trace]', function (path) {
+        var id = path.getAttribute('data-trace');
+        latest[id] = num(v[id]);
+        limit[id] = num(v[tv.getAttribute('data-max')]);
+      }, tv);
+    });
+    if (first) { sample(); drawScreens(); }   // the sample programme goes off the air
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function secondHands(seconds) {
+    each('[data-hand="second"]', function (el) { attr(el, 'transform', 'rotate(' + seconds * 6 + ' 150 148)'); });
+  }
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a cached list would revive cancelled ones.
+    var anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;
+    secondHands(new Date(now).getSeconds());
+    // Atoms: one turn every 6000 / RPM seconds, but never more than about
+    // 24 degrees a frame. The three orbits repeat every 60 degrees, so a
+    // bigger step would read as standing still or turning backwards.
+    each('[data-rotor]', function (el) {
+      var id = el.getAttribute('data-rotor'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(0.06 * rpm * dt * speed, 24 * (1 - Math.exp(-rpm / 1200)));
+      rotorAngle[id] = ((rotorAngle[id] || 0) + step) % 360;
+      el.setAttribute('transform', 'rotate(' + rotorAngle[id].toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) { secondHands(0); return; }
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // hands, knobs and glasses in place before the first values arrive
+  drawScreens();
+})();
+</script>
+</body>
+</html>

@@ -31,6 +31,18 @@
 //!                           tens of ms imitates dragging a panel's edge)
 //!   animation=on|off        the panel's Animation switch (default on)
 //!   options=ID=VALUE,...    values for the template's own options
+//!   layout=FILE             JSON of a custom layout (`CssLayoutConfig`)
+//!   scan=on                 set the panel up as Scan Placeholders does for a
+//!                           new one: the template's sensors as slots, its
+//!                           placeholders bound, made-up values for every
+//!                           slot. `scan=custom` also turns on the custom
+//!                           layout a fresh panel starts with (templates
+//!                           with prototypes); `layout=FILE` overrides it and
+//!                           `layout_out=FILE` writes it out to start from;
+//!                           `html_out=FILE` writes the page as built
+//!   feed=FILE               JSON object of source values by their own keys
+//!                           (`group2_1_value`), fed as they are; for the
+//!                           widgets of a custom layout
 //! ```
 //!
 //! The backend's own cadence is set through the environment:
@@ -114,6 +126,78 @@ fn descendants() -> Vec<(u32, String)> {
     out
 }
 
+/// Plausible values for every field a slot's source could report, so both
+/// a template's own bindings and generated widgets have something to show.
+fn made_up_values(slots: &[rg_sens::ui::css_template_display::SlotKind]) -> HashMap<String, Value> {
+    let mut out = HashMap::new();
+    for (i, slot) in slots.iter().enumerate() {
+        let mut put = |field: &str, value: Value| {
+            out.insert(format!("{}_{field}", slot.prefix), value);
+        };
+        if slot.source == "clock" {
+            put("time", json!("17:14:05"));
+            put("hour", json!(17));
+            put("minute", json!(14));
+            put("second", json!(5));
+            put("date", json!("2026-11-13"));
+            put("day_name", json!("Friday"));
+            put("day", json!(13));
+            put("month", json!(11));
+            put("month_name", json!("November"));
+            put("year", json!(2026));
+            put("alarm_enabled", json!(false));
+            put("caption", json!("Clock"));
+            put("value", json!("17:14"));
+            continue;
+        }
+        if slot.source == "uptime" {
+            let seconds = 4 * 86_400 + 7 * 3_600 + 12 * 60;
+            put("caption", json!("Uptime"));
+            put("value", json!("4d 07h 12m"));
+            put("text", json!("4 days, 7 hours"));
+            put("compact", json!("4d 07h"));
+            put("seconds", json!(seconds));
+            put("days", json!(4));
+            put("hours", json!(7));
+            put("minutes", json!(12));
+            put("unit", json!(""));
+            continue;
+        }
+        let metric = slot.metric.to_lowercase();
+        let label = slot.label.to_lowercase();
+        let step = (i * 13 % 50) as f64;
+        let (value, unit, max) = if slot.source == "uptime" {
+            (json!("4d 07h 12m"), "", 0.0)
+        } else if metric.contains("temp") || slot.source == "system_temp" {
+            (json!(48.0 + step * 0.6), "°C", 100.0)
+        } else if slot.source == "fan_speed" || label.contains("fan") {
+            (json!(860.0 + step * 20.0), "RPM", 2400.0)
+        } else if metric.contains("freq") || metric.contains("clock") {
+            (json!(2.1 + step * 0.05), "GHz", 5.5)
+        } else if metric.contains("power") {
+            (json!(45.0 + step * 2.0), "W", 300.0)
+        } else if slot.source == "network" {
+            (json!(1.1 + step * 0.3), "MB/s", 16.0)
+        } else if (metric.contains("used") || slot.source == "disk") && !metric.contains("percent")
+        {
+            (json!(6.1 + step * 0.4), "GB", 32.0)
+        } else {
+            (json!(24.0 + step * 1.3), "%", 100.0)
+        };
+        put("caption", json!(slot.label.clone()));
+        put("numerical_value", value.clone());
+        put("value", value);
+        put("unit", json!(unit));
+        put("max", json!(max));
+        put("max_limit", json!(max));
+        put("min", json!(0));
+        put("min_limit", json!(0));
+        put("total", json!(max));
+        put("percent", json!(24.0 + step * 1.3));
+    }
+    out
+}
+
 fn main() {
     let template = arg("template", "default");
     let updates = arg("updates", "on") == "on";
@@ -126,6 +210,75 @@ fn main() {
             let text = std::fs::read_to_string(&p).expect("values file");
             serde_json::from_str(&text).expect("values file is a JSON object of strings")
         });
+    let read_json = |name: &str| -> Option<Value> {
+        Some(arg(name, "")).filter(|p| !p.is_empty()).map(|p| {
+            let text = std::fs::read_to_string(&p).expect("json file");
+            serde_json::from_str(&text).expect("valid json")
+        })
+    };
+    let mut layout = read_json("layout");
+    let mut feed: Option<HashMap<String, Value>> =
+        read_json("feed").map(|v| serde_json::from_value(v).expect("feed is an object"));
+    let scan = arg("scan", "off");
+    let mut scanned_mappings: Option<Value> = None;
+    if scan != "off" {
+        let html = std::fs::read_to_string(&template).expect("template file");
+        let scanned = rg_sens::ui::css_template_layout::scan_template(&html);
+        let spec = rg_sens::ui::css_template_layout::layout_spec(&html);
+        eprintln!(
+            "scan: {} slots, {} bindings; prototypes: {} widgets [{}], {} groups, usable={}",
+            scanned.slots.len(),
+            scanned.mappings.len(),
+            spec.widgets.len(),
+            spec.widgets
+                .iter()
+                .map(|w| format!("{}/{}", w.kind, w.size))
+                .collect::<Vec<_>>()
+                .join(" "),
+            spec.groups.len(),
+            spec.usable(),
+        );
+        for slot in &scanned.slots {
+            let widget = scanned
+                .layout
+                .widgets
+                .get(&slot.prefix)
+                .map(|w| w.kind.as_str());
+            eprintln!(
+                "  {} {} [{}] -> {}",
+                slot.prefix,
+                slot.label,
+                slot.source,
+                widget.unwrap_or("-")
+            );
+        }
+        if scan == "custom" && layout.is_none() {
+            assert!(
+                scanned.layout.custom,
+                "the template has no usable prototypes"
+            );
+            layout = Some(serde_json::to_value(&scanned.layout).expect("layout json"));
+        }
+        let html_out = arg("html_out", "");
+        if !html_out.is_empty() {
+            let layout: rg_sens_types::display_configs::css_template::CssLayoutConfig = layout
+                .clone()
+                .map(|l| serde_json::from_value(l).expect("layout"))
+                .unwrap_or_else(|| scanned.layout.clone());
+            let built = rg_sens::ui::css_template_layout::expand_layout(&html, &layout)
+                .map_or(html.clone(), |e| e.html);
+            std::fs::write(html_out, built).expect("html_out");
+        }
+        let out = arg("layout_out", "");
+        if !out.is_empty() {
+            let text = serde_json::to_string_pretty(&scanned.layout).expect("layout json");
+            std::fs::write(out, text).expect("layout_out");
+        }
+        if feed.is_none() {
+            feed = Some(made_up_values(&scanned.slots));
+        }
+        scanned_mappings = Some(serde_json::to_value(&scanned.mappings).expect("mappings json"));
+    }
     let snapshot = arg("snapshot", "");
     let animation = arg("animation", "on") == "on";
     let reapply = arg("reapply", "off") == "on";
@@ -170,7 +323,7 @@ fn main() {
             .map(|(i, slot)| json!({"index": i, "slot_prefix": slot, "field": "value"}))
             .collect();
         let mut css_config = json!({
-            "mappings": mappings,
+            "mappings": scanned_mappings.clone().unwrap_or(json!(mappings)),
             "hot_reload": false,
             "animation_enabled": animation,
         });
@@ -188,6 +341,9 @@ fn main() {
             .collect();
         if !options.is_empty() {
             css_config["options"] = Value::Object(options);
+        }
+        if let Some(layout) = layout.clone() {
+            css_config["layout"] = layout;
         }
         config.insert("css_template_config".to_string(), css_config);
         displayer.apply_config(&config).expect("config applies");
@@ -247,7 +403,13 @@ fn main() {
         }
 
         // Feed the fixed values, or changing ones.
-        if let Some(fixed) = fixed.clone() {
+        if let Some(feed) = feed.clone() {
+            let displayer = displayer.clone();
+            glib::timeout_add_local(Duration::from_millis(feed_ms), move || {
+                displayer.borrow_mut().update_data(&feed);
+                glib::ControlFlow::Continue
+            });
+        } else if let Some(fixed) = fixed.clone() {
             let displayer = displayer.clone();
             let slots = slots.clone();
             glib::timeout_add_local(Duration::from_millis(feed_ms), move || {

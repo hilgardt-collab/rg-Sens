@@ -52,6 +52,26 @@ pub struct DisplayData {
     pub js_update_count: u32,
     /// Cached prefix set for O(1) lookups (avoids regenerating prefixes every frame)
     pub cached_prefix_set: std::collections::HashSet<String>,
+    /// The bindings of the widgets a custom layout generated; derived from
+    /// the template and the config each time the page is built.
+    pub layout_mappings: Vec<crate::ui::css_template_display::PlaceholderMapping>,
+}
+
+impl DisplayData {
+    /// Derive the custom layout's bindings from the template that is about
+    /// to be shown, and keep the values of the slots they read.
+    pub fn refresh_layout(&mut self, html: &str) {
+        self.layout_mappings =
+            crate::ui::css_template_layout::expand_layout(html, &self.config.layout)
+                .map(|e| e.mappings)
+                .unwrap_or_default();
+        let slots: Vec<String> = self
+            .layout_mappings
+            .iter()
+            .map(|m| m.slot_prefix.clone())
+            .collect();
+        self.cached_prefix_set.extend(slots);
+    }
 }
 
 impl Default for DisplayData {
@@ -76,6 +96,7 @@ impl Default for DisplayData {
             last_js_values: String::new(),
             js_update_count: 0,
             cached_prefix_set,
+            layout_mappings: Vec::new(),
         }
     }
 }

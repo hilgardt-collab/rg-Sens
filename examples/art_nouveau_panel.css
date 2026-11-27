@@ -78,3 +78,14 @@ html, body { margin: 0; background: var(--bg); }
 .groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
   grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 8px 28px; align-content: stretch; }
 .groups > * { justify-content: center; min-width: 0; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A group is the gilt title cartouche over its pieces (or the halo
+   alone); each piece is scaled to the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.nv-sec { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.nv-sec > div:first-child:not(.rg-items):not(.nv-items) { align-self: center; }
+.nv-items { flex: 1; min-height: 0; display: flex; }
+.nv-items > .rg-items, .nv-sec > .rg-items { flex: 1; min-height: 0; align-self: stretch; }
+.nv-halo { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rg-fit > div { box-sizing: border-box; }

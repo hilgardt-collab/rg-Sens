@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1760 960x1000 1440x715 2880x450">
+<meta name="rg-group-size" content="480x272+128">
 <title>Neon Sensor Panel</title>
 <!--
   Neon sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait.
@@ -81,6 +82,7 @@
 
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+<!--rg-groups 0-71-->
   <header>
     <div class="topbar">
       <div class="brand">
@@ -107,7 +109,7 @@
       <div class="hud-text">
         <span class="label">LOCAL TIME</span>
         <span class="clock uni" data-clock="0">--:--</span>
-        <span class="date" data-date>&nbsp;</span>
+        <span class="date" data-date="1 2 3">&nbsp;</span>
       </div>
     </div>
   </header>
@@ -155,7 +157,7 @@
       </div>
       <div class="graph" data-need="9">
         <div class="graph-head"><span>LOAD · LAST 60 S</span><b data-pct="9">--</b></div>
-        <svg aria-hidden="true" width="394" height="44" viewBox="0 0 394 44" data-graph="cpu" data-height="44">
+        <svg aria-hidden="true" width="394" height="44" viewBox="0 0 394 44" data-graph="cpu" data-src="9" data-height="44">
           <line class="mid" x1="0" y1="22" x2="394" y2="22"></line>
           <path data-area fill="url(#nn-fill-a)"></path>
           <path class="line sa" data-line></path>
@@ -208,7 +210,7 @@
       </div>
       <div class="graph" data-need="25">
         <div class="graph-head"><span>UTILISATION · LAST 60 S</span><b data-pct="25">--</b></div>
-        <svg aria-hidden="true" width="394" height="44" viewBox="0 0 394 44" data-graph="gpu" data-height="44">
+        <svg aria-hidden="true" width="394" height="44" viewBox="0 0 394 44" data-graph="gpu" data-src="25" data-height="44">
           <line class="mid" x1="0" y1="22" x2="394" y2="22"></line>
           <path data-area fill="url(#nn-fill-b)"></path>
           <path class="line sb" data-line></path>
@@ -334,7 +336,7 @@
           <div><span class="label">UP</span><span class="val uni"><span data-num="69" data-places="1">--</span><span class="unit"> <span data-unit="70"></span></span></span></div>
         </div>
       </div>
-      <svg aria-hidden="true" width="394" height="56" viewBox="0 0 394 56" data-netgraph>
+      <svg aria-hidden="true" width="394" height="56" viewBox="0 0 394 56" data-netgraph data-down="65" data-up="69">
         <line class="mid" x1="0" y1="28" x2="394" y2="28"></line>
         <path data-area="down" fill="url(#nn-fill-a)"></path>
         <path data-area="up" fill="url(#nn-fill-b)"></path>
@@ -345,7 +347,7 @@
       </svg>
     </div>
   </section>
-
+<!--/rg-groups-->
   </div>
 
   <footer data-section="uptime">
@@ -357,6 +359,134 @@
   <div class="bg scanlines" aria-hidden="true"></div>
 </div>
 
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): two group styles and the widgets the
+     groups are built from, drawn exactly as the cards above. -->
+<template data-rg-group="card" data-rg-label="Glass card">
+  <section class="card {{parity}}" data-section><div class="card-in"><div class="card-head"><div><span class="dot"></span><h2>{{title}}</h2></div></div><!--rg-items--></div></section>
+</template>
+<template data-rg-group="bare" data-rg-label="No card">
+  <header class="nn-bare" data-section><!--rg-items--></header>
+</template>
+<template data-rg-widget="clock" data-rg-label="Time ring" data-rg-size="large" data-rg-sources="clock" data-rg-group="bare" data-rg-width="300" data-rg-height="316">
+  <div class="nn-clock" data-need="{{time}}">
+    <div class="topbar">
+      <div class="brand">
+        <svg aria-hidden="true" width="22" height="22" viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" rx="5" fill="none" stroke="url(#nn-g-ab)" stroke-width="2"></rect><rect x="7" y="7" width="8" height="8" rx="2" fill="var(--a)"></rect></svg>
+        <span>SYSTEM SENSORS</span>
+      </div>
+    </div>
+    <div class="hud" data-need="{{time}}">
+      <svg aria-hidden="true" width="280" height="280" viewBox="0 0 280 280">
+        <g class="spin" style="animation: nn-spin 60s linear infinite">
+          <circle cx="140" cy="140" r="135" fill="none" stroke="var(--a)" stroke-width="1.5" stroke-dasharray="1 6" opacity="0.6"></circle>
+        </g>
+        <g class="spin glow-a" style="animation: nn-spin-rev 24s linear infinite" fill="none" stroke="url(#nn-g-ab)" stroke-width="2.5" stroke-linecap="round">
+          <path d="M263.1 161.7 A125 125 0 0 1 186.8 255.9"></path><path d="M118.3 263.1 A125 125 0 0 1 24.1 186.8"></path><path d="M16.9 118.3 A125 125 0 0 1 93.2 24.1"></path><path d="M161.7 16.9 A125 125 0 0 1 255.9 93.2"></path>
+        </g>
+        <g data-minutes></g>
+        <circle cx="140" cy="140" r="102" fill="#070912" stroke="rgba(255,255,255,0.08)" stroke-width="1"></circle>
+        <circle cx="140" cy="140" r="96" fill="none" stroke="var(--b)" stroke-width="1" opacity="0.25" stroke-dasharray="4 8"></circle>
+        <g class="spin" style="animation: nn-spin 8s linear infinite">
+          <circle cx="140" cy="14" r="4" fill="var(--b)" style="filter: drop-shadow(0 0 6px var(--b))"></circle>
+        </g>
+      </svg>
+      <div class="hud-text">
+        <span class="label">LOCAL TIME</span>
+        <span class="clock uni" data-clock="{{time}}">--:--</span>
+        <span class="date" data-date="{{day_name}} {{day:.0}} {{month_name}}">&nbsp;</span>
+      </div>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="clock" data-rg-label="Time ring" data-rg-size="medium" data-rg-sources="clock" data-rg-group="bare" data-rg-width="280" data-rg-height="280">
+  <div class="hud" data-need="{{time}}">
+      <svg aria-hidden="true" width="280" height="280" viewBox="0 0 280 280">
+        <g class="spin" style="animation: nn-spin 60s linear infinite">
+          <circle cx="140" cy="140" r="135" fill="none" stroke="var(--a)" stroke-width="1.5" stroke-dasharray="1 6" opacity="0.6"></circle>
+        </g>
+        <g class="spin glow-a" style="animation: nn-spin-rev 24s linear infinite" fill="none" stroke="url(#nn-g-ab)" stroke-width="2.5" stroke-linecap="round">
+          <path d="M263.1 161.7 A125 125 0 0 1 186.8 255.9"></path><path d="M118.3 263.1 A125 125 0 0 1 24.1 186.8"></path><path d="M16.9 118.3 A125 125 0 0 1 93.2 24.1"></path><path d="M161.7 16.9 A125 125 0 0 1 255.9 93.2"></path>
+        </g>
+        <g data-minutes></g>
+        <circle cx="140" cy="140" r="102" fill="#070912" stroke="rgba(255,255,255,0.08)" stroke-width="1"></circle>
+        <circle cx="140" cy="140" r="96" fill="none" stroke="var(--b)" stroke-width="1" opacity="0.25" stroke-dasharray="4 8"></circle>
+        <g class="spin" style="animation: nn-spin 8s linear infinite">
+          <circle cx="140" cy="14" r="4" fill="var(--b)" style="filter: drop-shadow(0 0 6px var(--b))"></circle>
+        </g>
+      </svg>
+      <div class="hud-text">
+        <span class="label">LOCAL TIME</span>
+        <span class="clock uni" data-clock="{{time}}">--:--</span>
+        <span class="date" data-date="{{day_name}} {{day:.0}} {{month_name}}">&nbsp;</span>
+      </div>
+    </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Ring gauge" data-rg-size="large" data-rg-width="190" data-rg-height="190">
+  <div class="gauge" data-gauge="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-need="{{value}}">
+    <svg role="img" aria-label="Gauge" width="190" height="190" viewBox="0 0 200 200">
+      <defs><linearGradient id="nn-g-{{slot}}" x1="0" y1="1" x2="1" y2="0"><stop offset="0" class="g0"></stop><stop offset="1" class="g1"></stop></linearGradient></defs>
+      <g data-gticks></g>
+      <path class="track" d="M44.8 155.2 A78 78 0 1 1 155.2 155.2"></path>
+      <path class="arc" data-arc d="M44.8 155.2 A78 78 0 1 1 155.2 155.2" stroke="url(#nn-g-{{slot}})" stroke-dasharray="0 1000"></path>
+      <g class="spin" style="animation: nn-spin 6s linear infinite">
+        <circle cx="100" cy="100" r="64" fill="none" stroke="var(--a)" stroke-width="1" stroke-dasharray="2 6" opacity="0.45"></circle>
+        <path d="M100 36 A64 64 0 0 1 145.3 54.7" fill="none" stroke="var(--b)" stroke-width="2" stroke-linecap="round" opacity="0.85"></path>
+      </g>
+      <circle class="knob" data-knob cx="44.8" cy="155.2" r="6"></circle>
+      <text class="scale" x="47.2" y="187.4">0</text>
+      <text class="scale" x="152.8" y="187.4">100</text>
+    </svg>
+    <div class="gauge-text">
+      <div><span class="temp uni" data-num="{{value}}" data-places="1">--</span><span class="deg uni" data-unit="{{unit}}"></span></div>
+      <span class="label nn-cut" data-cap="{{caption}}" data-default=""></span>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Glow bar" data-rg-size="small" data-rg-width="170" data-rg-height="40">
+  <div class="stat" data-need="{{value}}">
+    <div><span class="label nn-cut" data-cap="{{caption}}" data-default=""></span><span class="val uni"><span data-num="{{value}}" data-places="2">--</span><span class="unit"> <span data-unit="{{unit}}"></span></span></span></div>
+    <div class="bar"><i data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div>
+  </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Glow bar" data-rg-size="large" data-rg-width="380" data-rg-height="40">
+  <div class="stat" data-need="{{value}}">
+    <div><span class="label nn-cut" data-cap="{{caption}}" data-default=""></span><span class="val uni"><span data-num="{{value}}" data-places="2">--</span><span class="unit"> <span data-unit="{{unit}}"></span></span></span></div>
+    <div class="bar"><i data-bar="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100"></i></div>
+  </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Fan ring" data-rg-size="small" data-rg-sources="fan" data-rg-width="180" data-rg-height="76">
+  <div class="fan" data-need="{{value}}">
+    <svg aria-hidden="true" width="70" height="70" viewBox="0 0 76 76">
+      <circle cx="38" cy="38" r="31" fill="none" stroke="var(--track)" stroke-width="5"></circle>
+      <circle class="ring" data-ring="{{value}}" data-max="{{max}}" cx="38" cy="38" r="31" stroke="url(#nn-g-ab)" transform="rotate(-90 38 38)" stroke-dasharray="0 1000"></circle>
+      <g class="rotor" data-rotor="{{value}}">
+        <path class="blade-a" d="M38 38 C33 32 34 22 42 19 C46 25 44 33 38 38 Z"></path>
+        <path class="blade-b" d="M38 38 C33 32 34 22 42 19 C46 25 44 33 38 38 Z" transform="rotate(120 38 38)"></path>
+        <path class="blade-a" d="M38 38 C33 32 34 22 42 19 C46 25 44 33 38 38 Z" transform="rotate(240 38 38)"></path>
+      </g>
+      <circle cx="38" cy="38" r="4" fill="var(--bg)" stroke="#FFFFFF" stroke-width="1.5"></circle>
+    </svg>
+    <div>
+      <span class="label nn-cut" data-cap="{{caption}}" data-default="FAN">FAN</span>
+      <span class="rpm uni" data-num="{{value}}" data-places="0">--</span>
+      <span class="pct">RPM · <span data-fan-pct="{{value}}" data-max="{{max}}">--</span>%</span>
+    </div>
+  </div>
+</template>
+<template data-rg-widget="pool" data-rg-label="Capsule" data-rg-size="medium" data-rg-default-for="memory disk" data-rg-width="360" data-rg-height="48">
+  <div class="pool" data-need="{{value}}">
+    <div><span class="label nn-cut" data-cap="{{caption}}" data-default="POOL"></span><span class="used uni"><span data-num="{{value}}" data-places="1">--</span><span class="of"> / <span data-num="{{max}}" data-places="0">--</span> <span data-unit="{{unit}}"></span></span><span class="pc"><span data-fill-pct="{{value}}" data-max="{{max}}">--</span>%</span></span></div>
+    <div class="capsule"><i data-fill="{{value}}" data-max="{{max}}"></i></div>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Reading" data-rg-size="small" data-rg-width="180" data-rg-height="40">
+  <div class="net" data-need="{{value}}">
+    <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28"><rect class="net-box-a" x="1" y="1" width="26" height="26" rx="8"></rect><circle cx="14" cy="14" r="4" fill="var(--a)"></circle></svg>
+    <div><span class="label nn-cut" data-cap="{{caption}}" data-default=""></span><span class="val uni"><span data-num="{{value}}" data-places="1">--</span><span class="unit"> <span data-unit="{{unit}}"></span></span></span></div>
+  </div>
+</template>
 <script type="application/json" id="rg-template-options">
 [
     {"id": "palette", "label": "Palette", "type": "choice", "default": "cyan", "choices": [{"value": "cyan", "label": "Cyan + Magenta", "set": {"--a": "#22E4FF", "--b": "#FF2BD6"}}, {"value": "lime", "label": "Lime + Cyan", "set": {"--a": "#B6FF3B", "--b": "#22E4FF"}}, {"value": "amber", "label": "Amber + Pink", "set": {"--a": "#FFB020", "--b": "#FF3B8D"}}, {"value": "violet", "label": "Violet + Blue", "set": {"--a": "#9B5CFF", "--b": "#3BA4FF"}}]},
@@ -492,11 +622,13 @@
 
   // ------------------------------------------------------- drawn once
   // Minute dial: 60 ticks, every fifth one long.
-  var minuteTicks = [];
+  // Each dial keeps its own ticks; it lights the minute of the clock in
+  // the same dial.
   each('[data-minutes]', function (g) {
+    g.ticks = [];
     for (var i = 0; i < 60; i++) {
       var major = i % 5 === 0, deg = i * 6 - 90;
-      minuteTicks.push(line(g, polar(140, 140, major ? 106 : 110, deg), polar(140, 140, 116, deg), major ? 'tick major' : 'tick'));
+      g.ticks.push(line(g, polar(140, 140, major ? 106 : 110, deg), polar(140, 140, 116, deg), major ? 'tick major' : 'tick'));
     }
   });
   // Ring ticks: 54 across the 270 degrees, lit up to the value.
@@ -583,21 +715,28 @@
     var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
 
     // Clock: the first four digits of the time ("9:24 PM" shows 09:24).
-    var digits = known(v['0']) ? String(v['0']).replace(/\D/g, '') : '';
-    if (digits.length === 3 || digits.length === 5) digits = '0' + digits;
+    function digitsOf(id) {
+      var d = known(v[id]) ? String(v[id]).replace(/\D/g, '') : '';
+      return d.length === 3 || d.length === 5 ? '0' + d : d;
+    }
     each('[data-clock]', function (el) {
+      var digits = digitsOf(el.getAttribute('data-clock'));
       text(el, digits.length >= 4 ? digits.slice(0, 2) + ':' + digits.slice(2, 4) : '--:--');
     });
-    var minute = digits.length >= 4 ? +digits.slice(2, 4) : -1;
-    if (minute !== shownMinute) {
-      minuteTicks.forEach(function (el, i) {
+    each('[data-minutes]', function (g) {
+      var hud = g.closest('.hud'), clock = hud && hud.querySelector('[data-clock]');
+      var digits = clock ? digitsOf(clock.getAttribute('data-clock')) : '';
+      var minute = digits.length >= 4 ? +digits.slice(2, 4) : -1;
+      if (minute === g.shownMinute) return;
+      g.ticks.forEach(function (el, i) {
         attr(el, 'class', i === minute ? 'tick now' : i % 5 === 0 ? 'tick major' : 'tick');
       });
-      shownMinute = minute;
-    }
-    each('[data-date]', function (el) {    // THU · 12 NOV
-      var day = known(v['1']) ? String(v['1']).slice(0, 3) : '';
-      var rest = [known(v['2']) ? String(v['2']) : '', known(v['3']) ? String(v['3']).slice(0, 3) : ''].join(' ').trim();
+      g.shownMinute = minute;
+    });
+    each('[data-date]', function (el) {    // THU · 12 NOV: the ids of day name, day and month
+      var ids = el.getAttribute('data-date').split(' ');
+      var day = known(v[ids[0]]) ? String(v[ids[0]]).slice(0, 3) : '';
+      var rest = [known(v[ids[1]]) ? String(Math.round(num(v[ids[1]]))) : '', known(v[ids[2]]) ? String(v[ids[2]]).slice(0, 3) : ''].join(' ').trim();
       text(el, [day, rest].filter(Boolean).join(' · ') || '\u00a0');
     });
 
@@ -620,10 +759,19 @@
     });
 
     // Ring gauges: arc, value dot, lit ticks, and the colour of all three.
+    // A hand-written ring reads 20 to 100 degrees; a generated one (it has
+    // data-max) 0 to its sensor's maximum, warm and hot at the same shares.
     each('[data-gauge]', function (el) {
-      var t = num(v[el.dataset.gauge]);
-      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
-      attr(el, 'class', 'gauge' + (t >= 85 ? ' hot' : t >= 72 ? ' warn' : ''));
+      var t = num(v[el.dataset.gauge]), lo = T_MIN, hi = T_MAX;
+      if (el.hasAttribute('data-max')) {
+        var max = num(v[el.dataset.max]);
+        if (/^mhz$/i.test(String(v[el.dataset.unitOf] || ''))) { t /= 1000; max /= 1000; }
+        lo = 0; hi = max > 0 ? max : 100;
+        var ends = el.querySelectorAll('.scale');
+        if (ends.length === 2) { text(ends[0], '0'); text(ends[1], fmt(hi, 1)); }
+      }
+      var f = isFinite(t) ? clamp01((t - lo) / (hi - lo)) : 0;
+      attr(el, 'class', 'gauge' + (f >= 0.8125 ? ' hot' : f >= 0.65 ? ' warn' : ''));
       attr(el.querySelector('[data-arc]'), 'stroke-dasharray', (ARC * f).toFixed(1) + ' 1000');
       var p = polar(100, 100, 78, 135 + 270 * f), knob = el.querySelector('[data-knob]');
       attr(knob, 'cx', p[0].toFixed(1)); attr(knob, 'cy', p[1].toFixed(1));
@@ -676,12 +824,14 @@
       text(el, fans ? fans + (fans === 1 ? ' FAN' : ' FANS') + ' · MAX ' + fmt(fanMax, 0) : '\u00a0');
     });
 
-    latest.cpu = num(v['9']); latest.gpu = num(v['25']);
-    latest.down = num(v['65']); latest.up = num(v['69']);
+    // The graphs name their sensors; without them (a custom layout) nothing is sampled.
+    each('[data-graph]', function (svg) { latest[svg.dataset.graph] = num(v[svg.dataset.src]); });
+    each('[data-netgraph]', function (svg) { latest.down = num(v[svg.dataset.down]); latest.up = num(v[svg.dataset.up]); });
 
     // Hide what has no data. With nothing bound at all, show the whole design.
     each('[data-need]', function (el) {
-      var hide = anyMapped && !isFinite(num(el.dataset.need === '0' ? digits : v[el.dataset.need]));
+      var raw = v[el.dataset.need];
+      var hide = anyMapped && !isFinite(num(raw)) && !known(raw);
       if (el.hidden !== hide) el.hidden = hide;
     });
     each('[data-section]', function (el) {

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1920 960x1210 1440x1010 2880x725">
+<meta name="rg-group-size" content="480x300+120">
 <title>Art Nouveau Sensor Panel</title>
 <!--
   Art Nouveau sensor panel for the rg-Sens CSS Template displayer, 480x1920
@@ -210,6 +211,7 @@
 
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+<!--rg-groups 0-72-->
   <!-- ===== HEADER: Mucha halo ===== -->
   <header style="display: flex; flex-direction: column; align-items: center; gap: 4px">
     <div style="position: relative; width: 388px; height: 46px">
@@ -618,7 +620,7 @@
       </div>
     </div>
   </section>
-
+<!--/rg-groups-->
   </div>
 
   <!-- ===== FOOTER: water lily ===== -->
@@ -654,6 +656,152 @@
 <div hidden>{{73}} {{1}} {{2}} {{3}} {{7}} {{8}} {{9}} {{10}} {{11}} {{12}} {{13}} {{14}} {{15}} {{16}} {{17}} {{18}} {{19}} {{23}} {{24}} {{25}} {{26}} {{27}} {{28}} {{29}} {{30}} {{31}} {{32}} {{33}} {{34}} {{35}} {{37}} {{38}} {{39}} {{41}} {{42}} {{43}} {{45}} {{46}} {{47}} {{49}} {{50}} {{51}} {{53}} {{55}} {{57}} {{59}} {{61}} {{63}} {{64}} {{65}} {{67}} {{68}} {{69}} {{71}} {{72}}</div>
 
 <!-- Auto-configuration: which source and field each placeholder wants -->
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): two group styles and the pieces the groups
+     are built from, cut from the panels above. -->
+<template data-rg-group="cartouche" data-rg-label="Titled cartouche">
+  <section data-section class="nv-sec">
+    <div style="position: relative; width: 388px; height: 46px">
+      <svg aria-hidden="true" width="388" height="46" viewBox="0 0 388 46" style="position: absolute; top: 0; left: 0">
+        <g>
+          <path d="M96 23 C82 23 75 13 81 8 C87 3 95 9 90 14 C88 16 85 15 86 13" fill="none" stroke-width="1.6" style="stroke: url(#nv-gold) var(--m-mid)"></path>
+          <path d="M84 26 C66 28 56 37 40 33 C26 30 18 20 8 23" fill="none" stroke-width="1.4" style="stroke: url(#nv-sage) var(--l-mid)"></path>
+          <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(52 34) rotate(165)" style="fill: var(--l-mid)"></path>
+          <circle cx="6" cy="23" r="3" style="fill: var(--rose)"></circle>
+        </g>
+        <g transform="translate(388 0) scale(-1 1)">
+          <path d="M96 23 C82 23 75 13 81 8 C87 3 95 9 90 14 C88 16 85 15 86 13" fill="none" stroke-width="1.6" style="stroke: url(#nv-gold) var(--m-mid)"></path>
+          <path d="M84 26 C66 28 56 37 40 33 C26 30 18 20 8 23" fill="none" stroke-width="1.4" style="stroke: url(#nv-sage) var(--l-mid)"></path>
+          <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(52 34) rotate(165)" style="fill: var(--l-mid)"></path>
+          <circle cx="6" cy="23" r="3" style="fill: var(--rose)"></circle>
+        </g>
+        <rect x="96" y="8" width="196" height="30" rx="15" stroke-width="1.6" style="fill: var(--panel); stroke: url(#nv-gold) var(--m-mid)"></rect>
+        <rect x="101" y="12.5" width="186" height="21" rx="10.5" fill="none" stroke-width="0.8" opacity="0.7" style="stroke: var(--l-mid)"></rect>
+      </svg>
+      <h2 style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; margin: 0; display: flex; align-items: center; justify-content: center; font-family: Federo, serif; font-weight: 400; font-size: 15px; letter-spacing: 0.24em; padding-left: 0.24em; color: var(--m-lt)">{{title}}</h2>
+    </div>
+    <div class="nv-items"><!--rg-items--></div>
+  </section>
+</template>
+<template data-rg-group="halo" data-rg-label="Halo, no title">
+  <header class="nv-sec" data-section><!--rg-items--></header>
+</template>
+<template data-rg-widget="clock" data-rg-label="Mucha halo" data-rg-size="large" data-rg-sources="clock" data-rg-group="halo" data-rg-width="390" data-rg-height="380">
+  <div class="nv-halo" data-need="{{time}}">
+    <div style="position: relative; width: 388px; height: 46px">
+      <svg aria-hidden="true" width="388" height="46" viewBox="0 0 388 46" style="position: absolute; top: 0; left: 0">
+        <g>
+          <path d="M96 23 C82 23 75 13 81 8 C87 3 95 9 90 14 C88 16 85 15 86 13" fill="none" stroke-width="1.6" style="stroke: url(#nv-gold) var(--m-mid)"></path>
+          <path d="M84 26 C66 28 56 37 40 33 C26 30 18 20 8 23" fill="none" stroke-width="1.4" style="stroke: url(#nv-sage) var(--l-mid)"></path>
+          <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(52 34) rotate(165)" style="fill: var(--l-mid)"></path>
+          <circle cx="6" cy="23" r="3" style="fill: var(--rose)"></circle>
+        </g>
+        <g transform="translate(388 0) scale(-1 1)">
+          <path d="M96 23 C82 23 75 13 81 8 C87 3 95 9 90 14 C88 16 85 15 86 13" fill="none" stroke-width="1.6" style="stroke: url(#nv-gold) var(--m-mid)"></path>
+          <path d="M84 26 C66 28 56 37 40 33 C26 30 18 20 8 23" fill="none" stroke-width="1.4" style="stroke: url(#nv-sage) var(--l-mid)"></path>
+          <path d="M0 0 C5 -6 13 -6 18 0 C13 6 5 6 0 0 Z" transform="translate(52 34) rotate(165)" style="fill: var(--l-mid)"></path>
+          <circle cx="6" cy="23" r="3" style="fill: var(--rose)"></circle>
+        </g>
+        <rect x="96" y="8" width="196" height="30" rx="15" stroke-width="1.6" style="fill: var(--panel); stroke: url(#nv-gold) var(--m-mid)"></rect>
+        <rect x="101" y="12.5" width="186" height="21" rx="10.5" fill="none" stroke-width="0.8" opacity="0.7" style="stroke: var(--l-mid)"></rect>
+      </svg>
+      <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; font-family: Federo, serif; font-size: 14px; letter-spacing: 0.24em; padding-left: 0.24em; color: var(--m-lt)">SYSTEM SENSORS</div>
+    </div>
+
+    <div style="position: relative; width: 290px; height: 290px">
+      <svg aria-hidden="true" width="290" height="290" viewBox="0 0 300 300" style="position: absolute; top: 0; left: 0">
+        <circle cx="150" cy="150" r="146" stroke-width="2.6" style="fill: var(--halo); stroke: url(#nv-gold) var(--m-mid)"></circle>
+        <circle cx="288.5" cy="150.0" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="287.7" cy="164.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="285.5" cy="178.8" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="281.7" cy="192.8" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="276.5" cy="206.3" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="269.9" cy="219.3" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="262.0" cy="231.4" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="252.9" cy="242.7" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="242.7" cy="252.9" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="231.4" cy="262.0" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="219.3" cy="269.9" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="206.3" cy="276.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="192.8" cy="281.7" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="178.8" cy="285.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="164.5" cy="287.7" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="150.0" cy="288.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="135.5" cy="287.7" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="121.2" cy="285.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="107.2" cy="281.7" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="93.7" cy="276.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="80.8" cy="269.9" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="68.6" cy="262.0" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="57.3" cy="252.9" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="47.1" cy="242.7" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="38.0" cy="231.4" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="30.1" cy="219.3" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="23.5" cy="206.3" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="18.3" cy="192.8" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="14.5" cy="178.8" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="12.3" cy="164.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="11.5" cy="150.0" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="12.3" cy="135.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="14.5" cy="121.2" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="18.3" cy="107.2" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="23.5" cy="93.7" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="30.1" cy="80.7" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="38.0" cy="68.6" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="47.1" cy="57.3" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="57.3" cy="47.1" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="68.6" cy="38.0" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="80.7" cy="30.1" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="93.7" cy="23.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="107.2" cy="18.3" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="121.2" cy="14.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="135.5" cy="12.3" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="150.0" cy="11.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="164.5" cy="12.3" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="178.8" cy="14.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="192.8" cy="18.3" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="206.3" cy="23.5" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="219.3" cy="30.1" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="231.4" cy="38.0" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="242.7" cy="47.1" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="252.9" cy="57.3" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="262.0" cy="68.6" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="269.9" cy="80.7" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="276.5" cy="93.7" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="281.7" cy="107.2" r="2.3" style="fill: var(--l-mid)"></circle><circle cx="285.5" cy="121.2" r="2.3" style="fill: var(--m-mid)"></circle><circle cx="287.7" cy="135.5" r="2.3" style="fill: var(--l-mid)"></circle>
+        <circle cx="150" cy="150" r="131" fill="none" stroke-width="1.2" style="stroke: url(#nv-gold) var(--m-mid)"></circle>
+        <path d="M166.4 67.6 Q159.0 52.4 171.9 40.2 Q179.1 56.4 166.4 67.6 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M196.7 80.2 Q195.6 63.3 212.2 56.9 Q212.7 74.7 196.7 80.2 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M219.8 103.3 Q225.3 87.3 243.1 87.8 Q236.7 104.4 219.8 103.3 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M232.4 133.6 Q243.6 120.9 259.8 128.1 Q247.6 141.0 232.4 133.6 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M232.4 166.4 Q247.6 159.0 259.8 171.9 Q243.6 179.1 232.4 166.4 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M219.8 196.7 Q236.7 195.6 243.1 212.2 Q225.3 212.7 219.8 196.7 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M196.7 219.8 Q212.7 225.3 212.2 243.1 Q195.6 236.7 196.7 219.8 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M166.4 232.4 Q179.1 243.6 171.9 259.8 Q159.0 247.6 166.4 232.4 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M133.6 232.4 Q141.0 247.6 128.1 259.8 Q120.9 243.6 133.6 232.4 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M103.3 219.8 Q104.4 236.7 87.8 243.1 Q87.3 225.3 103.3 219.8 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M80.2 196.7 Q74.7 212.7 56.9 212.2 Q63.3 195.6 80.2 196.7 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M67.6 166.4 Q56.4 179.1 40.2 171.9 Q52.4 159.0 67.6 166.4 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M67.6 133.6 Q52.4 141.0 40.2 128.1 Q56.4 120.9 67.6 133.6 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M80.2 103.3 Q63.3 104.4 56.9 87.8 Q74.7 87.3 80.2 103.3 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M103.3 80.2 Q87.3 74.7 87.8 56.9 Q104.4 63.3 103.3 80.2 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M133.6 67.6 Q120.9 56.4 128.1 40.2 Q141.0 52.4 133.6 67.6 Z" opacity="0.55" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path>
+        <path d="M150.0 76.0 Q134.2 50.2 150.0 22.0 Q165.8 50.2 150.0 76.0 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M178.3 81.6 Q173.6 51.8 199.0 31.7 Q202.8 63.9 178.3 81.6 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M202.3 97.7 Q209.4 68.3 240.5 59.5 Q231.7 90.6 202.3 97.7 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M218.4 121.7 Q236.1 97.2 268.3 101.0 Q248.2 126.4 218.4 121.7 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M224.0 150.0 Q249.8 134.2 278.0 150.0 Q249.8 165.8 224.0 150.0 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M218.4 178.3 Q248.2 173.6 268.3 199.0 Q236.1 202.8 218.4 178.3 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M202.3 202.3 Q231.7 209.4 240.5 240.5 Q209.4 231.7 202.3 202.3 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M178.3 218.4 Q202.8 236.1 199.0 268.3 Q173.6 248.2 178.3 218.4 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M150.0 224.0 Q165.8 249.8 150.0 278.0 Q134.2 249.8 150.0 224.0 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M121.7 218.4 Q126.4 248.2 101.0 268.3 Q97.2 236.1 121.7 218.4 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M97.7 202.3 Q90.6 231.7 59.5 240.5 Q68.3 209.4 97.7 202.3 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M81.6 178.3 Q63.9 202.8 31.7 199.0 Q51.8 173.6 81.6 178.3 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M76.0 150.0 Q50.2 165.8 22.0 150.0 Q50.2 134.2 76.0 150.0 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M81.6 121.7 Q51.8 126.4 31.7 101.0 Q63.9 97.2 81.6 121.7 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M97.7 97.7 Q68.3 90.6 59.5 59.5 Q90.6 68.3 97.7 97.7 Z" opacity="0.85" stroke-width="2" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M121.7 81.6 Q97.2 63.9 101.0 31.7 Q126.4 51.8 121.7 81.6 Z" opacity="0.75" stroke-width="2" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path>
+        <circle cx="150" cy="150" r="72" stroke-width="2" style="fill: var(--bg); stroke: url(#nv-gold) var(--m-mid)"></circle>
+        <circle cx="150" cy="150" r="65" fill="none" stroke-width="0.8" opacity="0.8" style="stroke: var(--l-mid)"></circle>
+        <circle cx="150.0" cy="4.0" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle><circle cx="253.2" cy="46.8" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle><circle cx="296.0" cy="150.0" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle><circle cx="253.2" cy="253.2" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle><circle cx="150.0" cy="296.0" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle><circle cx="46.8" cy="253.2" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle><circle cx="4.0" cy="150.0" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle><circle cx="46.8" cy="46.8" r="5" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--bg)"></circle>
+      </svg>
+      <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px">
+        <div style="font-family: Federo, serif; font-size: 46px; line-height: 1; letter-spacing: 0.02em; background: linear-gradient(180deg, var(--m-hi) 0%, var(--m-lt) 35%, var(--m-mid) 62%, var(--m-dk) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent">{{{{time}}}}</div>
+        <div style="font-style: italic; font-weight: 600; font-size: 14px; color: var(--l-lt)" data-need="{{hour}}" data-daypart="{{hour}}"></div>
+      </div>
+    </div>
+    <div style="font-style: italic; font-weight: 600; font-size: 17px; letter-spacing: 0.06em; color: var(--label)" data-need="{{day}}" data-date="{{day_name}},{{day:.0}},{{month_name}}"></div>
+  </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Garland gauge" data-rg-size="large" data-rg-width="220" data-rg-height="214">
+      <div data-need="{{value}}" style="position: relative; width: 220px; height: 214px; flex: none">
+        <svg role="img" aria-label="CPU temperature gauge" width="220" height="214" viewBox="0 0 220 214" style="position: absolute; top: 0; left: 0">
+          <path d="M110.0 94.0 Q100.2 71.3 110.0 46.0 Q119.8 71.3 110.0 94.0 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M118.2 96.7 Q123.6 72.5 146.4 57.8 Q139.5 84.1 118.2 96.7 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M123.3 103.7 Q141.9 87.3 169.0 88.8 Q147.9 106.0 123.3 103.7 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M123.3 112.3 Q147.9 110.0 169.0 127.2 Q141.9 128.7 123.3 112.3 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M118.2 119.3 Q139.5 131.9 146.4 158.2 Q123.6 143.5 118.2 119.3 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M110.0 122.0 Q119.8 144.7 110.0 170.0 Q100.2 144.7 110.0 122.0 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M101.8 119.3 Q96.4 143.5 73.6 158.2 Q80.5 131.9 101.8 119.3 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M96.7 112.3 Q78.1 128.7 51.0 127.2 Q72.1 110.0 96.7 112.3 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path><path d="M96.7 103.7 Q72.1 106.0 51.0 88.8 Q78.1 87.3 96.7 103.7 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-sage) var(--l-mid); stroke: var(--leading)"></path><path d="M101.8 96.7 Q80.5 84.1 73.6 57.8 Q96.4 72.5 101.8 96.7 Z" opacity="0.4" stroke-width="1.5" style="fill: url(#nv-gold) var(--m-mid); stroke: var(--leading)"></path>
+          <path d="M42.1 175.9 A96 96 0 1 1 177.9 175.9" fill="none" stroke-width="1.3" style="stroke: url(#nv-gold) var(--m-mid)"></path>
+          <path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(26.9 156.0) rotate(212)" style="fill: url(#nv-sage) var(--l-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(14.0 108.0) rotate(298)" style="fill: url(#nv-gold) var(--m-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(26.9 60.0) rotate(272)" style="fill: url(#nv-sage) var(--l-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(62.0 24.9) rotate(358)" style="fill: url(#nv-gold) var(--m-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(110.0 12.0) rotate(332)" style="fill: url(#nv-sage) var(--l-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(158.0 24.9) rotate(418)" style="fill: url(#nv-gold) var(--m-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(193.1 60.0) rotate(392)" style="fill: url(#nv-sage) var(--l-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(206.0 108.0) rotate(478)" style="fill: url(#nv-gold) var(--m-mid)"></path><path d="M0 0 C4 -5 9 -5 13 0 C9 5 4 5 0 0 Z" transform="translate(193.1 156.0) rotate(452)" style="fill: url(#nv-sage) var(--l-mid)"></path>
+          <path d="M50.6 167.4 A84 84 0 1 1 169.4 167.4" fill="none" stroke-width="13" stroke-linecap="round" style="stroke: var(--track)"></path>
+          <path d="M50.6 167.4 A84 84 0 1 1 169.4 167.4" fill="none" stroke-width="8" stroke-linecap="round" class="arc" data-arc="{{value}}" data-max="{{max}}" style="stroke: url(#nv-gold) var(--m-mid); stroke-dasharray: 0 1000"></path>
+          <circle cx="60.5" cy="157.5" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="41.3" cy="121.7" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="45.3" cy="81.2" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="71.1" cy="49.8" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="110.0" cy="38.0" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="148.9" cy="49.8" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="174.7" cy="81.2" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="178.7" cy="121.7" r="1.8" style="fill: var(--m-mid)"></circle><circle cx="159.5" cy="157.5" r="1.8" style="fill: var(--m-mid)"></circle>
+          <circle data-marker="{{value}}" data-max="{{max}}" cx="50.6" cy="167.4" r="7.5" stroke-width="2.5" style="fill: var(--cream); stroke: url(#nv-gold) var(--m-mid)"></circle>
+          <circle data-marker="{{value}}" data-max="{{max}}" cx="50.6" cy="167.4" r="2.5" style="fill: var(--rose)"></circle>
+          <path d="M78 198 C94 190 100 206 110 197 C120 206 126 190 142 198" fill="none" stroke-width="1.6" style="stroke: url(#nv-gold) var(--m-mid)"></path>
+          <circle cx="110" cy="204" r="3.2" style="fill: var(--rose)"></circle>
+          <text x="46.0" y="198.0" text-anchor="middle" font-family="Cormorant Garamond, serif" font-style="italic" font-weight="600" font-size="13" style="fill: var(--label)" data-ends="{{max}}" data-end="lo">0</text>
+          <text x="174.0" y="198.0" text-anchor="middle" font-family="Cormorant Garamond, serif" font-style="italic" font-weight="600" font-size="13" style="fill: var(--label)" data-ends="{{max}}" data-end="hi">100</text>
+        </svg>
+        <div style="position: absolute; left: 0; right: 0; top: 64px; display: flex; flex-direction: column; align-items: center; gap: 0">
+          <div style="display: flex; align-items: flex-start">
+            <span style="font-family: Federo, serif; font-size: 58px; line-height: 1; background: linear-gradient(180deg, var(--m-hi) 0%, var(--m-lt) 35%, var(--m-mid) 62%, var(--m-dk) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent">{{{{value}}}}</span>
+            <span style="font-family: Federo, serif; font-size: 18px; color: var(--m-lt); margin: 4px 0 0 3px">{{{{unit}}}}</span>
+          </div>
+          <div style="font-style: italic; font-weight: 600; font-size: 15px; color: var(--l-lt); text-transform: lowercase">{{{{caption}}}}</div>
+        </div>
+      </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Gilt reading" data-rg-size="small" data-rg-width="160" data-rg-height="56">
+        <div class="stat" data-need="{{value}}" style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.2em; color: var(--label)">{{{{caption}}}}</span>
+          <span style="font-family: Federo, serif; font-size: 28px; line-height: 1.05"><span data-num="{{value}}">--</span><span style="font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600; font-size: 16px; color: var(--m-lt)"> <span data-unit="{{unit}}"></span></span></span>
+        </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Leaf vine" data-rg-size="large" data-rg-sources="fan" data-rg-width="388" data-rg-height="56">
+      <div data-need="{{value}}" style="display: flex; flex-direction: column; gap: 3px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: var(--label); text-transform: uppercase">{{{{caption}}}}</span>
+          <span style="font-family: Federo, serif; font-size: 22px; line-height: 1; color: var(--cream)"><span data-num="{{value}}">--</span><span style="font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600; font-size: 14px; color: var(--m-lt)"> <span data-unit="{{unit}}"></span></span></span>
+        </div>
+        <svg aria-hidden="true" width="388" height="24" viewBox="0 0 388 24">
+          <path d="M0 12 C65 8 129 16 194 12 C259 8 323 16 388 12" fill="none" stroke-width="1.3" style="stroke: url(#nv-sage) var(--l-mid)"></path>
+          <g class="leaves" data-leaves="{{value}}" data-max="{{max}}">
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(8.0 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(29.2 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(50.4 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(71.6 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(92.8 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(114.0 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(135.2 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(156.4 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(177.6 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(198.8 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(220.0 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(241.2 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(262.4 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(283.6 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(304.8 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(326.0 12) rotate(38)"></path>
+            <path class="g" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(347.2 12) rotate(-38)"></path>
+            <path class="s" d="M0 0 C4 -5 11 -5 15 0 C11 5 4 5 0 0 Z" transform="translate(368.4 12) rotate(38)"></path>
+          </g>
+        </svg>
+      </div>
+</template>
+<template data-rg-widget="pool" data-rg-label="Gilt bar" data-rg-size="large" data-rg-default-for="memory disk" data-rg-width="388" data-rg-height="44">
+      <div data-need="{{value}}" style="display: flex; flex-direction: column; gap: 7px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between">
+          <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.18em; color: var(--label); text-transform: uppercase">{{{{caption}}}}</span>
+          <span style="font-family: Federo, serif; font-size: 20px; line-height: 1; color: var(--cream)"><span data-num="{{value}}">--</span><span style="font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 600; font-size: 15px; color: var(--label)" data-need="{{max}}"> of <span data-num="{{max}}">--</span> {{{{unit}}}}</span></span>
+        </div>
+        <div style="position: relative; height: 10px; margin: 0 7px; border-radius: 5px; background: var(--track); box-shadow: inset 0 0 0 1px var(--l-dk)">
+          <div data-bar="{{value}}" data-max="{{max}}" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; border-radius: 5px; background: linear-gradient(180deg, var(--m-hi) 0%, var(--m-mid) 55%, var(--m-dk) 100%)"></div>
+          <div data-knob="{{value}}" data-max="{{max}}" style="position: absolute; top: -3px; left: calc(0% - 8px); width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; background: var(--cream); border: 2.5px solid var(--m-mid)"></div>
+        </div>
+      </div>
+</template>
 <script type="application/json" id="rg-template-options">
 [
     {"id": "metal", "label": "Metal", "type": "choice", "var": "--metal", "default": "#C9A24A", "choices": [{"value": "#C9A24A", "label": "Gold"}, {"value": "#B87A4B", "label": "Copper"}, {"value": "#C98B7A", "label": "Rose gold"}, {"value": "#BFC3BA", "label": "Pewter"}]},
@@ -774,6 +922,13 @@
   }
   function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
   function gauge(t) { return isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0; }
+  // A generated gauge (it has data-max) reads 0 to its sensor's maximum,
+  // warm and hot at the same shares as 72 and 85 of 20-100 degrees.
+  function gaugeOf(el, v, id) {
+    if (!el.hasAttribute('data-max')) return gauge(num(v[id]));
+    var t = num(v[id]), max = num(v[el.dataset.max]);
+    return isFinite(t) ? clamp01(t / (max > 0 ? max : 100)) : 0;
+  }
   // Write only what changed: an untouched page does not repaint.
   function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
   function text(el, value) { if (el.textContent !== value) el.textContent = value; }
@@ -811,13 +966,13 @@
     });
 
     each('[data-arc]', function (el) {
-      var t = num(v[el.dataset.arc]);
-      var dash = (gauge(t) * ARC).toFixed(1) + ' 1000';
+      var f = gaugeOf(el, v, el.dataset.arc), live = isFinite(num(v[el.dataset.arc]));
+      var dash = (f * ARC).toFixed(1) + ' 1000';
       if (el.style.strokeDasharray !== dash) el.style.strokeDasharray = dash;
-      attr(el, 'class', 'arc' + (t >= 85 ? ' hot' : t >= 72 ? ' warn' : ''));
+      attr(el, 'class', 'arc' + (live && f >= 0.8125 ? ' hot' : live && f >= 0.65 ? ' warn' : ''));
     });
     each('[data-marker]', function (el) {          // 135 degrees + 270 x fraction, clockwise
-      var a = (135 + 270 * gauge(num(v[el.dataset.marker]))) * Math.PI / 180;
+      var a = (135 + 270 * gaugeOf(el, v, el.dataset.marker)) * Math.PI / 180;
       attr(el, 'cx', (110 + 84 * Math.cos(a)).toFixed(1));
       attr(el, 'cy', (108 + 84 * Math.sin(a)).toFixed(1));
     });
@@ -840,6 +995,10 @@
       var max = num(v[el.dataset.max]);
       return clamp01(!isFinite(val) ? 0 : max > 0 ? val / max : val / 100) * 100;
     }
+    each('[data-ends]', function (el) {            // a generated gauge's ends: 0 and the maximum
+      var max = num(v[el.dataset.ends]);
+      text(el, el.dataset.end === 'lo' ? '0' : fmt(max > 0 ? max : 100, 1));
+    });
     each('[data-bar]', function (el) {
       var w = fraction(el).toFixed(1) + '%';
       if (el.style.width !== w) el.style.width = w;
@@ -851,7 +1010,8 @@
 
     // Hide what has no data. With nothing mapped at all, show the whole design.
     each('[data-need]', function (el) {
-      var hide = anyMapped && !isFinite(num(v[el.dataset.need]));
+      var raw = v[el.dataset.need];
+      var hide = anyMapped && !isFinite(num(raw)) && !known(raw);
       if (el.hidden !== hide) el.hidden = hide;
     });
     // A flourish separates two stats: keep it only between two visible ones.

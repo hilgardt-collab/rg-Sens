@@ -1,0 +1,202 @@
+/* Blueprint Sensor Panel: stylesheet for blueprint_panel.html (rg-Sens CSS
+   Template displayer). Prints, fonts, the grid of groups and the classes
+   the drawing is made of; the drawing itself is inline in the HTML, and the
+   few rules that point at its SVG definitions (the ink filter) are in a
+   style block there, because a url(#id) in this file would be looked up
+   here. Setup notes are at the top of the HTML file. */
+
+/* Bundled fonts: Architects Daughter and IBM Plex Mono, both SIL Open Font
+   License (OFL.txt in each folder). Keep the fonts folder next to this
+   file; without it the page falls back to system fonts. */
+@font-face { font-family: "Architects Daughter"; font-weight: 400; font-style: normal;
+  src: local("Architects Daughter"), url("fonts/architects-daughter/ArchitectsDaughter-Regular.ttf") format("truetype"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-style: normal;
+  src: local("IBM Plex Mono"), url("fonts/ibm-plex-mono/IBMPlexMono-Regular.ttf") format("truetype"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 600; font-style: normal;
+  src: local("IBM Plex Mono SemiBold"), url("fonts/ibm-plex-mono/IBMPlexMono-SemiBold.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Print: cyan (Cyanotype), white (Whiteprint) or sepia. */
+  --print: cyan;
+  /* 1 draws the linework through the ink filter (a slight wobble and
+     bleed); 0 leaves it crisp, which costs less to redraw. */
+  --ink-bleed: 1;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Full scale of a dimension line when a sensor has no maximum of its own.
+     Clocks are in GHz (a sensor that reports MHz is shown in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Network graph full scale in the sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  /* Cyanotype */
+  --paper: #1F4F8E;
+  --ink: #EEF4FF;
+  --pencil: #FF8A7A;
+  --board: #3E5A4A;
+  /* how dark the sheet's edges get, and its creases */
+  --edge: 0.45;
+  --crease: 0.14;
+}
+:root[data-print="white"] {
+  --paper: #F1EFE8; --ink: #34389A; --pencil: #D8342A; --board: #3E5A4A; --edge: 0.16; --crease: 0.09;
+}
+:root[data-print="sepia"] {
+  --paper: #EAD9B8; --ink: #5A3418; --pencil: #C0302A; --board: #3E4A3A; --edge: 0.24; --crease: 0.1;
+}
+
+html, body { margin: 0; background: var(--board); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+@keyframes bp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still-motion * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* ---- board, sheet, tape --------------------------------------------- */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative;
+  overflow: hidden; background: var(--board); color: var(--ink);
+  font-family: "Architects Daughter", "Comic Neue", cursive; font-variant-numeric: lining-nums; }
+.board { position: absolute; top: 0; left: 0; pointer-events: none; }
+.sheet { position: absolute; top: 10px; right: 10px; bottom: 10px; left: 10px; background: var(--paper);
+  box-shadow: 6px 8px 10px rgba(0, 0, 0, 0.35); }
+.sheet > .paper { position: absolute; top: 0; left: 0; pointer-events: none; }
+/* darker towards the edges */
+.sheet > .edge { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
+  background: radial-gradient(ellipse 75% 75% at 50% 50%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, var(--edge)) 100%); }
+/* fold creases: two across, one down the middle */
+.fold { position: absolute; pointer-events: none; }
+.fold.across { left: 0; right: 0; height: 3.2px;
+  background: linear-gradient(rgba(0, 0, 0, var(--crease)) 0 2px, rgba(255, 255, 255, 0.1) 2px 3.2px); }
+.fold.down { top: 0; bottom: 0; left: calc(50% - 1px); width: 2.5px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, calc(var(--crease) * 0.6)) 0 1.5px, rgba(255, 255, 255, 0.1) 1.5px 2.5px); }
+.coffee { position: absolute; right: 42px; top: calc(84% - 40px); width: 80px; height: 80px; pointer-events: none; }
+.tape { position: absolute; z-index: 2; width: 64px; height: 22px;
+  background: linear-gradient(180deg, rgba(236, 226, 196, 0.92) 0%, rgba(226, 214, 180, 0.88) 100%);
+  clip-path: polygon(0% 8%, 6% 0%, 12% 10%, 18% 2%, 26% 8%, 34% 0%, 44% 6%, 54% 0%, 64% 8%, 72% 1%, 82% 7%, 90% 0%, 100% 6%, 100% 94%, 92% 100%, 84% 92%, 74% 99%, 66% 92%, 56% 100%, 46% 93%, 36% 100%, 26% 92%, 16% 99%, 8% 92%, 0% 98%); }
+.tape.tl { top: 0; left: -8px; transform: rotate(-35deg); }
+.tape.tr { top: 0; right: -8px; transform: rotate(35deg); }
+.tape.bl { bottom: 0; left: -8px; transform: rotate(35deg); }
+.tape.br { bottom: 0; right: -8px; transform: rotate(-35deg); }
+
+/* ---- the drawing ----------------------------------------------------- */
+.frame { position: absolute; top: 0; left: 0; pointer-events: none; }
+.content { position: absolute; top: 18px; right: 18px; bottom: 18px; left: 18px; box-sizing: border-box;
+  padding: 18px 16px 14px; display: flex; flex-direction: column; gap: 6px; }
+.mono { font-family: "IBM Plex Mono", monospace; }
+.pencil { color: var(--pencil); }
+
+/* SVG linework: one ink, the paper where a shape covers what is under it */
+svg text { fill: var(--ink); font-family: "IBM Plex Mono", monospace; }
+svg text.hand { font-family: "Architects Daughter", cursive; }
+svg .l { fill: none; stroke: var(--ink); }
+svg .i { fill: var(--ink); }
+svg .pp { fill: var(--paper); stroke: var(--ink); }
+svg .hx { stroke: var(--ink); }
+svg .cl { fill: none; stroke: var(--ink); stroke-width: 0.6; stroke-dasharray: 14 3 2 3; }
+svg .cl.fine { stroke-width: 0.5; stroke-dasharray: 8 2 1.5 2; }
+svg .red { fill: none; stroke: var(--pencil); }
+svg text.red { fill: var(--pencil); stroke: none; }
+
+/* title strip */
+.strip { display: flex; flex-direction: column; gap: 6px; }
+.strip .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid var(--ink); padding-bottom: 6px; }
+.strip h1 { margin: 0; font-weight: 400; font-size: 36px; line-height: 1; letter-spacing: 0.04em; }
+.strip .dwg { font-weight: 600; font-size: 9px; letter-spacing: 0.12em; padding-bottom: 3px; white-space: nowrap; }
+.strip .notes { font-size: 9px; letter-spacing: 0.14em; opacity: 0.8; white-space: nowrap; overflow: hidden; }
+
+/* The six groups: a grid of --rg-cols columns (rg-Sens sets it, with the
+   box in --rg-w / --rg-h) whose rows share the height left over. Each view
+   is a drawing of a fixed size (392 wide) in the middle of its cell. */
+.groups { flex: 1; min-height: 0; display: grid; gap: 0 24px;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); align-content: stretch; }
+.groups > .view { min-width: 0; display: flex; align-items: center; justify-content: center; }
+.view > .g { width: 392px; flex: none; display: flex; flex-direction: column; gap: 4px; position: relative; }
+.cap { align-self: flex-start; font-size: 13px; line-height: 1.5; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.cap.right, .cap.even { align-self: flex-end; }
+.cap small { font-family: "IBM Plex Mono", monospace; font-size: 9px; }
+.row { display: flex; align-items: center; gap: 12px; }
+
+/* front elevation: the clock */
+.clockrow { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.clockrow > svg { flex: none; }
+.clockrow .side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.clockrow .time { font-size: 66px; line-height: 0.95; }
+.clockrow .hhmm { display: flex; align-items: center; gap: 6px; font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.1em; }
+.clockrow .date { font-size: 20px; line-height: 1.1; white-space: nowrap; }
+.clockrow .angles { font-family: "IBM Plex Mono", monospace; font-size: 9px; letter-spacing: 0.12em; opacity: 0.8; white-space: nowrap; }
+
+/* a dial with its reading lettered in the open bottom */
+.dial { position: relative; width: 172px; height: 172px; flex: none; }
+.dial > svg { overflow: visible; display: block; }
+.dial .read { position: absolute; left: 0; right: 0; top: 118px; display: flex; flex-direction: column; align-items: center; }
+.dial .read .v { font-size: 34px; line-height: 1; white-space: nowrap; }
+.dial .read .v [data-unit]:not(.deg) { font-size: 15px; margin-left: 2px; }
+.dial .read .n { font-family: "IBM Plex Mono", monospace; font-size: 8px; letter-spacing: 0.16em; max-width: 96px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.stats { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.note { font-size: 16px; line-height: 1.2; white-space: nowrap; }
+.note.warm, .note.hot { color: var(--pencil); font-size: 14px; line-height: 1.37; }
+.dim { display: block; overflow: visible; }
+.dim .label { font-weight: 600; font-size: 9px; letter-spacing: 1.2px; }
+
+/* plan views of the fans */
+.fans { display: flex; justify-content: space-around; gap: 4px; }
+.fan { width: 95px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fan > svg { overflow: visible; display: block; }
+.fan .v { font-size: 20px; line-height: 1; }
+.fan .n { font-family: "IBM Plex Mono", monospace; font-size: 8px; letter-spacing: 0.14em; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* tanks in section */
+.tanks { display: flex; justify-content: space-around; gap: 4px; }
+.tank { width: 128px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tank > svg { overflow: visible; display: block; }
+.tank .name { font-size: 18px; line-height: 1; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tank .sub { font-family: "IBM Plex Mono", monospace; font-size: 9px; white-space: nowrap; }
+
+/* network graph */
+.inout { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; font-size: 15px; }
+.inout b { font-weight: 400; font-size: 26px; }
+.inout small { font-family: "IBM Plex Mono", monospace; font-size: 9px; }
+.graph { display: block; overflow: visible; }
+[data-now] { animation: bp-pulse 1.6s ease-in-out infinite; }
+
+/* title block, bottom right as on a drawing */
+.tblock { position: relative; align-self: flex-end; width: 100%; max-width: 392px; box-sizing: border-box; display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr; border: 2px solid var(--ink); font-family: "IBM Plex Mono", monospace; }
+.tblock > div { padding: 4px 6px; display: flex; flex-direction: column; gap: 1px; border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.tblock > div.title { grid-row: span 2; padding: 6px 8px; justify-content: center; gap: 2px; border-bottom: 0; }
+.tblock > div.e { border-right: 0; }
+.tblock > div.s { border-bottom: 0; }
+.tblock .k { font-size: 7px; letter-spacing: 0.14em; opacity: 0.8; }
+.tblock .v { font-family: "Architects Daughter", cursive; font-size: 14px; line-height: 1.1; white-space: nowrap; }
+.tblock .title .v { font-size: 17px; }
+.tblock .title .sub { font-size: 8px; letter-spacing: 0.1em; }
+.tblock .ok { position: absolute; right: 2px; top: -44px; overflow: visible; }
+
+/* ---- custom layouts: groups built from the prototypes -------------------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.view:has(.rg-items) { min-height: 0; align-items: stretch; padding: 6px 0; }
+.view:has(.rg-items) > .g { width: 100%; flex: 1; min-width: 0; min-height: 0; }
+.view .rg-items { align-self: stretch; }
+.rg-fit { display: flex; align-items: center; justify-content: center; }
+.rg-fit > * { flex: none; }
+.w-dial { width: 100%; height: 100%; box-sizing: border-box; padding-top: 22px; display: flex; justify-content: center; }
+.w-clock { width: 100%; }
+.w-clock .clockrow { margin: 0; }
+.reading { width: 100%; display: flex; flex-direction: column; gap: 3px; }
+.reading .v { font-size: 26px; line-height: 1; white-space: nowrap; border-bottom: 1px solid var(--ink); padding: 0 2px 2px 12px; align-self: flex-start; }
+.reading .v small { font-family: "IBM Plex Mono", monospace; font-size: 9px; }
+.reading .n { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 9px; letter-spacing: 0.12em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

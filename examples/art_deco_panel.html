@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=480">
 <meta name="rg-design-size" content="480x1920">
 <meta name="rg-layouts" content="480x1920 960x1240 1440x930 2880x680">
+<!-- custom layouts: the room a group gets, plus the paddings and the footer -->
+<meta name="rg-group-size" content="480x269+306">
 <title>Art Deco Sensor Panel</title>
 <!--
   Art Deco sensor panel for the rg-Sens CSS Template displayer, 480x1920 portrait.
@@ -47,6 +49,13 @@
   by side (the rg-layouts list gives the size each needs), and then take up
   the panel's exact shape. The Layout option fixes the column count; the Fit
   option can crop, letterbox or distort instead.
+
+  Custom layouts (Display > Layout > "My own groups and widgets"): the
+  templates after the page are the building blocks: two group styles (the
+  section under its gold plaque, and the crown the clock gets) and the
+  widgets: sunburst clock, sunburst gauge, bar, fan and plain reading. The
+  network pair and the processor's stat row need several sensors and are
+  not among them.
 -->
 <link rel="stylesheet" href="art_deco_panel.css">
 </head>
@@ -679,6 +688,7 @@
 
   <!-- the six groups: one, two, three or six columns, by the panel's shape -->
   <div class="groups">
+  <!--rg-groups 0-71-->
   <!-- ===== HEADER: crown + clock ===== -->
   <header style="display: flex; flex-direction: column; align-items: center; gap: 10px">
     <div style="display: flex; align-items: center; gap: 8px; width: 100%">
@@ -1050,7 +1060,7 @@
       </div>
     </div>
   </section>
-
+  <!--/rg-groups-->
   </div>
 
   <!-- ===== FOOTER: frozen fountain ===== -->
@@ -1065,6 +1075,241 @@
   </footer>
 </div>
 <div hidden>{{72}} {{73}} {{7}} {{65}} {{69}} {{13}} {{29}} {{8}} {{11}} {{12}} {{15}} {{16}} {{19}} {{23}} {{24}} {{27}} {{28}} {{31}} {{32}} {{35}} {{37}} {{39}} {{41}} {{43}} {{45}} {{47}} {{49}} {{51}} {{55}} {{59}} {{63}} {{64}} {{67}} {{68}} {{71}}</div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout).
+     rg-Sens builds the groups from these in place of the template's own ones
+     (between the rg-groups markers); a field name in double braces (value,
+     caption, unit, max, time ...) becomes a placeholder bound to the
+     widget's own sensor. They use the gold gradients defined at the top of
+     the page; the .ad- rules at the end of art_deco_panel.css style them. -->
+<template data-rg-group="section" data-rg-label="Section">
+  <section class="ad-g" data-section style="display: flex; flex-direction: column; gap: 10px">
+    <div class="ad-head" style="display: flex; align-items: center; gap: 8px">
+      <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 3px"><div style="width: 100%; height: 3px; background: linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="width: 70%; height: 1px; background: var(--mid)"></div><div style="width: 40%; height: 1px; background: var(--mid)"></div></div>
+      <div style="background: linear-gradient(180deg, var(--dk) 0%, var(--dp) 50%, var(--dk) 100%); padding: 3px; clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%)">
+        <h2 class="ad-title" style="margin: 0; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--lt) 28%, var(--mid) 62%, var(--lt) 82%, var(--dk) 100%); color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.45); font-size: 15px; font-weight: 700; letter-spacing: 0.34em; line-height: 1; padding: 9px 26px 7px 31px; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%)">{{title}}</h2>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 3px"><div style="width: 100%; height: 3px; background: linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="width: 70%; height: 1px; background: var(--mid)"></div><div style="width: 40%; height: 1px; background: var(--mid)"></div></div>
+    </div>
+    <!--rg-items-->
+  </section>
+</template>
+<template data-rg-group="crown" data-rg-label="Crown (no rules under the title)">
+  <header class="ad-g ad-crown" data-section style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+    <div class="ad-head" style="display: flex; align-items: center; gap: 8px; width: 100%">
+      <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 3px"><div style="width: 100%; height: 3px; background: linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="width: 70%; height: 1px; background: var(--mid)"></div><div style="width: 40%; height: 1px; background: var(--mid)"></div></div>
+      <div style="background: linear-gradient(180deg, var(--dk) 0%, var(--dp) 50%, var(--dk) 100%); padding: 3px; clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%)">
+        <h2 class="ad-title" style="margin: 0; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--lt) 28%, var(--mid) 62%, var(--lt) 82%, var(--dk) 100%); color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.45); font-size: 14px; font-weight: 700; letter-spacing: 0.38em; line-height: 1; padding: 9px 26px 7px 31px; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%)">{{title}}</h2>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 3px"><div style="width: 100%; height: 3px; background: linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="width: 70%; height: 1px; background: var(--mid)"></div><div style="width: 40%; height: 1px; background: var(--mid)"></div></div>
+    </div>
+    <!--rg-items-->
+  </header>
+</template>
+<template data-rg-widget="clock" data-rg-label="Sunburst clock" data-rg-size="large" data-rg-sources="clock" data-rg-group="crown" data-rg-width="404" data-rg-height="250">
+  <div class="ad-clock">
+    <div style="position: relative; width: 404px; height: 222px">
+      <svg aria-hidden="true" width="404" height="222" viewBox="0 0 408 224" style="position: absolute; top: 0; left: 0">
+        <path d="M4 214 A200 200 0 0 1 404 214" fill="none" stroke-width="3" style="stroke: url(#gold-v) var(--mid)"></path>
+        
+          <polygon points="35.1 194.5 38.6 174.6 11.0 180.0" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="41.1 165.4 48.0 146.5 19.8 147.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="52.0 137.9 62.1 120.4 34.3 116.0" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="67.5 112.6 80.5 97.2 53.9 88.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="87.2 90.5 102.6 77.5 78.0 63.9" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="110.4 72.1 127.9 62.0 106.0 44.3" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="136.5 58.0 155.4 51.1 137.0 29.8" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="164.6 48.6 184.5 45.1 170.0 21.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="193.9 44.3 214.1 44.3 204.0 18.0" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="223.5 45.1 243.4 48.6 238.0 21.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="252.6 51.1 271.5 58.0 271.0 29.8" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="280.1 62.0 297.6 72.1 302.0 44.3" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="305.4 77.5 320.8 90.5 330.0 63.9" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="327.5 97.2 340.5 112.6 354.1 88.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="345.9 120.4 356.0 137.9 373.7 116.0" style="fill: var(--dk)"></polygon>
+        
+          <polygon points="360.0 146.5 366.9 165.4 388.2 147.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="369.4 174.6 372.9 194.5 397.0 180.0" style="fill: var(--dk)"></polygon>
+        
+        <path d="M38 214 A166 166 0 0 1 370 214" fill="none" stroke-width="2" style="stroke: url(#gold-v) var(--mid)"></path>
+        
+          <polygon points="76.1 191.0 81.7 170.0 49.5 172.6" style="fill: var(--dp)"></polygon>
+        
+          <polygon points="86.4 158.6 97.3 139.8 65.4 134.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="104.7 130.1 120.1 114.7 90.9 100.9" style="fill: var(--dp)"></polygon>
+        
+          <polygon points="129.8 107.3 148.6 96.4 124.0 75.4" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="160.0 91.7 181.0 86.1 162.6 59.5" style="fill: var(--dp)"></polygon>
+        
+          <polygon points="193.1 84.5 214.9 84.5 204.0 54.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="227.0 86.1 248.0 91.7 245.4 59.5" style="fill: var(--dp)"></polygon>
+        
+          <polygon points="259.4 96.4 278.2 107.3 284.0 75.4" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="287.9 114.7 303.3 130.1 317.1 100.9" style="fill: var(--dp)"></polygon>
+        
+          <polygon points="310.7 139.8 321.6 158.6 342.6 134.0" style="fill: url(#gold-v) var(--mid)"></polygon>
+        
+          <polygon points="326.3 170.0 331.9 191.0 358.5 172.6" style="fill: var(--dp)"></polygon>
+        
+        <path d="M80 214 A124 124 0 0 1 328 214" fill="none" stroke-width="1" style="stroke: var(--mid)"></path>
+        
+          <path d="M164.0 214.0 L86.0 214.0 A118 118 0 0 1 87.5 195.5 L164.5 207.7 A40 40 0 0 0 164.0 214.0 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M164.5 207.7 L87.5 195.5 A118 118 0 0 1 91.8 177.5 L166.0 201.6 A40 40 0 0 0 164.5 207.7 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M166.0 201.6 L91.8 177.5 A118 118 0 0 1 98.9 160.4 L168.4 195.8 A40 40 0 0 0 166.0 201.6 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M168.4 195.8 L98.9 160.4 A118 118 0 0 1 108.5 144.6 L171.6 190.5 A40 40 0 0 0 168.4 195.8 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M171.6 190.5 L108.5 144.6 A118 118 0 0 1 120.6 130.6 L175.7 185.7 A40 40 0 0 0 171.6 190.5 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M175.7 185.7 L120.6 130.6 A118 118 0 0 1 134.6 118.5 L180.5 181.6 A40 40 0 0 0 175.7 185.7 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M180.5 181.6 L134.6 118.5 A118 118 0 0 1 150.4 108.9 L185.8 178.4 A40 40 0 0 0 180.5 181.6 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M185.8 178.4 L150.4 108.9 A118 118 0 0 1 167.5 101.8 L191.6 176.0 A40 40 0 0 0 185.8 178.4 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M191.6 176.0 L167.5 101.8 A118 118 0 0 1 185.5 97.5 L197.7 174.5 A40 40 0 0 0 191.6 176.0 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M197.7 174.5 L185.5 97.5 A118 118 0 0 1 204.0 96.0 L204.0 174.0 A40 40 0 0 0 197.7 174.5 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M204.0 174.0 L204.0 96.0 A118 118 0 0 1 222.5 97.5 L210.3 174.5 A40 40 0 0 0 204.0 174.0 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M210.3 174.5 L222.5 97.5 A118 118 0 0 1 240.5 101.8 L216.4 176.0 A40 40 0 0 0 210.3 174.5 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M216.4 176.0 L240.5 101.8 A118 118 0 0 1 257.6 108.9 L222.2 178.4 A40 40 0 0 0 216.4 176.0 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M222.2 178.4 L257.6 108.9 A118 118 0 0 1 273.4 118.5 L227.5 181.6 A40 40 0 0 0 222.2 178.4 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M227.5 181.6 L273.4 118.5 A118 118 0 0 1 287.4 130.6 L232.3 185.7 A40 40 0 0 0 227.5 181.6 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M232.3 185.7 L287.4 130.6 A118 118 0 0 1 299.5 144.6 L236.4 190.5 A40 40 0 0 0 232.3 185.7 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M236.4 190.5 L299.5 144.6 A118 118 0 0 1 309.1 160.4 L239.6 195.8 A40 40 0 0 0 236.4 190.5 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M239.6 195.8 L309.1 160.4 A118 118 0 0 1 316.2 177.5 L242.0 201.6 A40 40 0 0 0 239.6 195.8 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M242.0 201.6 L316.2 177.5 A118 118 0 0 1 320.5 195.5 L243.5 207.7 A40 40 0 0 0 242.0 201.6 Z" opacity="0.85" style="fill: url(#gold-v) var(--mid)"></path>
+        
+          <path d="M243.5 207.7 L320.5 195.5 A118 118 0 0 1 322.0 214.0 L244.0 214.0 A40 40 0 0 0 243.5 207.7 Z" opacity="0.22" style="fill: url(#gold-v) var(--mid)"></path>
+        
+        <rect x="0" y="212" width="408" height="5" style="fill: url(#gold-v) var(--mid)"></rect>
+        <line x1="0" y1="221" x2="408" y2="221" stroke-width="1" opacity="0.5" style="stroke: var(--mid)"></line>
+      </svg>
+      <div style="position: absolute; left: 0; right: 0; bottom: 12px; display: flex; justify-content: center">
+        <div style="background: linear-gradient(180deg, var(--dk) 0%, var(--dp) 50%, var(--dk) 100%); padding: 3px 3px 0; clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%, 0 18px)">
+          <div style="background: var(--bg); padding: 12px 22px 2px; clip-path: polygon(17px 0, calc(100% - 17px) 0, 100% 17px, 100% 100%, 0 100%, 0 17px)">
+            <div style="font-family: Limelight, serif; font-size: 72px; line-height: 1; letter-spacing: 0.04em; background: linear-gradient(180deg, var(--hi) 0%, var(--lt) 30%, var(--mid) 50%, var(--dk) 54%, var(--lt) 78%, var(--mid) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent">{{{{time}}}}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 13px; font-weight: 600; letter-spacing: 0.3em; color: var(--label); padding-left: 0.3em; text-transform: uppercase">{{{{day_name}}}} · {{{{day:.0}}}} {{{{month_name}}}}</div>
+  </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Sunburst gauge" data-rg-size="large" data-rg-width="404" data-rg-height="227">
+  <div class="ad-gauge" data-need="{{value}}" style="position: relative; width: 404px; height: 227px">
+      <svg role="img" aria-label="Gauge" width="404" height="227" viewBox="0 0 400 225" style="position: absolute; top: 0; left: 0">
+        <path d="M176.0 200.0 L80.0 200.0 A120 120 0 0 1 82.3 176.6 L176.5 195.3 A24 24 0 0 0 176.0 200.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M176.5 195.3 L82.3 176.6 A120 120 0 0 1 89.1 154.1 L177.8 190.8 A24 24 0 0 0 176.5 195.3 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M177.8 190.8 L89.1 154.1 A120 120 0 0 1 100.2 133.3 L180.0 186.7 A24 24 0 0 0 177.8 190.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M180.0 186.7 L100.2 133.3 A120 120 0 0 1 115.1 115.1 L183.0 183.0 A24 24 0 0 0 180.0 186.7 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M183.0 183.0 L115.1 115.1 A120 120 0 0 1 133.3 100.2 L186.7 180.0 A24 24 0 0 0 183.0 183.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M186.7 180.0 L133.3 100.2 A120 120 0 0 1 154.1 89.1 L190.8 177.8 A24 24 0 0 0 186.7 180.0 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M190.8 177.8 L154.1 89.1 A120 120 0 0 1 176.6 82.3 L195.3 176.5 A24 24 0 0 0 190.8 177.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M195.3 176.5 L176.6 82.3 A120 120 0 0 1 200.0 80.0 L200.0 176.0 A24 24 0 0 0 195.3 176.5 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M200.0 176.0 L200.0 80.0 A120 120 0 0 1 223.4 82.3 L204.7 176.5 A24 24 0 0 0 200.0 176.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M204.7 176.5 L223.4 82.3 A120 120 0 0 1 245.9 89.1 L209.2 177.8 A24 24 0 0 0 204.7 176.5 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M209.2 177.8 L245.9 89.1 A120 120 0 0 1 266.7 100.2 L213.3 180.0 A24 24 0 0 0 209.2 177.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M213.3 180.0 L266.7 100.2 A120 120 0 0 1 284.9 115.1 L217.0 183.0 A24 24 0 0 0 213.3 180.0 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M217.0 183.0 L284.9 115.1 A120 120 0 0 1 299.8 133.3 L220.0 186.7 A24 24 0 0 0 217.0 183.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M220.0 186.7 L299.8 133.3 A120 120 0 0 1 310.9 154.1 L222.2 190.8 A24 24 0 0 0 220.0 186.7 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M222.2 190.8 L310.9 154.1 A120 120 0 0 1 317.7 176.6 L223.5 195.3 A24 24 0 0 0 222.2 190.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M223.5 195.3 L317.7 176.6 A120 120 0 0 1 320.0 200.0 L224.0 200.0 A24 24 0 0 0 223.5 195.3 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path>
+        <path d="M76 200 A124 124 0 0 1 324 200" fill="none" stroke-width="1" opacity="0.7" style="stroke: var(--mid)"></path>
+        <line x1="34.0" y1="200.0" x2="22.0" y2="200.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="30.5" y1="186.7" x2="22.5" y2="186.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="32.1" y1="173.4" x2="24.2" y2="172.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="34.7" y1="160.3" x2="26.9" y2="158.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="42.1" y1="148.7" x2="30.7" y2="145.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="42.9" y1="134.9" x2="35.5" y2="131.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="48.5" y1="122.8" x2="41.4" y2="119.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="55.1" y1="111.2" x2="48.2" y2="107.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="65.7" y1="102.4" x2="56.0" y2="95.4" stroke-width="2" style="stroke: var(--mid)"></line><line x1="70.7" y1="89.6" x2="64.6" y2="84.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="79.8" y1="79.8" x2="74.1" y2="74.1" stroke-width="1" style="stroke: var(--mid)"></line><line x1="89.6" y1="70.7" x2="84.4" y2="64.6" stroke-width="1" style="stroke: var(--mid)"></line><line x1="102.4" y1="65.7" x2="95.4" y2="56.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="111.2" y1="55.1" x2="107.0" y2="48.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="122.8" y1="48.5" x2="119.2" y2="41.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="134.9" y1="42.9" x2="131.9" y2="35.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="148.7" y1="42.1" x2="145.0" y2="30.7" stroke-width="2" style="stroke: var(--mid)"></line><line x1="160.3" y1="34.7" x2="158.4" y2="26.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="173.4" y1="32.1" x2="172.2" y2="24.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="186.7" y1="30.5" x2="186.0" y2="22.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="200.0" y1="34.0" x2="200.0" y2="22.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="213.3" y1="30.5" x2="214.0" y2="22.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="226.6" y1="32.1" x2="227.8" y2="24.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="239.7" y1="34.7" x2="241.6" y2="26.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="251.3" y1="42.1" x2="255.0" y2="30.7" stroke-width="2" style="stroke: var(--mid)"></line><line x1="265.1" y1="42.9" x2="268.1" y2="35.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="277.2" y1="48.5" x2="280.8" y2="41.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="288.8" y1="55.1" x2="293.0" y2="48.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="297.6" y1="65.7" x2="304.6" y2="56.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="310.4" y1="70.7" x2="315.6" y2="64.6" stroke-width="1" style="stroke: var(--mid)"></line><line x1="320.2" y1="79.8" x2="325.9" y2="74.1" stroke-width="1" style="stroke: var(--mid)"></line><line x1="329.3" y1="89.6" x2="335.4" y2="84.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="334.3" y1="102.4" x2="344.0" y2="95.4" stroke-width="2" style="stroke: var(--mid)"></line><line x1="344.9" y1="111.2" x2="351.8" y2="107.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="351.5" y1="122.8" x2="358.6" y2="119.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="357.1" y1="134.9" x2="364.5" y2="131.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="357.9" y1="148.7" x2="369.3" y2="145.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="365.3" y1="160.3" x2="373.1" y2="158.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="367.9" y1="173.4" x2="375.8" y2="172.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="369.5" y1="186.7" x2="377.5" y2="186.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="366.0" y1="200.0" x2="378.0" y2="200.0" stroke-width="2" style="stroke: var(--mid)"></line>
+        <polygon points="19.1 179.7 21.7 163.4 5.4 169.2" style="fill: var(--dk)"></polygon><polygon points="24.5 151.7 29.6 136.0 12.6 139.1" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="34.3 124.8 41.8 110.1 24.5 110.6" style="fill: var(--dk)"></polygon><polygon points="48.1 99.8 57.8 86.5 40.6 84.2" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="65.6 77.3 77.3 65.6 60.7 60.7" style="fill: var(--dk)"></polygon><polygon points="86.5 57.8 99.8 48.1 84.2 40.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="110.1 41.8 124.8 34.3 110.6 24.5" style="fill: var(--dk)"></polygon><polygon points="136.0 29.6 151.7 24.5 139.1 12.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="163.4 21.7 179.7 19.1 169.2 5.4" style="fill: var(--dk)"></polygon><polygon points="191.7 18.2 208.3 18.2 200.0 3.0" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="220.3 19.1 236.6 21.7 230.8 5.4" style="fill: var(--dk)"></polygon><polygon points="248.3 24.5 264.0 29.6 260.9 12.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="275.2 34.3 289.9 41.8 289.4 24.5" style="fill: var(--dk)"></polygon><polygon points="300.2 48.1 313.5 57.8 315.8 40.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="322.7 65.6 334.4 77.3 339.3 60.7" style="fill: var(--dk)"></polygon><polygon points="342.2 86.5 351.9 99.8 359.4 84.2" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="358.2 110.1 365.7 124.8 375.5 110.6" style="fill: var(--dk)"></polygon><polygon points="370.4 136.0 375.5 151.7 387.4 139.1" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="378.3 163.4 380.9 179.7 394.6 169.2" style="fill: var(--dk)"></polygon>
+        <path d="M184 200 A16 16 0 0 1 216 200" style="fill: url(#gold-v) var(--mid)"></path>
+        <path d="M50 200 A150 150 0 0 1 350 200" fill="none" stroke-width="16" style="stroke: var(--track)"></path>
+        <path d="M50 200 A150 150 0 0 1 350 200" fill="none" stroke-width="12" class="arc" data-arc="{{value}}" data-max="{{max}}" style="stroke: url(#gold-v) var(--mid); stroke-dasharray: 0 1000"></path>
+        <path d="M34 200 A166 166 0 0 1 366 200" fill="none" stroke-width="2" style="stroke: url(#gold-v) var(--mid)"></path>
+        <rect data-marker="{{value}}" data-max="{{max}}" x="43" y="193" width="14" height="14" transform="rotate(45 50 200)" stroke-width="2.5" style="fill: var(--bg); stroke: url(#gold-h) var(--text)"></rect>
+        <rect x="0" y="198" width="400" height="5" style="fill: url(#gold-v) var(--mid)"></rect>
+        <text x="50" y="220" text-anchor="middle" font-family="Josefin Sans, sans-serif" font-size="12" font-weight="600" style="fill: var(--label)">0</text>
+        <text x="350" y="220" text-anchor="middle" font-family="Josefin Sans, sans-serif" font-size="12" font-weight="600" style="fill: var(--label)" data-hi="{{max}}">100</text>
+      </svg>
+      <div style="position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; bottom: 40px">
+        <div style="display: flex; align-items: flex-start; background: var(--bg); padding: 0 10px">
+          <span class="ad-gnum" data-num="{{value}}" data-tight style="font-family: Limelight, serif; --ad-n: 76px; line-height: 0.95; background: linear-gradient(180deg, var(--hi) 0%, var(--lt) 30%, var(--mid) 50%, var(--dk) 54%, var(--lt) 78%, var(--mid) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent">--</span>
+          <span style="font-family: Limelight, serif; font-size: 22px; color: var(--lt); margin-left: 4px; white-space: nowrap">{{{{unit}}}}</span>
+        </div>
+        <div class="ad-plaque" style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--lt) 28%, var(--mid) 62%, var(--lt) 82%, var(--dk) 100%); color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.45); font-size: 10px; font-weight: 700; letter-spacing: 0.3em; line-height: 1; padding: 5px 14px 3px 17px; clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 7px 100%, 0 50%); text-transform: uppercase">{{{{caption}}}}</div>
+      </div>
+    </div>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Sunburst gauge" data-rg-size="medium" data-rg-width="230" data-rg-height="154">
+  <div class="ad-gauge" data-need="{{value}}" style="position: relative; width: 230px; height: 154px">
+      <svg role="img" aria-label="Gauge" width="230" height="129" viewBox="0 0 400 225" style="position: absolute; top: 0; left: 0">
+        <path d="M176.0 200.0 L80.0 200.0 A120 120 0 0 1 82.3 176.6 L176.5 195.3 A24 24 0 0 0 176.0 200.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M176.5 195.3 L82.3 176.6 A120 120 0 0 1 89.1 154.1 L177.8 190.8 A24 24 0 0 0 176.5 195.3 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M177.8 190.8 L89.1 154.1 A120 120 0 0 1 100.2 133.3 L180.0 186.7 A24 24 0 0 0 177.8 190.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M180.0 186.7 L100.2 133.3 A120 120 0 0 1 115.1 115.1 L183.0 183.0 A24 24 0 0 0 180.0 186.7 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M183.0 183.0 L115.1 115.1 A120 120 0 0 1 133.3 100.2 L186.7 180.0 A24 24 0 0 0 183.0 183.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M186.7 180.0 L133.3 100.2 A120 120 0 0 1 154.1 89.1 L190.8 177.8 A24 24 0 0 0 186.7 180.0 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M190.8 177.8 L154.1 89.1 A120 120 0 0 1 176.6 82.3 L195.3 176.5 A24 24 0 0 0 190.8 177.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M195.3 176.5 L176.6 82.3 A120 120 0 0 1 200.0 80.0 L200.0 176.0 A24 24 0 0 0 195.3 176.5 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M200.0 176.0 L200.0 80.0 A120 120 0 0 1 223.4 82.3 L204.7 176.5 A24 24 0 0 0 200.0 176.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M204.7 176.5 L223.4 82.3 A120 120 0 0 1 245.9 89.1 L209.2 177.8 A24 24 0 0 0 204.7 176.5 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M209.2 177.8 L245.9 89.1 A120 120 0 0 1 266.7 100.2 L213.3 180.0 A24 24 0 0 0 209.2 177.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M213.3 180.0 L266.7 100.2 A120 120 0 0 1 284.9 115.1 L217.0 183.0 A24 24 0 0 0 213.3 180.0 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M217.0 183.0 L284.9 115.1 A120 120 0 0 1 299.8 133.3 L220.0 186.7 A24 24 0 0 0 217.0 183.0 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M220.0 186.7 L299.8 133.3 A120 120 0 0 1 310.9 154.1 L222.2 190.8 A24 24 0 0 0 220.0 186.7 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path><path d="M222.2 190.8 L310.9 154.1 A120 120 0 0 1 317.7 176.6 L223.5 195.3 A24 24 0 0 0 222.2 190.8 Z" opacity="0.32" style="fill: url(#gold-v) var(--mid)"></path><path d="M223.5 195.3 L317.7 176.6 A120 120 0 0 1 320.0 200.0 L224.0 200.0 A24 24 0 0 0 223.5 195.3 Z" opacity="0.1" style="fill: url(#gold-v) var(--mid)"></path>
+        <path d="M76 200 A124 124 0 0 1 324 200" fill="none" stroke-width="1" opacity="0.7" style="stroke: var(--mid)"></path>
+        <line x1="34.0" y1="200.0" x2="22.0" y2="200.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="30.5" y1="186.7" x2="22.5" y2="186.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="32.1" y1="173.4" x2="24.2" y2="172.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="34.7" y1="160.3" x2="26.9" y2="158.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="42.1" y1="148.7" x2="30.7" y2="145.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="42.9" y1="134.9" x2="35.5" y2="131.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="48.5" y1="122.8" x2="41.4" y2="119.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="55.1" y1="111.2" x2="48.2" y2="107.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="65.7" y1="102.4" x2="56.0" y2="95.4" stroke-width="2" style="stroke: var(--mid)"></line><line x1="70.7" y1="89.6" x2="64.6" y2="84.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="79.8" y1="79.8" x2="74.1" y2="74.1" stroke-width="1" style="stroke: var(--mid)"></line><line x1="89.6" y1="70.7" x2="84.4" y2="64.6" stroke-width="1" style="stroke: var(--mid)"></line><line x1="102.4" y1="65.7" x2="95.4" y2="56.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="111.2" y1="55.1" x2="107.0" y2="48.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="122.8" y1="48.5" x2="119.2" y2="41.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="134.9" y1="42.9" x2="131.9" y2="35.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="148.7" y1="42.1" x2="145.0" y2="30.7" stroke-width="2" style="stroke: var(--mid)"></line><line x1="160.3" y1="34.7" x2="158.4" y2="26.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="173.4" y1="32.1" x2="172.2" y2="24.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="186.7" y1="30.5" x2="186.0" y2="22.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="200.0" y1="34.0" x2="200.0" y2="22.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="213.3" y1="30.5" x2="214.0" y2="22.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="226.6" y1="32.1" x2="227.8" y2="24.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="239.7" y1="34.7" x2="241.6" y2="26.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="251.3" y1="42.1" x2="255.0" y2="30.7" stroke-width="2" style="stroke: var(--mid)"></line><line x1="265.1" y1="42.9" x2="268.1" y2="35.5" stroke-width="1" style="stroke: var(--mid)"></line><line x1="277.2" y1="48.5" x2="280.8" y2="41.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="288.8" y1="55.1" x2="293.0" y2="48.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="297.6" y1="65.7" x2="304.6" y2="56.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="310.4" y1="70.7" x2="315.6" y2="64.6" stroke-width="1" style="stroke: var(--mid)"></line><line x1="320.2" y1="79.8" x2="325.9" y2="74.1" stroke-width="1" style="stroke: var(--mid)"></line><line x1="329.3" y1="89.6" x2="335.4" y2="84.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="334.3" y1="102.4" x2="344.0" y2="95.4" stroke-width="2" style="stroke: var(--mid)"></line><line x1="344.9" y1="111.2" x2="351.8" y2="107.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="351.5" y1="122.8" x2="358.6" y2="119.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="357.1" y1="134.9" x2="364.5" y2="131.9" stroke-width="1" style="stroke: var(--mid)"></line><line x1="357.9" y1="148.7" x2="369.3" y2="145.0" stroke-width="2" style="stroke: var(--mid)"></line><line x1="365.3" y1="160.3" x2="373.1" y2="158.4" stroke-width="1" style="stroke: var(--mid)"></line><line x1="367.9" y1="173.4" x2="375.8" y2="172.2" stroke-width="1" style="stroke: var(--mid)"></line><line x1="369.5" y1="186.7" x2="377.5" y2="186.0" stroke-width="1" style="stroke: var(--mid)"></line><line x1="366.0" y1="200.0" x2="378.0" y2="200.0" stroke-width="2" style="stroke: var(--mid)"></line>
+        <polygon points="19.1 179.7 21.7 163.4 5.4 169.2" style="fill: var(--dk)"></polygon><polygon points="24.5 151.7 29.6 136.0 12.6 139.1" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="34.3 124.8 41.8 110.1 24.5 110.6" style="fill: var(--dk)"></polygon><polygon points="48.1 99.8 57.8 86.5 40.6 84.2" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="65.6 77.3 77.3 65.6 60.7 60.7" style="fill: var(--dk)"></polygon><polygon points="86.5 57.8 99.8 48.1 84.2 40.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="110.1 41.8 124.8 34.3 110.6 24.5" style="fill: var(--dk)"></polygon><polygon points="136.0 29.6 151.7 24.5 139.1 12.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="163.4 21.7 179.7 19.1 169.2 5.4" style="fill: var(--dk)"></polygon><polygon points="191.7 18.2 208.3 18.2 200.0 3.0" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="220.3 19.1 236.6 21.7 230.8 5.4" style="fill: var(--dk)"></polygon><polygon points="248.3 24.5 264.0 29.6 260.9 12.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="275.2 34.3 289.9 41.8 289.4 24.5" style="fill: var(--dk)"></polygon><polygon points="300.2 48.1 313.5 57.8 315.8 40.6" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="322.7 65.6 334.4 77.3 339.3 60.7" style="fill: var(--dk)"></polygon><polygon points="342.2 86.5 351.9 99.8 359.4 84.2" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="358.2 110.1 365.7 124.8 375.5 110.6" style="fill: var(--dk)"></polygon><polygon points="370.4 136.0 375.5 151.7 387.4 139.1" style="fill: url(#gold-v) var(--mid)"></polygon><polygon points="378.3 163.4 380.9 179.7 394.6 169.2" style="fill: var(--dk)"></polygon>
+        <path d="M184 200 A16 16 0 0 1 216 200" style="fill: url(#gold-v) var(--mid)"></path>
+        <path d="M50 200 A150 150 0 0 1 350 200" fill="none" stroke-width="16" style="stroke: var(--track)"></path>
+        <path d="M50 200 A150 150 0 0 1 350 200" fill="none" stroke-width="12" class="arc" data-arc="{{value}}" data-max="{{max}}" style="stroke: url(#gold-v) var(--mid); stroke-dasharray: 0 1000"></path>
+        <path d="M34 200 A166 166 0 0 1 366 200" fill="none" stroke-width="2" style="stroke: url(#gold-v) var(--mid)"></path>
+        <rect data-marker="{{value}}" data-max="{{max}}" x="43" y="193" width="14" height="14" transform="rotate(45 50 200)" stroke-width="2.5" style="fill: var(--bg); stroke: url(#gold-h) var(--text)"></rect>
+        <rect x="0" y="198" width="400" height="5" style="fill: url(#gold-v) var(--mid)"></rect>
+        <text x="50" y="220" text-anchor="middle" font-family="Josefin Sans, sans-serif" font-size="12" font-weight="600" style="fill: var(--label)">0</text>
+        <text x="350" y="220" text-anchor="middle" font-family="Josefin Sans, sans-serif" font-size="12" font-weight="600" style="fill: var(--label)" data-hi="{{max}}">100</text>
+      </svg>
+      <div style="position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; bottom: 42px">
+        <div style="display: flex; align-items: flex-start; background: var(--bg); padding: 0 10px">
+          <span class="ad-gnum" data-num="{{value}}" data-tight style="font-family: Limelight, serif; --ad-n: 42px; line-height: 0.95; background: linear-gradient(180deg, var(--hi) 0%, var(--lt) 30%, var(--mid) 50%, var(--dk) 54%, var(--lt) 78%, var(--mid) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent">--</span>
+          <span style="font-family: Limelight, serif; font-size: 14px; color: var(--lt); margin-left: 4px; white-space: nowrap">{{{{unit}}}}</span>
+        </div>
+      </div>
+      <div style="position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; bottom: 0px">
+        <div class="ad-plaque ad-small" style="background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--lt) 28%, var(--mid) 62%, var(--lt) 82%, var(--dk) 100%); color: var(--ink); text-shadow: 0 1px 0 rgba(255,255,255,0.45); font-size: 10px; font-weight: 700; letter-spacing: 0.3em; line-height: 1; padding: 5px 14px 3px 17px; clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 7px 100%, 0 50%); text-transform: uppercase">{{{{caption}}}}</div>
+      </div>
+    </div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Bar" data-rg-size="small" data-rg-width="130" data-rg-height="58">
+  <div class="ad-bar ad-compact" data-need="{{value}}"><span class="ad-cap">{{{{caption}}}}</span><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span><div class="ad-track"><div data-bar="{{value}}" data-max="{{max}}" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 2px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 2px; background: var(--bg)"></div></div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Bar" data-rg-size="medium" data-rg-width="200" data-rg-height="44">
+  <div class="ad-bar" data-need="{{value}}"><div class="ad-top"><span class="ad-cap">{{{{caption}}}}</span><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span></div><div class="ad-track"><div data-bar="{{value}}" data-max="{{max}}" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 2px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 2px; background: var(--bg)"></div></div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Bar" data-rg-size="large" data-rg-width="404" data-rg-height="30">
+  <div class="ad-bar ad-long" data-need="{{value}}"><span class="ad-cap">{{{{caption}}}}</span><div class="ad-track"><div data-bar="{{value}}" data-max="{{max}}" style="position: absolute; top: 0; bottom: 0; left: 0; width: 0%; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 1px, transparent 1px, transparent 3px), linear-gradient(180deg, var(--hi) 0%, var(--mid) 45%, var(--dk) 100%)"></div><div style="position: absolute; top: 0; bottom: 0; left: 25%; width: 2px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--bg)"></div><div style="position: absolute; top: 0; bottom: 0; left: 75%; width: 2px; background: var(--bg)"></div></div><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span></div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Fan" data-rg-size="small" data-rg-sources="fan" data-rg-width="120" data-rg-height="124">
+  <div class="ad-fan ad-compact" data-need="{{value}}">
+        <svg aria-hidden="true" width="46" height="46" viewBox="0 0 30 30" style="flex: none">
+          <path d="M12.0 26.0 L1.0 26.0 A14 14 0 0 1 2.9 19.0 L12.4 24.5 A3 3 0 0 0 12.0 26.0 Z" stroke-width="0.75" style="fill: url(#gold-v) var(--mid); stroke: var(--bg)"></path><path d="M12.4 24.5 L2.9 19.0 A14 14 0 0 1 8.0 13.9 L13.5 23.4 A3 3 0 0 0 12.4 24.5 Z" stroke-width="0.75" style="fill: var(--dp); stroke: var(--bg)"></path><path d="M13.5 23.4 L8.0 13.9 A14 14 0 0 1 15.0 12.0 L15.0 23.0 A3 3 0 0 0 13.5 23.4 Z" stroke-width="0.75" style="fill: url(#gold-v) var(--mid); stroke: var(--bg)"></path><path d="M15.0 23.0 L15.0 12.0 A14 14 0 0 1 22.0 13.9 L16.5 23.4 A3 3 0 0 0 15.0 23.0 Z" stroke-width="0.75" style="fill: var(--dp); stroke: var(--bg)"></path><path d="M16.5 23.4 L22.0 13.9 A14 14 0 0 1 27.1 19.0 L17.6 24.5 A3 3 0 0 0 16.5 23.4 Z" stroke-width="0.75" style="fill: url(#gold-v) var(--mid); stroke: var(--bg)"></path><path d="M17.6 24.5 L27.1 19.0 A14 14 0 0 1 29.0 26.0 L18.0 26.0 A3 3 0 0 0 17.6 24.5 Z" stroke-width="0.75" style="fill: var(--dp); stroke: var(--bg)"></path>
+          <rect x="1" y="26" width="28" height="3" style="fill: url(#gold-v) var(--mid)"></rect>
+        </svg>
+    <span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span>
+    <span class="ad-cap">{{{{caption}}}}</span>
+    <div class="segs" data-segs="{{value}}" data-max="{{max}}"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+</template>
+<template data-rg-widget="fan" data-rg-label="Fan" data-rg-size="large" data-rg-sources="fan" data-rg-width="404" data-rg-height="36">
+  <div class="ad-fan ad-long" data-need="{{value}}">
+        <svg aria-hidden="true" width="30" height="30" viewBox="0 0 30 30" style="flex: none">
+          <path d="M12.0 26.0 L1.0 26.0 A14 14 0 0 1 2.9 19.0 L12.4 24.5 A3 3 0 0 0 12.0 26.0 Z" stroke-width="0.75" style="fill: url(#gold-v) var(--mid); stroke: var(--bg)"></path><path d="M12.4 24.5 L2.9 19.0 A14 14 0 0 1 8.0 13.9 L13.5 23.4 A3 3 0 0 0 12.4 24.5 Z" stroke-width="0.75" style="fill: var(--dp); stroke: var(--bg)"></path><path d="M13.5 23.4 L8.0 13.9 A14 14 0 0 1 15.0 12.0 L15.0 23.0 A3 3 0 0 0 13.5 23.4 Z" stroke-width="0.75" style="fill: url(#gold-v) var(--mid); stroke: var(--bg)"></path><path d="M15.0 23.0 L15.0 12.0 A14 14 0 0 1 22.0 13.9 L16.5 23.4 A3 3 0 0 0 15.0 23.0 Z" stroke-width="0.75" style="fill: var(--dp); stroke: var(--bg)"></path><path d="M16.5 23.4 L22.0 13.9 A14 14 0 0 1 27.1 19.0 L17.6 24.5 A3 3 0 0 0 16.5 23.4 Z" stroke-width="0.75" style="fill: url(#gold-v) var(--mid); stroke: var(--bg)"></path><path d="M17.6 24.5 L27.1 19.0 A14 14 0 0 1 29.0 26.0 L18.0 26.0 A3 3 0 0 0 17.6 24.5 Z" stroke-width="0.75" style="fill: var(--dp); stroke: var(--bg)"></path>
+          <rect x="1" y="26" width="28" height="3" style="fill: url(#gold-v) var(--mid)"></rect>
+        </svg>
+    <div class="ad-fan-body"><div class="ad-top"><span class="ad-cap">{{{{caption}}}}</span><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span></div><div class="segs" data-segs="{{value}}" data-max="{{max}}"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+  </div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Reading" data-rg-size="small" data-rg-width="130" data-rg-height="64">
+  <div class="ad-reading" data-need="{{value}}"><span class="ad-cap">{{{{caption}}}}</span><span class="ad-val"><span data-num="{{value}}">--</span><span class="ad-unit"> {{{{unit}}}}</span></span></div>
+</template>
 
 <!-- Auto-configuration: which source and field each placeholder wants -->
 <script type="application/json" id="rg-template-options">
@@ -1159,7 +1404,7 @@
   'use strict';
   var ARC = Math.PI * 150;          // length of the gauge arc, r = 150
   var T_MIN = 20, T_MAX = 100;      // gauge scale
-  var SEGMENTS = 22, FAN_MAX = 2400;
+  var FAN_MAX = 2400;               // fan scale when the sensor has no maximum
 
   function num(v) {
     if (v === undefined || v === null) return NaN;
@@ -1170,7 +1415,7 @@
   // so 4210 MHz and 4.21 GHz both read well.
   function fmt(n, places) {
     if (!isFinite(n)) return '--';
-    var p = Math.abs(n) >= 100 ? 0 : (places || 1);
+    var p = Math.abs(n) >= 100 ? 0 : (isFinite(places) ? places : 1);
     return n.toLocaleString('en-US', { maximumFractionDigits: p });
   }
   function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
@@ -1178,6 +1423,14 @@
   function attr(el, name, value) { if (el.getAttribute(name) !== value) el.setAttribute(name, value); }
   function text(el, value) { if (el.textContent !== value) el.textContent = value; }
   function each(sel, fn) { Array.prototype.forEach.call(document.querySelectorAll(sel), fn); }
+  // The share of a gauge: the template's own read 20 to 100 degrees; one with
+  // data-max (a custom layout's) reads 0 to its sensor's maximum, 100 when the
+  // sensor has none.
+  function gaugeShare(el, v, t) {
+    if (!el.hasAttribute('data-max')) return isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+    var max = num(v[el.dataset.max]);
+    return isFinite(t) ? clamp01(t / (max > 0 ? max : 100)) : 0;
+  }
 
   window.updateValues = function (v) {
     if (!v || typeof v !== 'object') return;
@@ -1190,18 +1443,32 @@
       var hm = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
       text(el, d > 0 ? d + 'D ' + hm : hm);
     });
-    each('[data-num]', function (el) { text(el, fmt(num(v[el.dataset.num]), +el.dataset.places)); });
+    each('[data-num]', function (el) {
+      var n = num(v[el.dataset.num]);
+      if (!el.hasAttribute('data-tight')) { text(el, fmt(n, +el.dataset.places)); return; }
+      // a gauge's numeral: whole from 10 up, and smaller when it is long
+      var shown = fmt(n, Math.abs(n) >= 10 ? 0 : 1);
+      text(el, shown);
+      var long = shown.length > 4;
+      if (el.classList.contains('ad-long') !== long) el.classList.toggle('ad-long', long);
+    });
+    each('[data-hi]', function (el) {      // a custom gauge's top end: its sensor's maximum
+      var max = num(v[el.dataset.hi]);
+      text(el, fmt(max > 0 ? max : 100, 0));
+    });
 
     each('[data-arc]', function (el) {
       var t = num(v[el.dataset.arc]);
-      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var f = gaugeShare(el, v, t);
       var dash = (f * ARC).toFixed(1) + ' 1000';
       if (el.style.strokeDasharray !== dash) el.style.strokeDasharray = dash;
-      attr(el, 'class', 'arc' + (t >= 85 ? ' hot' : t >= 72 ? ' warn' : ''));
+      // warm and hot: 72 and 85 degrees, or 72 % and 85 % of a custom gauge's scale
+      var hot = el.hasAttribute('data-max') ? f >= 0.85 : t >= 85, warm = el.hasAttribute('data-max') ? f >= 0.72 : t >= 72;
+      attr(el, 'class', 'arc' + (hot ? ' hot' : warm ? ' warn' : ''));
     });
     each('[data-marker]', function (el) {
       var t = num(v[el.dataset.marker]);
-      var f = isFinite(t) ? clamp01((t - T_MIN) / (T_MAX - T_MIN)) : 0;
+      var f = gaugeShare(el, v, t);
       var a = Math.PI * (1 - f);
       var x = 200 + 150 * Math.cos(a), y = 200 - 150 * Math.sin(a);
       attr(el, 'x', (x - 7).toFixed(1));
@@ -1213,7 +1480,7 @@
       var rpm = num(v[el.dataset.segs]);
       var max = num(v[el.dataset.max]);
       if (!(max > 0)) max = FAN_MAX;
-      var lit = isFinite(rpm) ? Math.round(clamp01(rpm / max) * SEGMENTS) : 0;
+      var lit = isFinite(rpm) ? Math.round(clamp01(rpm / max) * el.children.length) : 0;
       if (el.dataset.lit === String(lit)) return;
       el.dataset.lit = String(lit);
       for (var i = 0; i < el.children.length; i++) {

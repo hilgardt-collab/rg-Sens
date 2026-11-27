@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1280 1440x940 2400x584">
+<meta name="rg-group-size" content="480x344+200">
+<title>Blue &amp; White Porcelain Sensor Panel</title>
+<!--
+  Blue-and-white porcelain sensor panel for the rg-Sens CSS Template
+  displayer, drawn for 480x1920 portrait: a museum display against a pale
+  split-bamboo screen. Every piece is glossy white porcelain painted in
+  underglaze cobalt (soft edges where the pigment bleeds into the glaze,
+  darker spots where it pooled), with museum label cards. The motifs are
+  generic, traditional ones: waves, lotus, the Greek key, clouds and plum
+  blossom; no reign marks or inscriptions. A sibling of the other example
+  panels: the same placeholders 0-73 and the same setup.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the card's name)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Anything left unbound is hidden: a bar, a saucer, a vase, a whole group.
+  The processor's power bar has no rg-Sens source and stays hidden unless you
+  bind a sensor to it by hand on the Bindings tab.
+
+  A dish's painted wash sweeps 270 degrees from 20 to 100 degrees; its state
+  reads TEMPERATE, WARM (from 72) or RUNNING HOT (from 85, when the sweep and
+  the numbers turn to the ware's hot accent). A vase fills with a painted sea
+  to the share in use; a lotus vine fills the empty field above while there
+  is room.
+
+  The tile panel keeps the last minute (31 samples, one every 2 s) in the
+  page and paints it as a landscape: inbound as washed mountains (full scale
+  16 MB/s), outbound as darker foothills in front (4 MB/s, so it stays
+  visible). It starts empty and survives a reload of the template, not a
+  restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of porcelain_panel.css): ware
+  (Ming Cobalt, Delft, Azulejo), how the design fits the panel, the layout,
+  the frame rate, and the full scales of the bars and the landscape.
+
+  Size: the design is drawn for 480x1920, but its five groups (the clock
+  plate, the dishes, the saucers, the vases and the tile panel) re-arrange to
+  suit the panel: one column, two, three or five side by side (the
+  rg-layouts list gives the size each needs). Each group is one drawing that
+  keeps its proportions and grows into its cell; the bamboo screen covers
+  whatever box the panel has.
+
+  Custom layouts: the template elements at the end of the body are the
+  building blocks (two group styles and the clock plate, dish, glazed slip,
+  saucer, vase and label card widgets) that "My own groups and widgets"
+  builds groups from; see the guide's "Custom Layouts" section.
+
+  The bamboo's fibres and flecks are noise filters, which are costly to
+  redraw; they carry data-rg-bake, so rg-Sens draws each once into a bitmap.
+
+  Motion: the fan whorls turn with RPM (one turn every 6000 / RPM seconds),
+  and the newest point of the landscape pulses, at --motion-fps frames a
+  second. 0 turns motion off, as do the panel's Animation switch and the
+  system's reduced-motion setting.
+
+  Fonts: Cormorant Garamond (numbers, with lining figures) and Cormorant SC
+  (labels), loaded from the fonts folder next to this file; copy that folder
+  along with the template. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="porcelain_panel.css">
+</head>
+<body>
+<div class="panel">
+  <svg aria-hidden="true" width="0" height="0" style="position: absolute">
+    <defs>
+      <!-- underglaze cobalt: soft edges where the pigment bleeds into the glaze, plus darker pooled spots -->
+      <filter id="pc-blue" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="0.45" result="soft"></feGaussianBlur>
+        <feTurbulence type="fractalNoise" baseFrequency="0.075" numOctaves="3" seed="8" result="n"></feTurbulence>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 2.4 -1.0" result="na"></feColorMatrix>
+        <feFlood result="dk" style="flood-color: var(--pool)"></feFlood>
+        <feComposite in="dk" in2="soft" operator="in" result="dkS"></feComposite>
+        <feComposite in="dkS" in2="na" operator="in" result="pool"></feComposite>
+        <feComponentTransfer in="soft" result="base"><feFuncA type="linear" slope="0.9"></feFuncA></feComponentTransfer>
+        <feMerge><feMergeNode in="base"></feMergeNode><feMergeNode in="pool"></feMergeNode></feMerge>
+      </filter>
+      <filter id="pc-red" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="0.5" result="soft"></feGaussianBlur>
+        <feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="3" seed="21" result="n"></feTurbulence>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 2.4 -1.0" result="na"></feColorMatrix>
+        <feFlood result="dk" style="flood-color: var(--hot-pool)"></feFlood>
+        <feComposite in="dk" in2="soft" operator="in" result="dkS"></feComposite>
+        <feComposite in="dkS" in2="na" operator="in" result="pool"></feComposite>
+        <feComponentTransfer in="soft" result="base"><feFuncA type="linear" slope="0.85"></feFuncA></feComponentTransfer>
+        <feMerge><feMergeNode in="base"></feMergeNode><feMergeNode in="pool"></feMergeNode></feMerge>
+      </filter>
+      <!-- tiny glaze pinholes and iron specks -->
+      <filter id="pc-speck" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.3" numOctaves="1" seed="3"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.32  0 0 0 0 0.3  0 0 0 0 0.3  7 0 0 0 -4.3"></feColorMatrix></filter>
+      <filter id="pc-blur2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"></feGaussianBlur></filter>
+      <filter id="pc-blur5" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"></feGaussianBlur></filter>
+      <filter id="pc-blur9" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"></feGaussianBlur></filter>
+      <filter id="pc-card" x="-20%" y="-40%" width="140%" height="200%"><fedropshadow dx="0" dy="2" stdDeviation="1.6" flood-color="#3A2810" flood-opacity="0.38"></fedropshadow></filter>
+      <!-- backdrop linen -->
+      <filter id="pc-linenH" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.02 1.1" numOctaves="2" seed="5"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.9  1.2 0 0 0 -0.62"></feColorMatrix></filter>
+      <filter id="pc-linenV" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.1 0.02" numOctaves="2" seed="9"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.2 0 0 0 -0.58"></feColorMatrix></filter>
+      <!-- rosewood shelf grain -->
+      <filter id="pc-wood" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.5" numOctaves="3" seed="7" result="lines"></feTurbulence>
+        <feTurbulence type="fractalNoise" baseFrequency="0.01 0.04" numOctaves="2" seed="3" result="warp"></feTurbulence>
+        <feDisplacementMap in="lines" in2="warp" scale="14" xChannelSelector="R" yChannelSelector="G" result="bent"></feDisplacementMap>
+        <feColorMatrix in="bent" type="matrix" values="0 0 0 0 0.06  0 0 0 0 0.025  0 0 0 0 0.01  0 0 0 2.4 -0.95"></feColorMatrix>
+      </filter>
+      <!-- bamboo: long vertical fibres and darker flecks -->
+      <filter id="pc-fibre" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.9 0.006" numOctaves="3" seed="12"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.33  0 0 0 0 0.16  1.3 0 0 0 -0.62"></feColorMatrix></filter>
+      <filter id="pc-fleck" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.35 0.02" numOctaves="2" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.4  0 0 0 0 0.28  0 0 0 0 0.12  3 0 0 0 -1.9"></feColorMatrix></filter>
+      <linearGradient id="pc-slat" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#C4A674"></stop>
+        <stop offset="0.12" stop-color="#E4D0A6"></stop>
+        <stop offset="0.38" stop-color="#F3E7C8"></stop>
+        <stop offset="0.7" stop-color="#E4D0A6"></stop>
+        <stop offset="1" stop-color="#C4A674"></stop>
+      </linearGradient>
+      <clipPath id="pc-circ" clipPathUnits="objectBoundingBox"><circle cx="0.5" cy="0.5" r="0.5"></circle></clipPath>
+      <!-- glazed body shading -->
+      <radialGradient id="pc-plate" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" style="stop-color: var(--hi)"></stop>
+        <stop offset="0.5" style="stop-color: var(--body)"></stop>
+        <stop offset="0.575" style="stop-color: var(--body)"></stop>
+        <stop offset="0.6" style="stop-color: var(--shade)"></stop>
+        <stop offset="0.64" style="stop-color: var(--body)"></stop>
+        <stop offset="0.82" style="stop-color: var(--body)"></stop>
+        <stop offset="0.85" style="stop-color: var(--shade)"></stop>
+        <stop offset="0.88" style="stop-color: var(--hi)"></stop>
+        <stop offset="0.95" style="stop-color: var(--body)"></stop>
+        <stop offset="0.985" style="stop-color: var(--shade)"></stop>
+        <stop offset="1" style="stop-color: var(--edge)"></stop>
+      </radialGradient>
+      <radialGradient id="pc-saucer" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" style="stop-color: var(--hi)"></stop>
+        <stop offset="0.62" style="stop-color: var(--body)"></stop>
+        <stop offset="0.7" style="stop-color: var(--shade)"></stop>
+        <stop offset="0.76" style="stop-color: var(--body)"></stop>
+        <stop offset="0.9" style="stop-color: var(--hi)"></stop>
+        <stop offset="0.97" style="stop-color: var(--shade)"></stop>
+        <stop offset="1" style="stop-color: var(--edge)"></stop>
+      </radialGradient>
+      <linearGradient id="pc-light" x1="0.15" y1="0.05" x2="0.85" y2="0.95">
+        <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"></stop>
+        <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0"></stop>
+        <stop offset="0.7" stop-color="#000000" stop-opacity="0"></stop>
+        <stop offset="1" stop-color="#000000" stop-opacity="0.22"></stop>
+      </linearGradient>
+      <linearGradient id="pc-vase" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" style="stop-color: var(--edge)"></stop>
+        <stop offset="0.1" style="stop-color: var(--shade)"></stop>
+        <stop offset="0.28" style="stop-color: var(--hi)"></stop>
+        <stop offset="0.48" style="stop-color: var(--body)"></stop>
+        <stop offset="0.76" style="stop-color: var(--shade)"></stop>
+        <stop offset="0.94" style="stop-color: var(--edge)"></stop>
+        <stop offset="1" style="stop-color: var(--edge-dk)"></stop>
+      </linearGradient>
+      <linearGradient id="pc-vaseV" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#000000" stop-opacity="0.12"></stop>
+        <stop offset="0.25" stop-color="#000000" stop-opacity="0"></stop>
+        <stop offset="0.85" stop-color="#000000" stop-opacity="0"></stop>
+        <stop offset="1" stop-color="#000000" stop-opacity="0.28"></stop>
+      </linearGradient>
+      <linearGradient id="pc-tile" x1="0" y1="0" x2="0.35" y2="1">
+        <stop offset="0" style="stop-color: var(--hi)"></stop>
+        <stop offset="0.5" style="stop-color: var(--body)"></stop>
+        <stop offset="1" style="stop-color: var(--shade)"></stop>
+      </linearGradient>
+      <linearGradient id="pc-gloss" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"></stop>
+        <stop offset="0.3" stop-color="#FFFFFF" stop-opacity="0"></stop>
+        <stop offset="0.36" stop-color="#FFFFFF" stop-opacity="0.55"></stop>
+        <stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0.08"></stop>
+        <stop offset="0.47" stop-color="#FFFFFF" stop-opacity="0.3"></stop>
+        <stop offset="0.52" stop-color="#FFFFFF" stop-opacity="0"></stop>
+        <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"></stop>
+      </linearGradient>
+      <linearGradient id="pc-mtn" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="0" y2="268">
+        <stop offset="0" stop-opacity="0.92" style="stop-color: var(--line)"></stop>
+        <stop offset="0.45" stop-opacity="0.55" style="stop-color: var(--wash)"></stop>
+        <stop offset="1" stop-opacity="0.08" style="stop-color: var(--wash)"></stop>
+      </linearGradient>
+      <linearGradient id="pc-shelf" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#6E3524"></stop>
+        <stop offset="0.25" stop-color="#4A2015"></stop>
+        <stop offset="1" stop-color="#260E08"></stop>
+      </linearGradient>
+<g id="pc-clockBody" transform="translate(-224 -176)">
+    <circle cx="232" cy="190" r="168" fill="#3A2810" opacity="0.4" filter="url(#pc-blur9)"></circle>
+    <circle cx="224" cy="176" r="170" fill="url(#pc-plate)"></circle>
+</g>
+<g id="pc-clockPaint" transform="translate(-224 -176)">
+      <path d="M58.5 176.0 a165.5 165.5 0 1 0 331 0 a165.5 165.5 0 1 0 -331 0 M78.5 176.0 a145.5 145.5 0 1 0 291 0 a145.5 145.5 0 1 0 -291 0 M125.0 176.0 a99 99 0 1 0 198 0 a99 99 0 1 0 -198 0 " fill="none" stroke-width="1.5" style="stroke: var(--line)"></path>
+      <path d="M61.0 176.0 a163 163 0 1 0 326 0 a163 163 0 1 0 -326 0 M76.0 176.0 a148 148 0 1 0 296 0 a148 148 0 1 0 -296 0 M128.0 176.0 a96 96 0 1 0 192 0 a96 96 0 1 0 -192 0 " fill="none" stroke-width="0.7" style="stroke: var(--line)"></path>
+      <path transform="translate(224.0 13.6) rotate(0.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(249.4 15.6) rotate(9.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(274.2 21.5) rotate(18.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(297.7 31.3) rotate(27.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(319.5 44.6) rotate(36.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(338.8 61.2) rotate(45.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(355.4 80.5) rotate(54.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(368.7 102.3) rotate(63.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(378.5 125.8) rotate(72.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(384.4 150.6) rotate(81.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(386.4 176.0) rotate(90.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(384.4 201.4) rotate(99.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(378.5 226.2) rotate(108.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(368.7 249.7) rotate(117.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(355.4 271.5) rotate(126.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(338.8 290.8) rotate(135.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(319.5 307.4) rotate(144.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(297.7 320.7) rotate(153.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(274.2 330.5) rotate(162.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(249.4 336.4) rotate(171.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(224.0 338.4) rotate(180.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(198.6 336.4) rotate(189.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(173.8 330.5) rotate(198.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(150.3 320.7) rotate(207.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(128.5 307.4) rotate(216.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(109.2 290.8) rotate(225.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(92.6 271.5) rotate(234.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(79.3 249.7) rotate(243.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(69.5 226.2) rotate(252.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(63.6 201.4) rotate(261.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(61.6 176.0) rotate(270.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(63.6 150.6) rotate(279.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(69.5 125.8) rotate(288.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(79.3 102.3) rotate(297.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(92.6 80.5) rotate(306.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(109.2 61.2) rotate(315.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(128.5 44.6) rotate(324.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(150.3 31.3) rotate(333.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(173.8 21.5) rotate(342.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path><path transform="translate(198.6 15.6) rotate(351.0) scale(0.850 1)" d="M-15 12 C-12 4 -4 0 4 1 C10 2 13 6 11 9 C9 11.5 5 11 5 8 C5 6 7 5.5 8 6.5 C7 3.5 0 3 -4 6 C-7 8.5 -8 11 -8 12 Z" style="fill: var(--line)"></path>
+      <path d="M207.1 69.3 C203.7 57.2 214.0 48.4 224.0 43.0 C234.0 48.4 244.3 57.2 240.9 69.3 Z M330.7 159.1 C342.8 155.7 351.6 166.0 357.0 176.0 C351.6 186.0 342.8 196.3 330.7 192.9 Z M240.9 282.7 C244.3 294.8 234.0 303.6 224.0 309.0 C214.0 303.6 203.7 294.8 207.1 282.7 Z M117.3 192.9 C105.2 196.3 96.4 186.0 91.0 176.0 C96.4 166.0 105.2 155.7 117.3 159.1 Z " opacity="0.92" style="fill: var(--wash)"></path>
+      <path d="M200.0 75.8 C193.3 57.9 208.3 43.5 224.0 35.0 C239.7 43.5 254.7 57.9 248.0 75.8 M253.3 77.2 C256.4 58.4 276.7 53.4 294.5 53.9 C303.8 69.1 309.6 89.1 294.9 101.3 M298.7 105.1 C310.9 90.4 330.9 96.2 346.1 105.5 C346.6 123.3 341.6 143.6 322.8 146.7 M324.2 152.0 C342.1 145.3 356.5 160.3 365.0 176.0 C356.5 191.7 342.1 206.7 324.2 200.0 M322.8 205.3 C341.6 208.4 346.6 228.7 346.1 246.5 C330.9 255.8 310.9 261.6 298.7 246.9 M294.9 250.7 C309.6 262.9 303.8 282.9 294.5 298.1 C276.7 298.6 256.4 293.6 253.3 274.8 M248.0 276.2 C254.7 294.1 239.7 308.5 224.0 317.0 C208.3 308.5 193.3 294.1 200.0 276.2 M194.7 274.8 C191.6 293.6 171.3 298.6 153.5 298.1 C144.2 282.9 138.4 262.9 153.1 250.7 M149.3 246.9 C137.1 261.6 117.1 255.8 101.9 246.5 C101.4 228.7 106.4 208.4 125.2 205.3 M123.8 200.0 C105.9 206.7 91.5 191.7 83.0 176.0 C91.5 160.3 105.9 145.3 123.8 152.0 M125.2 146.7 C106.4 143.6 101.4 123.3 101.9 105.5 C117.1 96.2 137.1 90.4 149.3 105.1 M153.1 101.3 C138.4 89.1 144.2 69.1 153.5 53.9 C171.3 53.4 191.6 58.4 194.7 77.2 " fill="none" stroke-width="1.5" stroke-linejoin="round" style="stroke: var(--line)"></path>
+      <path d="M207.1 69.3 C203.7 57.2 214.0 48.4 224.0 43.0 C234.0 48.4 244.3 57.2 240.9 69.3 M262.7 75.2 C265.8 63.0 279.1 60.5 290.5 60.8 C296.5 70.5 301.0 83.3 292.0 92.1 M307.9 108.0 C316.7 99.0 329.5 103.5 339.2 109.5 C339.5 120.9 337.0 134.2 324.8 137.3 M330.7 159.1 C342.8 155.7 351.6 166.0 357.0 176.0 C351.6 186.0 342.8 196.3 330.7 192.9 M324.8 214.7 C337.0 217.8 339.5 231.1 339.2 242.5 C329.5 248.5 316.7 253.0 307.9 244.0 M292.0 259.9 C301.0 268.7 296.5 281.5 290.5 291.2 C279.1 291.5 265.8 289.0 262.7 276.8 M240.9 282.7 C244.3 294.8 234.0 303.6 224.0 309.0 C214.0 303.6 203.7 294.8 207.1 282.7 M185.3 276.8 C182.2 289.0 168.9 291.5 157.5 291.2 C151.5 281.5 147.0 268.7 156.0 259.9 M140.1 244.0 C131.3 253.0 118.5 248.5 108.8 242.5 C108.5 231.1 111.0 217.8 123.2 214.7 M117.3 192.9 C105.2 196.3 96.4 186.0 91.0 176.0 C96.4 166.0 105.2 155.7 117.3 159.1 M123.2 137.3 C111.0 134.2 108.5 120.9 108.8 109.5 C118.5 103.5 131.3 99.0 140.1 108.0 M156.0 92.1 C147.0 83.3 151.5 70.5 157.5 60.8 C168.9 60.5 182.2 63.0 185.3 75.2 " fill="none" stroke-width="0.7" style="stroke: var(--line)"></path>
+      <path d="M274.2 74.8 C276.8 68.2 282.7 66.5 287.5 66.0 C289.4 70.4 290.9 76.4 286.5 81.9 Z M318.1 113.5 C323.6 109.1 329.6 110.6 334.0 112.5 C333.5 117.3 331.8 123.2 325.2 125.8 Z M325.2 226.2 C331.8 228.8 333.5 234.7 334.0 239.5 C329.6 241.4 323.6 242.9 318.1 238.5 Z M286.5 270.1 C290.9 275.6 289.4 281.6 287.5 286.0 C282.7 285.5 276.8 283.8 274.2 277.2 Z M173.8 277.2 C171.2 283.8 165.3 285.5 160.5 286.0 C158.6 281.6 157.1 275.6 161.5 270.1 Z M129.9 238.5 C124.4 242.9 118.4 241.4 114.0 239.5 C114.5 234.7 116.2 228.8 122.8 226.2 Z M122.8 125.8 C116.2 123.2 114.5 117.3 114.0 112.5 C118.4 110.6 124.4 109.1 129.9 113.5 Z M161.5 81.9 C157.1 76.4 158.6 70.4 160.5 66.0 C165.3 66.5 171.2 68.2 173.8 74.8 Z " style="fill: var(--line)"></path>
+      <path d="M221.8 86.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M232.3 86.5 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M241.6 88.0 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M250.7 90.4 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M259.5 93.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M266.8 98.1 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M275.8 103.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M283.1 109.1 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M289.8 115.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M295.7 123.1 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M299.7 131.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M305.1 139.4 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M308.5 148.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M310.9 157.3 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M312.4 166.6 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M311.8 176.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M312.4 185.4 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M310.9 194.7 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M308.5 203.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M305.1 212.6 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M299.7 221.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M295.7 228.9 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M289.8 236.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M283.1 242.9 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M275.8 248.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M266.8 253.9 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M259.5 258.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M250.7 261.6 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M241.6 264.0 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M232.3 265.5 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M221.8 266.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M213.5 265.5 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M204.2 264.0 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M195.1 261.6 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M186.3 258.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M176.8 253.9 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M170.0 248.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M162.7 242.9 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M156.0 236.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M150.1 228.9 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M143.9 221.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M140.7 212.6 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M137.3 203.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M134.9 194.7 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M133.4 185.4 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M131.8 176.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M133.4 166.6 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M134.9 157.3 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M137.3 148.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M140.7 139.4 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M143.9 131.0 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M150.1 123.1 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M156.0 115.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M162.7 109.1 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M170.0 103.2 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M176.8 98.1 a2.2 2.2 0 1 0 4.4 0 a2.2 2.2 0 1 0 -4.4 0 M186.3 93.8 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M195.1 90.4 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M204.2 88.0 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 M213.5 86.5 a1.1 1.1 0 1 0 2.2 0 a1.1 1.1 0 1 0 -2.2 0 " style="fill: var(--line)"></path>
+</g>
+<g id="pc-clockBoss" transform="translate(-224 -176)">
+      <path d="M218.5 169.2 a5.5 5.5 0 1 0 11 0 a5.5 5.5 0 1 0 -11 0 M225.0 173.9 a5.5 5.5 0 1 0 11 0 a5.5 5.5 0 1 0 -11 0 M222.5 181.5 a5.5 5.5 0 1 0 11 0 a5.5 5.5 0 1 0 -11 0 M214.5 181.5 a5.5 5.5 0 1 0 11 0 a5.5 5.5 0 1 0 -11 0 M212.0 173.9 a5.5 5.5 0 1 0 11 0 a5.5 5.5 0 1 0 -11 0 " style="fill: var(--line)"></path>
+</g>
+<g id="pc-clockGlaze" transform="translate(-224 -176)">
+    <circle cx="224" cy="176" r="2.6" style="fill: var(--body)"></circle>
+    <circle cx="224" cy="176" r="170" fill="url(#pc-light)"></circle>
+    <rect x="54" y="6" width="340" height="340" clip-path="url(#pc-circ)" filter="url(#pc-speck)" opacity="0.14"></rect>
+    <path d="M77.4 122.6 A156 156 0 0 1 155.6 35.8 " fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" opacity="0.85" filter="url(#pc-blur2)"></path>
+    <rect x="-34" y="-12" width="54" height="24" rx="8" transform="translate(166 100) rotate(-28)" fill="#FFFFFF" opacity="0.5" filter="url(#pc-blur5)"></rect>
+    <rect x="-16" y="-4" width="26" height="7" rx="3.5" transform="translate(164 101) rotate(-28)" fill="#FFFFFF" opacity="0.75" filter="url(#pc-blur2)"></rect>
+    <circle cx="224" cy="176" r="169.4" fill="none" stroke-width="1.2" opacity="0.7" style="stroke: var(--rim)"></circle>
+</g>
+<g id="pc-dishBody" transform="translate(-110 -106)">
+        <circle cx="117" cy="119" r="98" fill="#3A2810" opacity="0.4" filter="url(#pc-blur9)"></circle>
+        <circle cx="110" cy="106" r="100" fill="url(#pc-plate)"></circle>
+</g>
+<g id="pc-dishPaint" transform="translate(-110 -106)">
+          <path d="M12.5 106.0 a97.5 97.5 0 1 0 195 0 a97.5 97.5 0 1 0 -195 0 M25.5 106.0 a84.5 84.5 0 1 0 169 0 a84.5 84.5 0 1 0 -169 0 " fill="none" stroke-width="1.3" style="stroke: var(--line)"></path>
+          <path d="M14.7 106.0 a95.3 95.3 0 1 0 190.6 0 a95.3 95.3 0 1 0 -190.6 0 M23.3 106.0 a86.7 86.7 0 1 0 173.4 0 a86.7 86.7 0 1 0 -173.4 0 " fill="none" stroke-width="0.6" style="stroke: var(--line)"></path>
+          <path transform="translate(110.0 10.7) rotate(0.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(124.9 11.9) rotate(9.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(139.4 15.4) rotate(18.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(153.3 21.1) rotate(27.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(166.0 28.9) rotate(36.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(177.4 38.6) rotate(45.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(187.1 50.0) rotate(54.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(194.9 62.7) rotate(63.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(200.6 76.6) rotate(72.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(204.1 91.1) rotate(81.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(205.3 106.0) rotate(90.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(204.1 120.9) rotate(99.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(200.6 135.4) rotate(108.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(194.9 149.3) rotate(117.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(187.1 162.0) rotate(126.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(177.4 173.4) rotate(135.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(166.0 183.1) rotate(144.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(153.3 190.9) rotate(153.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(139.4 196.6) rotate(162.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(124.9 200.1) rotate(171.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(110.0 201.3) rotate(180.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(95.1 200.1) rotate(189.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(80.6 196.6) rotate(198.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(66.7 190.9) rotate(207.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(54.0 183.1) rotate(216.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(42.6 173.4) rotate(225.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(32.9 162.0) rotate(234.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(25.1 149.3) rotate(243.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(19.4 135.4) rotate(252.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(15.9 120.9) rotate(261.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(14.7 106.0) rotate(270.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(15.9 91.1) rotate(279.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(19.4 76.6) rotate(288.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(25.1 62.7) rotate(297.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(32.9 50.0) rotate(306.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(42.6 38.6) rotate(315.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(54.0 28.9) rotate(324.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(66.7 21.1) rotate(333.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(80.6 15.4) rotate(342.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path><path transform="translate(95.1 11.9) rotate(351.0) scale(1.069 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.15" style="stroke: var(--line)"></path>
+          <path d="M53.8 162.2 A79.5 79.5 0 1 1 166.2 162.2 M64.4 151.6 A64.5 64.5 0 1 1 155.6 151.6 " fill="none" stroke-width="0.8" style="stroke: var(--line)"></path>
+          <path d="M67.2 147.0 a1.8 1.8 0 1 0 3.6 0 a1.8 1.8 0 1 0 -3.6 0 M52.1 117.3 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M54.6 83.8 a1.8 1.8 0 1 0 3.6 0 a1.8 1.8 0 1 0 -3.6 0 M76.8 57.8 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M108.2 48.0 a1.8 1.8 0 1 0 3.6 0 a1.8 1.8 0 1 0 -3.6 0 M141.2 57.8 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M161.8 83.8 a1.8 1.8 0 1 0 3.6 0 a1.8 1.8 0 1 0 -3.6 0 M165.9 117.3 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M149.2 147.0 a1.8 1.8 0 1 0 3.6 0 a1.8 1.8 0 1 0 -3.6 0 " style="fill: var(--line)"></path>
+</g>
+<g id="pc-dishGlaze" transform="translate(-110 -106)">
+        <circle cx="110" cy="106" r="100" fill="url(#pc-light)"></circle>
+        <rect x="10" y="6" width="200" height="200" clip-path="url(#pc-circ)" filter="url(#pc-speck)" opacity="0.14"></rect>
+        <path d="M27.5 67.5 A91 91 0 0 1 64.5 27.2 " fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" opacity="0.85" filter="url(#pc-blur2)"></path>
+        <rect x="-20" y="-7" width="32" height="14" rx="5" transform="translate(76 62) rotate(-28)" fill="#FFFFFF" opacity="0.5" filter="url(#pc-blur2)"></rect>
+        <circle cx="110" cy="106" r="99.5" fill="none" stroke-width="1" opacity="0.7" style="stroke: var(--rim)"></circle>
+</g>
+<g id="pc-tileBody" transform="translate(-6 -228)">
+        <rect x="12" y="234" width="204" height="146" rx="3" fill="#3A2810" opacity="0.34" filter="url(#pc-blur5)"></rect>
+        <rect x="6" y="228" width="208" height="150" rx="3" fill="url(#pc-tile)"></rect>
+</g>
+<g id="pc-tilePaint" transform="translate(-6 -228)">
+          <rect x="13" y="235" width="194" height="136" rx="1.5" fill="none" stroke-width="1.3" style="stroke: var(--line)"></rect>
+          <rect x="16.5" y="238.5" width="187" height="129" rx="1" fill="none" stroke-width="0.6" style="stroke: var(--line)"></rect>
+          <path d="M13.0 235.0 C19.5 235.4 23.3 236.7 25.6 238.4 C22.7 238.6 18.8 237.9 13.0 235.0 Z M13.0 235.0 C18.4 238.6 21.0 241.6 22.2 244.2 C19.6 243.0 16.6 240.4 13.0 235.0 Z M13.0 235.0 C15.9 240.8 16.6 244.7 16.4 247.6 C14.7 245.3 13.4 241.5 13.0 235.0 Z M207.0 235.0 C206.6 241.5 205.3 245.3 203.6 247.6 C203.4 244.7 204.1 240.8 207.0 235.0 Z M207.0 235.0 C203.4 240.4 200.4 243.0 197.8 244.2 C199.0 241.6 201.6 238.6 207.0 235.0 Z M207.0 235.0 C201.2 237.9 197.3 238.6 194.4 238.4 C196.7 236.7 200.5 235.4 207.0 235.0 Z M207.0 371.0 C200.5 370.6 196.7 369.3 194.4 367.6 C197.3 367.4 201.2 368.1 207.0 371.0 Z M207.0 371.0 C201.6 367.4 199.0 364.4 197.8 361.8 C200.4 363.0 203.4 365.6 207.0 371.0 Z M207.0 371.0 C204.1 365.2 203.4 361.3 203.6 358.4 C205.3 360.7 206.6 364.5 207.0 371.0 Z M13.0 371.0 C13.4 364.5 14.7 360.7 16.4 358.4 C16.6 361.3 15.9 365.2 13.0 371.0 Z M13.0 371.0 C16.6 365.6 19.6 363.0 22.2 361.8 C21.0 364.4 18.4 367.4 13.0 371.0 Z M13.0 371.0 C18.8 368.1 22.7 367.4 25.6 367.6 C23.3 369.3 19.5 370.6 13.0 371.0 Z " opacity="0.9" style="fill: var(--wash)"></path>
+</g>
+<g id="pc-tileGlaze" transform="translate(-6 -228)">
+        <rect x="6" y="228" width="208" height="150" rx="3" fill="url(#pc-gloss)"></rect>
+        <rect x="6" y="228" width="208" height="150" rx="3" filter="url(#pc-speck)" opacity="0.12"></rect>
+        <rect x="6" y="228" width="208" height="150" rx="3" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1"></rect>
+</g>
+<g id="pc-saucerBody" transform="translate(-56 -98)">
+        <circle cx="61" cy="106" r="49" fill="#3A2810" opacity="0.4" filter="url(#pc-blur5)"></circle>
+        <circle cx="56" cy="98" r="50" fill="url(#pc-saucer)"></circle>
+</g>
+<g id="pc-saucerPaint" transform="translate(-56 -98)">
+          <path d="M10.5 98.0 a45.5 45.5 0 1 0 91 0 a45.5 45.5 0 1 0 -91 0 " fill="none" stroke-width="1.2" style="stroke: var(--line)"></path>
+          <path d="M13.0 98.0 a43 43 0 1 0 86 0 a43 43 0 1 0 -86 0 M23.0 98.0 a33 33 0 1 0 66 0 a33 33 0 1 0 -66 0 " fill="none" stroke-width="0.6" style="stroke: var(--line)"></path>
+          <path d="M64.5 60.8 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M81.7 70.8 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M91.7 88.0 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M91.7 108.0 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M81.7 125.2 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M64.5 135.2 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M44.5 135.2 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M27.3 125.2 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M17.3 108.0 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M17.3 88.0 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M27.3 70.8 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 M44.5 60.8 a1.5 1.5 0 1 0 3 0 a1.5 1.5 0 1 0 -3 0 " style="fill: var(--line)"></path>
+</g>
+<g id="pc-whorl" transform="translate(0 0)">
+              <path d="M0.0 -4.0 C7.0 -10.0 9.0 -23.0 2.0 -30.0 C11.0 -25.0 14.0 -12.0 5.0 -2.0 Z M3.5 -2.0 C12.2 1.1 24.4 -3.7 27.0 -13.3 C27.2 -3.0 17.4 6.1 4.2 3.3 Z M3.5 2.0 C5.2 11.1 15.4 19.3 25.0 16.7 C16.2 22.0 3.4 18.1 -0.8 5.3 Z M0.0 4.0 C-7.0 10.0 -9.0 23.0 -2.0 30.0 C-11.0 25.0 -14.0 12.0 -5.0 2.0 Z M-3.5 2.0 C-12.2 -1.1 -24.4 3.7 -27.0 13.3 C-27.2 3.0 -17.4 -6.1 -4.2 -3.3 Z M-3.5 -2.0 C-5.2 -11.1 -15.4 -19.3 -25.0 -16.7 C-16.2 -22.0 -3.4 -18.1 0.8 -5.3 Z " style="fill: var(--wash)"></path>
+              <path d="M0.0 -4.0 C7.0 -10.0 9.0 -23.0 2.0 -30.0 C11.0 -25.0 14.0 -12.0 5.0 -2.0 Z M3.5 -2.0 C12.2 1.1 24.4 -3.7 27.0 -13.3 C27.2 -3.0 17.4 6.1 4.2 3.3 Z M3.5 2.0 C5.2 11.1 15.4 19.3 25.0 16.7 C16.2 22.0 3.4 18.1 -0.8 5.3 Z M0.0 4.0 C-7.0 10.0 -9.0 23.0 -2.0 30.0 C-11.0 25.0 -14.0 12.0 -5.0 2.0 Z M-3.5 2.0 C-12.2 -1.1 -24.4 3.7 -27.0 13.3 C-27.2 3.0 -17.4 -6.1 -4.2 -3.3 Z M-3.5 -2.0 C-5.2 -11.1 -15.4 -19.3 -25.0 -16.7 C-16.2 -22.0 -3.4 -18.1 0.8 -5.3 Z " fill="none" stroke-width="0.8" style="stroke: var(--line)"></path>
+              <circle cx="0" cy="0" r="4.6" style="fill: var(--line)"></circle>
+</g>
+<g id="pc-saucerGlaze" transform="translate(-56 -98)">
+        <circle cx="56" cy="98" r="1.8" style="fill: var(--body)"></circle>
+        <circle cx="56" cy="98" r="50" fill="url(#pc-light)"></circle>
+        <rect x="6" y="48" width="100" height="100" clip-path="url(#pc-circ)" filter="url(#pc-speck)" opacity="0.14"></rect>
+        <path d="M14.3 78.6 A46 46 0 0 1 31.6 59.0 " fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" opacity="0.85" filter="url(#pc-blur2)"></path>
+        <circle cx="56" cy="98" r="49.5" fill="none" stroke-width="0.9" opacity="0.7" style="stroke: var(--rim)"></circle>
+</g>
+<g id="pc-vaseShadow" transform="translate(-76 0)">
+        <ellipse cx="76" cy="253" rx="40" ry="5" fill="#3A2810" opacity="0.5" filter="url(#pc-blur2)"></ellipse>
+        <path d="M46 250 Q80 236 136 246 L126 254 Z" fill="#3A2810" opacity="0.22" filter="url(#pc-blur9)"></path>
+</g>
+<g id="pc-vaseBody" transform="translate(-76 0)"><path d="M91.0 32.0 C91.0 32.8 91.7 35.7 91.0 37.0 C90.3 38.3 87.7 38.3 87.0 40.0 C86.3 41.7 84.8 44.7 87.0 47.0 C89.2 49.3 95.2 51.0 100.0 54.0 C104.8 57.0 111.5 60.3 116.0 65.0 C120.5 69.7 124.7 74.8 127.0 82.0 C129.3 89.2 130.3 96.7 130.0 108.0 C129.7 119.3 127.5 136.0 125.0 150.0 C122.5 164.0 118.0 179.0 115.0 192.0 C112.0 205.0 108.7 220.2 107.0 228.0 C105.3 235.8 105.0 236.0 105.0 239.0 C105.0 242.0 106.7 243.8 107.0 246.0 C107.3 248.2 107.0 251.0 107.0 252.0 L45.0 252.0 C45.0 251.0 44.7 248.2 45.0 246.0 C45.3 243.8 47.0 242.0 47.0 239.0 C47.0 236.0 46.7 235.8 45.0 228.0 C43.3 220.2 40.0 205.0 37.0 192.0 C34.0 179.0 29.5 164.0 27.0 150.0 C24.5 136.0 22.3 119.3 22.0 108.0 C21.7 96.7 22.7 89.2 25.0 82.0 C27.3 74.8 31.5 69.7 36.0 65.0 C40.5 60.3 47.2 57.0 52.0 54.0 C56.8 51.0 62.8 49.3 65.0 47.0 C67.2 44.7 65.7 41.7 65.0 40.0 C64.3 38.3 61.7 38.3 61.0 37.0 C60.3 35.7 61.0 32.8 61.0 32.0 Z" fill="url(#pc-vase)"></path></g>
+<g id="pc-vaseBands" transform="translate(-76 0)">
+            <path d="M16 46.0 Q76 47.5 136 46.0 M16 57.0 Q76 60.0 136 57.0 M16 96.0 Q76 100.0 136 96.0 M16 226.0 Q76 231.0 136 226.0 M16 246.0 Q76 249.0 136 246.0 " fill="none" stroke-width="1.3" style="stroke: var(--line)"></path>
+            <path d="M16 49.0 Q76 50.5 136 49.0 M16 60.0 Q76 63.0 136 60.0 M16 93.0 Q76 97.0 136 93.0 M16 229.0 Q76 234.0 136 229.0 " fill="none" stroke-width="0.6" style="stroke: var(--line)"></path>
+            <path d="M25.0 84.7 C21.8 84.7 20.3 81.8 21.8 79.6 C20.7 77.5 22.8 75.3 25.0 76.7 C27.2 75.3 29.3 77.5 28.2 79.6 C29.7 81.8 28.2 84.7 25.0 84.7 Z M25.0 84.7 C24.3 86.8 26.4 87.9 27.9 86.8  M42.0 82.2 C38.8 82.2 37.3 79.3 38.8 77.1 C37.7 75.0 39.8 72.8 42.0 74.2 C44.2 72.8 46.3 75.0 45.2 77.1 C46.7 79.3 45.2 82.2 42.0 82.2 Z M42.0 82.2 C41.3 84.3 43.4 85.4 44.9 84.3  M59.0 79.7 C55.8 79.7 54.3 76.8 55.8 74.6 C54.7 72.5 56.8 70.3 59.0 71.7 C61.2 70.3 63.3 72.5 62.2 74.6 C63.7 76.8 62.2 79.7 59.0 79.7 Z M59.0 79.7 C58.3 81.8 60.4 82.9 61.9 81.8  M76.0 77.2 C72.8 77.2 71.3 74.3 72.8 72.1 C71.7 70.0 73.8 67.8 76.0 69.2 C78.2 67.8 80.3 70.0 79.2 72.1 C80.7 74.3 79.2 77.2 76.0 77.2 Z M76.0 77.2 C75.3 79.3 77.4 80.4 78.9 79.3  M93.0 79.7 C89.8 79.7 88.3 76.8 89.8 74.6 C88.7 72.5 90.8 70.3 93.0 71.7 C95.2 70.3 97.3 72.5 96.2 74.6 C97.7 76.8 96.2 79.7 93.0 79.7 Z M93.0 79.7 C92.3 81.8 94.4 82.9 95.9 81.8  M110.0 82.2 C106.8 82.2 105.3 79.3 106.8 77.1 C105.7 75.0 107.8 72.8 110.0 74.2 C112.2 72.8 114.3 75.0 113.2 77.1 C114.7 79.3 113.2 82.2 110.0 82.2 Z M110.0 82.2 C109.3 84.3 111.4 85.4 112.9 84.3  M127.0 84.7 C123.8 84.7 122.3 81.8 123.8 79.6 C122.7 77.5 124.8 75.3 127.0 76.7 C129.2 75.3 131.3 77.5 130.2 79.6 C131.7 81.8 130.2 84.7 127.0 84.7 Z M127.0 84.7 C126.3 86.8 128.4 87.9 129.9 86.8  " opacity="0.85" style="fill: var(--wash)"></path>
+            <path d="M16.5 71.5 C16.0 81.5 20.0 87.5 25.0 92.5 C30.0 87.5 34.0 81.5 33.5 71.5 M33.5 69.0 C33.0 79.0 37.0 85.0 42.0 90.0 C47.0 85.0 51.0 79.0 50.5 69.0 M50.5 66.5 C50.0 76.5 54.0 82.5 59.0 87.5 C64.0 82.5 68.0 76.5 67.5 66.5 M67.5 64.0 C67.0 74.0 71.0 80.0 76.0 85.0 C81.0 80.0 85.0 74.0 84.5 64.0 M84.5 66.5 C84.0 76.5 88.0 82.5 93.0 87.5 C98.0 82.5 102.0 76.5 101.5 66.5 M101.5 69.0 C101.0 79.0 105.0 85.0 110.0 90.0 C115.0 85.0 119.0 79.0 118.5 69.0 M118.5 71.5 C118.0 81.5 122.0 87.5 127.0 92.5 C132.0 87.5 136.0 81.5 135.5 71.5 " fill="none" stroke-width="1.1" style="stroke: var(--line)"></path>
+            <path d="M36.0 244 C36.0 237 39.0 232 40.0 229 C41.0 232 44.0 237 44.0 244 M45.0 244 C45.0 237 48.0 232 49.0 229 C50.0 232 53.0 237 53.0 244 M54.0 244 C54.0 237 57.0 232 58.0 229 C59.0 232 62.0 237 62.0 244 M63.0 244 C63.0 237 66.0 232 67.0 229 C68.0 232 71.0 237 71.0 244 M72.0 244 C72.0 237 75.0 232 76.0 229 C77.0 232 80.0 237 80.0 244 M81.0 244 C81.0 237 84.0 232 85.0 229 C86.0 232 89.0 237 89.0 244 M90.0 244 C90.0 237 93.0 232 94.0 229 C95.0 232 98.0 237 98.0 244 M99.0 244 C99.0 237 102.0 232 103.0 229 C104.0 232 107.0 237 107.0 244 M108.0 244 C108.0 237 111.0 232 112.0 229 C113.0 232 116.0 237 116.0 244 " fill="none" stroke-width="0.9" style="stroke: var(--line)"></path>
+</g>
+<g id="pc-vaseVine" transform="translate(-76 0)">
+            <path d="M16.0 134.1 C17.7 133.7 22.7 133.0 26.0 131.5 C29.3 130.0 32.7 127.2 36.0 125.1 C39.3 123.0 42.7 120.2 46.0 118.7 C49.3 117.2 52.7 116.1 56.0 116.1 C59.3 116.1 62.7 117.2 66.0 118.7 C69.3 120.2 72.7 123.0 76.0 125.1 C79.3 127.2 82.7 130.0 86.0 131.5 C89.3 133.0 92.7 134.1 96.0 134.1 C99.3 134.1 102.7 133.0 106.0 131.5 C109.3 130.0 112.7 127.2 116.0 125.1 C119.3 123.0 122.7 120.2 126.0 118.7 C129.3 117.2 134.3 116.5 136.0 116.1" fill="none" stroke-width="1" style="stroke: var(--line)"></path>
+            <path d="M26.0 131.5 C28.0 124.5 34.0 123.5 36.0 124.5 C34.0 128.5 30.0 130.5 26.0 131.5 Z M46.0 118.7 C48.0 125.7 54.0 126.7 56.0 125.7 C54.0 121.7 50.0 119.7 46.0 118.7 Z M66.0 118.7 C68.0 111.7 74.0 110.7 76.0 111.7 C74.0 115.7 70.0 117.7 66.0 118.7 Z M86.0 131.5 C88.0 138.5 94.0 139.5 96.0 138.5 C94.0 134.5 90.0 132.5 86.0 131.5 Z M106.0 131.5 C108.0 124.5 114.0 123.5 116.0 124.5 C114.0 128.5 110.0 130.5 106.0 131.5 Z M126.0 118.7 C128.0 125.7 134.0 126.7 136.0 125.7 C134.0 121.7 130.0 119.7 126.0 118.7 Z " opacity="0.8" style="fill: var(--wash)"></path>
+</g>
+<g id="pc-vaseGlaze" transform="translate(-76 0)">
+          <path d="M91.0 32.0 C91.0 32.8 91.7 35.7 91.0 37.0 C90.3 38.3 87.7 38.3 87.0 40.0 C86.3 41.7 84.8 44.7 87.0 47.0 C89.2 49.3 95.2 51.0 100.0 54.0 C104.8 57.0 111.5 60.3 116.0 65.0 C120.5 69.7 124.7 74.8 127.0 82.0 C129.3 89.2 130.3 96.7 130.0 108.0 C129.7 119.3 127.5 136.0 125.0 150.0 C122.5 164.0 118.0 179.0 115.0 192.0 C112.0 205.0 108.7 220.2 107.0 228.0 C105.3 235.8 105.0 236.0 105.0 239.0 C105.0 242.0 106.7 243.8 107.0 246.0 C107.3 248.2 107.0 251.0 107.0 252.0 L45.0 252.0 C45.0 251.0 44.7 248.2 45.0 246.0 C45.3 243.8 47.0 242.0 47.0 239.0 C47.0 236.0 46.7 235.8 45.0 228.0 C43.3 220.2 40.0 205.0 37.0 192.0 C34.0 179.0 29.5 164.0 27.0 150.0 C24.5 136.0 22.3 119.3 22.0 108.0 C21.7 96.7 22.7 89.2 25.0 82.0 C27.3 74.8 31.5 69.7 36.0 65.0 C40.5 60.3 47.2 57.0 52.0 54.0 C56.8 51.0 62.8 49.3 65.0 47.0 C67.2 44.7 65.7 41.7 65.0 40.0 C64.3 38.3 61.7 38.3 61.0 37.0 C60.3 35.7 61.0 32.8 61.0 32.0 Z" fill="url(#pc-vaseV)"></path>
+          <rect x="42" y="64" width="7" height="150" rx="3.5" fill="#FFFFFF" opacity="0.7" filter="url(#pc-blur2)"></rect>
+          <rect x="47" y="72" width="3" height="40" rx="1.5" fill="#FFFFFF" opacity="0.85"></rect>
+          <rect x="20" y="30" width="112" height="222" filter="url(#pc-speck)" opacity="0.12"></rect>
+</g>
+<g id="pc-vaseRim" transform="translate(-76 0)">
+        <path d="M61 32 H91" fill="none" stroke-width="1.2" opacity="0.8" style="stroke: var(--rim)"></path>
+</g>
+<g id="pc-clouds" transform="translate(0 0)">
+      <path d="M212.0 85.4 C203.9 85.4 200.3 78.2 203.9 72.8 C201.2 67.4 206.6 62.0 212.0 65.6 C217.4 62.0 222.8 67.4 220.1 72.8 C223.7 78.2 220.1 85.4 212.0 85.4 Z M212.0 85.4 C210.2 90.8 215.6 93.5 219.2 90.8 M236.0 73.6 C230.6 73.6 228.2 68.8 230.6 65.2 C228.8 61.6 232.4 58.0 236.0 60.4 C239.6 58.0 243.2 61.6 241.4 65.2 C243.8 68.8 241.4 73.6 236.0 73.6 Z M236.0 73.6 C234.8 77.2 238.4 79.0 240.8 77.2 M330.0 68.5 C323.3 68.5 320.3 62.5 323.3 58.0 C321.0 53.5 325.5 49.0 330.0 52.0 C334.5 49.0 339.0 53.5 336.8 58.0 C339.8 62.5 336.8 68.5 330.0 68.5 Z M330.0 68.5 C328.5 73.0 333.0 75.3 336.0 73.0 " fill="none" stroke-width="0.9" style="stroke: var(--line)"></path>
+</g>
+<g id="pc-water" transform="translate(0 0)">
+      <path d="M20 276 q5 -3 10 0 t10 0 M48 276 q5 -3 10 0 t10 0 M76 276 q5 -3 10 0 t10 0 M104 276 q5 -3 10 0 t10 0 M132 276 q5 -3 10 0 t10 0 M160 276 q5 -3 10 0 t10 0 M188 276 q5 -3 10 0 t10 0 M216 276 q5 -3 10 0 t10 0 M244 276 q5 -3 10 0 t10 0 M272 276 q5 -3 10 0 t10 0 M300 276 q5 -3 10 0 t10 0 M328 276 q5 -3 10 0 t10 0 M356 276 q5 -3 10 0 t10 0 M384 276 q5 -3 10 0 t10 0 M412 276 q5 -3 10 0 t10 0 M34 284 q5 -3 10 0 t10 0 M62 284 q5 -3 10 0 t10 0 M90 284 q5 -3 10 0 t10 0 M118 284 q5 -3 10 0 t10 0 M146 284 q5 -3 10 0 t10 0 M174 284 q5 -3 10 0 t10 0 M202 284 q5 -3 10 0 t10 0 M230 284 q5 -3 10 0 t10 0 M258 284 q5 -3 10 0 t10 0 M286 284 q5 -3 10 0 t10 0 M314 284 q5 -3 10 0 t10 0 M342 284 q5 -3 10 0 t10 0 M370 284 q5 -3 10 0 t10 0 M398 284 q5 -3 10 0 t10 0 M20 292 q5 -3 10 0 t10 0 M48 292 q5 -3 10 0 t10 0 M76 292 q5 -3 10 0 t10 0 M104 292 q5 -3 10 0 t10 0 M132 292 q5 -3 10 0 t10 0 M160 292 q5 -3 10 0 t10 0 M188 292 q5 -3 10 0 t10 0 M216 292 q5 -3 10 0 t10 0 M244 292 q5 -3 10 0 t10 0 M272 292 q5 -3 10 0 t10 0 M300 292 q5 -3 10 0 t10 0 M328 292 q5 -3 10 0 t10 0 M356 292 q5 -3 10 0 t10 0 M384 292 q5 -3 10 0 t10 0 M412 292 q5 -3 10 0 t10 0 " fill="none" stroke-width="0.9" stroke-linecap="round" style="stroke: var(--line)"></path>
+</g>
+<path id="pc-hourHand" d="M-4.2 16 C-5 0 -4 -30 -2.6 -54 L2.6 -54 C4 -30 5 0 4.2 16 Z M0.0 -54.3 C-5.6 -54.3 -8.1 -59.2 -5.6 -63.0 C-7.4 -66.7 -3.7 -70.4 0.0 -67.9 C3.7 -70.4 7.4 -66.7 5.6 -63.0 C8.1 -59.2 5.6 -54.3 0.0 -54.3 Z M0.0 -54.3 C-1.2 -50.6 2.5 -48.7 5.0 -50.6 "></path>
+<path id="pc-minuteHand" d="M-3.2 20 C-3.8 0 -2.6 -52 0 -92 C2.6 -52 3.8 0 3.2 20 Z"></path>
+<clipPath id="pc-vclip"><path transform="translate(-76 0)" d="M91.0 32.0 C91.0 32.8 91.7 35.7 91.0 37.0 C90.3 38.3 87.7 38.3 87.0 40.0 C86.3 41.7 84.8 44.7 87.0 47.0 C89.2 49.3 95.2 51.0 100.0 54.0 C104.8 57.0 111.5 60.3 116.0 65.0 C120.5 69.7 124.7 74.8 127.0 82.0 C129.3 89.2 130.3 96.7 130.0 108.0 C129.7 119.3 127.5 136.0 125.0 150.0 C122.5 164.0 118.0 179.0 115.0 192.0 C112.0 205.0 108.7 220.2 107.0 228.0 C105.3 235.8 105.0 236.0 105.0 239.0 C105.0 242.0 106.7 243.8 107.0 246.0 C107.3 248.2 107.0 251.0 107.0 252.0 L45.0 252.0 C45.0 251.0 44.7 248.2 45.0 246.0 C45.3 243.8 47.0 242.0 47.0 239.0 C47.0 236.0 46.7 235.8 45.0 228.0 C43.3 220.2 40.0 205.0 37.0 192.0 C34.0 179.0 29.5 164.0 27.0 150.0 C24.5 136.0 22.3 119.3 22.0 108.0 C21.7 96.7 22.7 89.2 25.0 82.0 C27.3 74.8 31.5 69.7 36.0 65.0 C40.5 60.3 47.2 57.0 52.0 54.0 C56.8 51.0 62.8 49.3 65.0 47.0 C67.2 44.7 65.7 41.7 65.0 40.0 C64.3 38.3 61.7 38.3 61.0 37.0 C60.3 35.7 61.0 32.8 61.0 32.0 Z"></path></clipPath>
+    </defs>
+  </svg>
+  <!-- the split-bamboo screen and the light falling on it (never hidden) -->
+  <svg class="screen" aria-hidden="true" data-screen>
+    <rect x="0" y="0" width="100%" height="100%" fill="#8C6E42"></rect>
+    <g data-slats></g>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#pc-fibre)" opacity="0.5"></rect>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#pc-fleck)" opacity="0.35"></rect>
+  </svg>
+  <div class="light" aria-hidden="true"></div>
+
+  <header class="strip">
+    <svg viewBox="0 0 448 64" role="img" aria-label="System sensors">
+    <rect x="4" y="8" width="440" height="60" rx="3" fill="#3A2810" opacity="0.34" filter="url(#pc-blur5)"></rect>
+    <rect x="0" y="0" width="448" height="64" rx="3" fill="url(#pc-tile)"></rect>
+    <g filter="url(#pc-blue)" style="mix-blend-mode: multiply">
+      <rect x="5" y="5" width="438" height="54" rx="1.5" fill="none" stroke-width="1.4" style="stroke: var(--line)"></rect>
+      <path transform="translate(19.1 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(19.1 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(33.2 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(33.2 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(47.3 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(47.3 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(61.5 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(61.5 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(75.6 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(75.6 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(89.7 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(89.7 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(103.9 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(103.9 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(118.0 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(118.0 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(132.1 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(132.1 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(146.3 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(146.3 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(160.4 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(160.4 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(174.5 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(174.5 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(188.7 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(188.7 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(202.8 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(202.8 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(216.9 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(216.9 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(231.1 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(231.1 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(245.2 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(245.2 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(259.3 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(259.3 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(273.5 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(273.5 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(287.6 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(287.6 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(301.7 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(301.7 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(315.9 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(315.9 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(330.0 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(330.0 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(344.1 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(344.1 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(358.3 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(358.3 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(372.4 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(372.4 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(386.5 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(386.5 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(400.7 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(400.7 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(414.8 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(414.8 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(428.9 9.5) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path><path transform="translate(428.9 54.5) rotate(180) scale(1.010 1)" d="M-7 9 V0.8 H5.6 V7 H-2.4 V3.6 H2.4 M-7 9 H7" fill="none" stroke-width="1.3" stroke-linejoin="miter" style="stroke: var(--line)"></path>
+      <path d="M12 18.5 H436 M12 45.5 H436" stroke-width="0.7" style="stroke: var(--line)"></path>
+      <text x="224" y="40.5" text-anchor="middle" font-family="Cormorant SC, Georgia, serif" font-weight="600" font-size="25" letter-spacing="7" style="fill: var(--line)">SYSTEM SENSORS</text>
+    </g>
+    <rect x="0" y="0" width="448" height="64" rx="3" fill="url(#pc-gloss)"></rect>
+    <rect x="0" y="0" width="448" height="64" rx="3" filter="url(#pc-speck)" opacity="0.12"></rect>
+    <rect x="0.5" y="0.5" width="447" height="63" rx="2.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1"></rect>
+    </svg>
+  </header>
+
+  <div class="groups">
+<!--rg-groups 0-71-->
+  <section class="g-clock" data-section>
+    <svg viewBox="0 0 448 384" role="img" aria-label="Clock">
+      <g data-pc="clock" data-need="0" transform="translate(224 176)" data-time="0" data-date="1 2 3"></g>
+    </svg>
+  </section>
+  <section class="g-temp" data-section>
+    <svg viewBox="0 0 448 384" role="img" aria-label="Processor and graphics">
+      <g data-pc="dish" data-need="5" transform="translate(110 106)" data-v="5" data-unit-of="6" data-lo="20" data-hi="100" data-label="PROCESSOR"></g>
+      <g data-pc="tile" data-need="9" transform="translate(6 228)" data-rows="LOAD 9 11 10 100|CLOCK 13 15 14 --cpu-clock-max|POWER 17 19 18 --cpu-power-max"></g>
+      <g data-pc="dish" data-need="21" transform="translate(338 106)" data-v="21" data-unit-of="22" data-lo="20" data-hi="100" data-label="GRAPHICS"></g>
+      <g data-pc="tile" data-need="25" transform="translate(234 228)" data-rows="LOAD 25 27 26 100|CLOCK 29 31 30 --gpu-clock-max|POWER 33 35 34 --gpu-power-max"></g>
+    </svg>
+  </section>
+  <section class="g-fans" data-section>
+    <svg viewBox="0 0 448 196" role="img" aria-label="Cooling">
+      <g filter="url(#pc-card)"><rect x="0" y="0" width="150" height="22" rx="1.5" fill="#FCFAF4"></rect></g>
+      <text class="sc c-ink" x="10" y="15.5" font-size="12" letter-spacing="2">Cooling · rpm</text>
+      <g data-pc="saucer" data-need="37" transform="translate(56 98)" data-v="37" data-cap="36" data-default="FAN 1"></g>
+      <g data-pc="saucer" data-need="41" transform="translate(168 98)" data-v="41" data-cap="40" data-default="FAN 2"></g>
+      <g data-pc="saucer" data-need="45" transform="translate(280 98)" data-v="45" data-cap="44" data-default="FAN 3"></g>
+      <g data-pc="saucer" data-need="49" transform="translate(392 98)" data-v="49" data-cap="48" data-default="FAN 4"></g>
+    </svg>
+  </section>
+  <section class="g-store" data-section>
+    <svg viewBox="0 0 448 316" role="img" aria-label="Storage">
+      <g filter="url(#pc-card)"><rect x="0" y="0" width="176" height="22" rx="1.5" fill="#FCFAF4"></rect></g>
+      <text class="sc c-ink" x="10" y="15.5" font-size="12" letter-spacing="2">Storage · % full</text>
+    <rect x="-16" y="252" width="480" height="16" fill="url(#pc-shelf)"></rect>
+    <rect x="-16" y="252" width="480" height="16" filter="url(#pc-wood)" opacity="0.8"></rect>
+    <path d="M-16 252.5 H464" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1"></path>
+    <rect x="-16" y="268" width="480" height="10" fill="#3A2810" opacity="0.35" filter="url(#pc-blur2)"></rect>
+      <g data-pc="vase" data-need="53" transform="translate(76 0)" data-v="53" data-max="55" data-unit-of="54" data-label="MEMORY"></g>
+      <g data-pc="vase" data-need="57" transform="translate(224 0)" data-v="57" data-max="59" data-unit-of="58" data-label="VIDEO"></g>
+      <g data-pc="vase" data-need="61" transform="translate(372 0)" data-v="61" data-max="63" data-unit-of="62" data-label="DISK"></g>
+    </svg>
+  </section>
+  <section class="g-net" data-section>
+    <svg viewBox="0 0 448 330" role="img" aria-label="Network">
+      <g filter="url(#pc-card)"><rect x="0" y="0" width="206" height="22" rx="1.5" fill="#FCFAF4"></rect></g>
+      <text class="sc c-ink" x="10" y="15.5" font-size="12" letter-spacing="2">Network · last 60 s</text>
+      <g data-pc="land" data-need="65" data-in="65" data-out="69" data-unit-of="66" data-max-in="67" data-max-out="71"></g>
+    </svg>
+  </section>
+<!--/rg-groups-->
+  </div>
+
+  <footer class="foot" data-need="73">
+    <svg viewBox="0 0 448 60" role="img" aria-label="Uptime">
+      <rect x="4" y="6" width="440" height="58" rx="29" fill="#3A2810" opacity="0.34" filter="url(#pc-blur5)"></rect>
+      <rect x="0" y="0" width="448" height="60" rx="30" fill="url(#pc-tile)"></rect>
+      <g filter="url(#pc-blue)" class="paint">
+        <rect class="s-line" x="6" y="6" width="436" height="48" rx="24" fill="none" stroke-width="1.4"></rect>
+        <rect class="s-line" x="10" y="10" width="428" height="40" rx="20" fill="none" stroke-width="0.6"></rect>
+        <g data-blossom transform="translate(38 30)"></g>
+        <g data-blossom transform="translate(410 30)"></g>
+        <text class="sc c-line" x="66" y="35" font-size="13" letter-spacing="3" font-weight="600">Uptime</text>
+        <text class="c-line" x="224" y="38.5" text-anchor="middle" font-size="25" data-uptime="73">--</text>
+        <text class="sc c-line" x="382" y="35" text-anchor="end" font-size="11" letter-spacing="2" font-weight="600" data-well>All well</text>
+      </g>
+      <rect x="0" y="0" width="448" height="60" rx="30" fill="url(#pc-gloss)"></rect>
+      <rect x="0" y="0" width="448" height="60" rx="30" filter="url(#pc-speck)" opacity="0.12"></rect>
+      <rect x="0.5" y="0.5" width="447" height="59" rx="29.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1"></rect>
+    </svg>
+  </footer>
+</div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): two group styles and the pieces the groups
+     are built from. Each piece is one drawing in its own units, made by the
+     script below from its data-pc kind, so a generated piece is painted
+     exactly as the template's own. -->
+<template data-rg-group="card" data-rg-label="Label card">
+  <section class="pc-sec" data-section><div class="pc-card">{{title}}</div><!--rg-items--></section>
+</template>
+<template data-rg-group="bare" data-rg-label="No label">
+  <section class="pc-sec" data-section><!--rg-items--></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock plate" data-rg-size="large" data-rg-sources="clock" data-rg-width="360" data-rg-height="396">
+  <svg viewBox="-180 -180 360 396" role="img" aria-label="Clock"><g data-pc="clock" data-need="{{time}}" data-time="{{time}}" data-date="{{day_name}} {{day:.0}} {{month_name}}"></g></svg>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock plate" data-rg-size="medium" data-rg-sources="clock" data-rg-width="360" data-rg-height="360">
+  <svg viewBox="-180 -180 360 360" role="img" aria-label="Clock"><g data-pc="clock" data-need="{{time}}" data-time="{{time}}" data-date="{{day_name}} {{day:.0}} {{month_name}}" data-plate-only></g></svg>
+</template>
+<template data-rg-widget="dish" data-rg-label="Dish" data-rg-size="large" data-rg-width="224" data-rg-height="226">
+  <svg viewBox="-106 -106 224 226" role="img" aria-label="Dish"><g data-pc="dish" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Glazed slip" data-rg-size="small" data-rg-width="130" data-rg-height="60">
+  <svg viewBox="0 0 130 60" role="img" aria-label="Bar"><g data-pc="slip" data-need="{{value}}" data-w="130" data-h="56" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Glazed slip" data-rg-size="medium" data-rg-width="212" data-rg-height="60">
+  <svg viewBox="0 0 212 60" role="img" aria-label="Bar"><g data-pc="slip" data-need="{{value}}" data-w="212" data-h="56" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Glazed slip" data-rg-size="large" data-rg-width="394" data-rg-height="40">
+  <svg viewBox="0 0 394 40" role="img" aria-label="Bar"><g data-pc="slip" data-need="{{value}}" data-w="390" data-h="36" data-row data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100"></g></svg>
+</template>
+<template data-rg-widget="fan" data-rg-label="Saucer" data-rg-size="small" data-rg-sources="fan" data-rg-width="112" data-rg-height="154">
+  <svg viewBox="-56 -54 112 154" role="img" aria-label="Fan"><g data-pc="saucer" data-need="{{value}}" data-v="{{value}}" data-cap="{{caption}}" data-default="FAN"></g></svg>
+</template>
+<template data-rg-widget="vase" data-rg-label="Vase" data-rg-size="medium" data-rg-default-for="memory disk" data-rg-width="128" data-rg-height="292">
+  <svg viewBox="-64 26 128 292" role="img" aria-label="Vase"><g data-pc="vase" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}"></g></svg>
+</template>
+<template data-rg-widget="reading" data-rg-label="Label card" data-rg-size="small" data-rg-width="134" data-rg-height="48">
+  <svg viewBox="0 0 134 48" role="img" aria-label="Reading"><g data-pc="card" data-need="{{value}}" data-v="{{value}}" data-unit-of="{{unit}}" data-cap="{{caption}}"></g></svg>
+</template>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "ware", "label": "Ware", "type": "choice", "var": "--ware", "default": "ming", "choices": [{"value": "ming", "label": "Ming Cobalt"}, {"value": "delft", "label": "Delft"}, {"value": "azulejo", "label": "Azulejo"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 5)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "5", "label": "Five columns (5 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_in_max", "label": "Mountains full scale (inbound)", "type": "number", "var": "--net-in-max", "min": 0, "max": 10000, "step": 1, "default": 16, "help": "In the network sensors' unit; 0 follows the peak of the last minute"},
+    {"id": "net_out_max", "label": "Foothills full scale (outbound)", "type": "number", "var": "--net-out-max", "min": 0, "max": 10000, "step": 1, "default": 4, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+<script>
+(function () {
+  'use strict';
+  var WARM = 72, HOT = 85;
+  var SAMPLES = 31, SAMPLE_MS = 2000;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  // The ware is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-ware', (css.getPropertyValue('--ware') || 'ming').trim() || 'ming');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places, grouped) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    var s = n.toLocaleString('en-US', { maximumFractionDigits: p });
+    return grouped ? s : s.replace(/,/g, '');
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function f1(n) { return (Math.round(n * 10) / 10).toString(); }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el && el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function flag(el, name, on) { if (el && el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el && el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function one(scope, role) { return scope.querySelector('[data-role="' + role + '"]'); }
+  // Text that may not run wider than `max` units: cut with an ellipsis.
+  function text(el, value, max) {
+    if (!el) return;
+    if (el.getAttribute('data-full') === value && el.textContent !== '') return;
+    el.setAttribute('data-full', value);
+    el.textContent = value;
+    if (!max || !el.getBBox) return;
+    var s = value;
+    // The box, not getComputedTextLength: that leaves out letter-spacing.
+    while (s.length > 1 && el.getBBox().width > max) {
+      s = s.slice(0, -1);
+      el.textContent = s.replace(/[\s·]+$/, '') + '…';
+    }
+  }
+  function isMhz(v, id) { return !!id && /^mhz$/i.test(String(v[id] || '')); }
+  function unitOf(v, g, id) {
+    id = id || g.getAttribute('data-unit-of');
+    var u = v[id];
+    return isMhz(v, id) ? 'GHz' : known(u) ? String(u) : '';
+  }
+  // A reading and its full scale: the sensor's own maximum, else the scale
+  // given (a number or a custom property's name).
+  function reading(v, valId, maxId, unitId, scale) {
+    var val = num(v[valId]), max = num(v[maxId]);
+    if (isMhz(v, unitId)) { val /= 1000; max /= 1000; }
+    scale = scale || '100';
+    var full = max > 0 ? max : scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+    return { val: val, full: full > 0 ? full : 100 };
+  }
+  function caption(v, g) {
+    var label = g.getAttribute('data-label');
+    if (label) return label;
+    var c = v[g.getAttribute('data-cap')];
+    return known(c) ? String(c).toUpperCase().replace(/_/g, ' ') : (g.getAttribute('data-default') || '');
+  }
+  function withUnit(val, unit, places) {
+    if (!isFinite(val)) return '--';
+    return fmt(val, unit === '%' ? 0 : places) + (unit === '%' ? ' %' : unit ? ' ' + unit : '');
+  }
+  function at(r, deg) { var a = deg * Math.PI / 180; return [r * Math.sin(a), -r * Math.cos(a)]; }
+  function xy(p) { return f1(p[0]) + ' ' + f1(p[1]); }
+  function arc(r, d0, d1) { return 'M' + xy(at(r, d0)) + ' A' + r + ' ' + r + ' 0 ' + (d1 - d0 > 180 ? 1 : 0) + ' 1 ' + xy(at(r, d1)); }
+  function use(id, extra) { return '<use href="#pc-' + id + '"' + (extra || '') + '/>'; }
+  var PAINT = ' filter="url(#pc-blue)" class="paint"';
+  var CARD = '<g filter="url(#pc-card)"><rect x="X" y="Y" width="W" height="H" rx="1.5" fill="#FCFAF4"/></g>';
+  function card(x, y, w, h) { return CARD.replace('X', x).replace('Y', y).replace('W', w).replace('H', h); }
+  // A smooth line through the points (each one passed through).
+  function smooth(p) {
+    if (p.length < 2) return '';
+    var d = 'M' + xy(p[0]);
+    for (var i = 0; i < p.length - 1; i++) {
+      var a = p[i - 1] || p[i], b = p[i], c = p[i + 1], e = p[i + 2] || c;
+      d += ' C' + xy([b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6]) + ' ' + xy([c[0] - (e[0] - b[0]) / 6, c[1] - (e[1] - b[1]) / 6]) + ' ' + xy(c);
+    }
+    return d;
+  }
+
+  // ------------------------------------------------------- pieces
+  // Each kind paints itself once, in its own units, into the element that
+  // names it (data-pc): the glazed body, the fixed painting (shared from the
+  // defs), and the parts the values move.
+  var DRAW = {
+    clock: function (g) {
+      var s = use('clockBody') + '<g' + PAINT + '>' + use('clockPaint') +
+        '<g data-hand="hour"><use href="#pc-hourHand" class="c-line"/></g>' +
+        '<g data-hand="minute"><use href="#pc-minuteHand" class="c-line"/></g>' + use('clockBoss') + '</g>' + use('clockGlaze');
+      if (!g.hasAttribute('data-plate-only')) {
+        s += card(-140, 176, 280, 32) +
+          '<text class="c-ink" x="-98" y="198.5" text-anchor="middle" font-size="21" data-role="time">--:--</text>' +
+          '<path d="M-56 184 V200" stroke="#120E0A" stroke-width="0.8" opacity="0.6"/>' +
+          '<text class="sc c-ink" x="40" y="196" text-anchor="middle" font-size="12" letter-spacing="1.6" data-role="date"> </text>';
+      }
+      return s;
+    },
+    dish: function () {
+      return use('dishBody') + '<g' + PAINT + '>' + use('dishPaint') + '</g>' +
+        '<g data-role="sweep"' + PAINT + '><path class="s-wash" fill="none" stroke-width="13" stroke-linecap="round" opacity="0.88" data-role="wash"/>' +
+        '<path class="s-pool" fill="none" stroke-width="4" stroke-linecap="round" opacity="0.35" data-role="pooled"/>' +
+        '<circle class="c-pool" r="7.6" opacity="0.55" data-role="blob"/></g>' + use('dishGlaze') +
+        '<g class="c-line" font-size="11" font-weight="600" text-anchor="middle"><text x="-38" y="64" data-role="lo"></text><text x="38" y="64" data-role="hi"></text></g>' +
+        '<text class="sc c-line" y="-27" font-size="12" font-weight="600" letter-spacing="2.5" text-anchor="middle" data-role="cap"></text>' +
+        '<text class="c-wash" y="11" font-size="50" text-anchor="middle" data-role="val">--</text>' +
+        '<text class="sc c-wash" y="31" font-size="10" font-weight="600" letter-spacing="2.5" text-anchor="middle" data-role="state"></text>';
+    },
+    tile: function (g) {
+      var rows = g.getAttribute('data-rows').split('|'), s = use('tileBody') + '<g' + PAINT + '>' + use('tilePaint');
+      rows.forEach(function (row, k) {
+        var y = 39 + k * 39, need = row.split(' ')[1];
+        s += '<g data-row="' + k + '" data-need="' + need + '"><rect class="s-line" x="18" y="' + y + '" width="172" height="10" rx="5" fill="none" stroke-width="0.8"/>' +
+          '<rect class="c-wash" x="18" y="' + y + '" height="10" rx="5" opacity="0.9" data-role="fill"/>' +
+          '<circle class="c-pool" cy="' + (y + 5) + '" r="4.2" opacity="0.4" data-role="blob"/></g>';
+      });
+      s += '</g>' + use('tileGlaze');
+      rows.forEach(function (row, k) {
+        var y = 39 + k * 39 - 8;
+        s += '<g data-row="' + k + '" data-need="' + row.split(' ')[1] + '"><text class="sc c-line" x="18" y="' + y + '" font-size="12" font-weight="600" letter-spacing="2">' + row.split(' ')[0] + '</text>' +
+          '<text class="c-line" x="190" y="' + y + '" font-size="16" text-anchor="end" data-role="val">--</text></g>';
+      });
+      return s;
+    },
+    slip: function (g) {
+      // One glazed slip with a painted bar, for wide cells.
+      var w = +g.getAttribute('data-w') || 130, h = +g.getAttribute('data-h') || 56, row = g.hasAttribute('data-row');
+      var bx = row ? 124 : 10, bw = row ? w - 124 - 70 : w - 20, by = row ? 13 : 40;
+      g.setAttribute('data-geom', bx + ' ' + bw + ' ' + by);
+      return '<rect x="3" y="4" width="' + w + '" height="' + h + '" rx="3" fill="#3A2810" opacity="0.34" filter="url(#pc-blur2)"/>' +
+        '<rect width="' + w + '" height="' + h + '" rx="3" fill="url(#pc-tile)"/>' +
+        '<g' + PAINT + '><rect class="s-line" x="3.5" y="3.5" width="' + (w - 7) + '" height="' + (h - 7) + '" rx="1.5" fill="none" stroke-width="1"/>' +
+        '<rect class="s-line" x="' + bx + '" y="' + by + '" width="' + bw + '" height="10" rx="5" fill="none" stroke-width="0.8"/>' +
+        '<rect class="c-wash" x="' + bx + '" y="' + by + '" height="10" rx="5" opacity="0.9" data-role="fill"/>' +
+        '<circle class="c-pool" cy="' + (by + 5) + '" r="4.2" opacity="0.4" data-role="blob"/></g>' +
+        '<rect width="' + w + '" height="' + h + '" rx="3" fill="url(#pc-gloss)"/>' +
+        '<rect x="0.5" y="0.5" width="' + (w - 1) + '" height="' + (h - 1) + '" rx="2.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1"/>' +
+        (row ? '<text class="sc c-line" x="10" y="23" font-size="11" font-weight="600" letter-spacing="1.6" data-role="cap"></text>' +
+               '<text class="c-line" x="' + (w - 10) + '" y="24" font-size="16" text-anchor="end" data-role="val">--</text>'
+             : '<text class="sc c-line" x="10" y="17" font-size="10.5" font-weight="600" letter-spacing="1.4" data-role="cap"></text>' +
+               '<text class="c-line" x="' + (w - 10) + '" y="34" font-size="16" text-anchor="end" data-role="val">--</text>');
+    },
+    saucer: function () {
+      return use('saucerBody') + '<g' + PAINT + '>' + use('saucerPaint') + '<g data-rotor>' + use('whorl') + '</g></g>' + use('saucerGlaze') +
+        card(-50, 60, 100, 36) +
+        '<text class="sc c-ink" y="72.5" font-size="11.5" letter-spacing="1.4" text-anchor="middle" data-role="cap"></text>' +
+        '<text class="c-ink" y="90" font-size="18" text-anchor="middle" data-role="val">--</text>';
+    },
+    vase: function () {
+      return use('vaseShadow') + use('vaseBody') + '<g clip-path="url(#pc-vclip)"><g' + PAINT + '>' + use('vaseBands') +
+        '<g data-role="vine">' + use('vaseVine') + '</g>' +
+        '<path class="c-wash" data-role="sea"/>' +
+        '<path class="s-body" fill="none" stroke-width="1.3" stroke-linecap="round" opacity="0.75" data-role="marks"/>' +
+        '<path class="s-pool" fill="none" stroke-width="1.6" stroke-linecap="round" data-role="crest"/></g>' + use('vaseGlaze') + '</g>' + use('vaseRim') +
+        card(-60, 278, 120, 38) +
+        '<text class="sc c-ink" x="-52" y="294" font-size="11.5" letter-spacing="1.4" data-role="cap"></text>' +
+        '<text class="c-ink" x="52" y="294.5" font-size="18" text-anchor="end" data-role="pct">--</text>' +
+        '<text class="c-ink" y="310" font-size="13" text-anchor="middle" data-role="of"></text>';
+    },
+    card: function () {
+      return card(0, 0, 130, 44) +
+        '<text class="sc c-ink" x="10" y="16" font-size="10.5" letter-spacing="1.4" data-role="cap"></text>' +
+        '<text class="c-ink" x="10" y="37" font-size="19" data-role="val">--</text>';
+    },
+    land: function () {
+      var s = '<rect x="4" y="38" width="440" height="296" fill="#3A2810" opacity="0.34" filter="url(#pc-blur5)"/>' +
+        '<rect y="32" width="448" height="298" style="fill: var(--grout)"/>';
+      var gloss = [0.9, 0.5, 0.7, 0.4, 0.45, 0.8, 0.5, 0.6], dark = [0.02, 0.05, 0, 0.035, 0.045, 0, 0.03, 0.06], glaze = '';
+      for (var k = 0; k < 8; k++) {
+        var x = 1 + (k % 4) * 111.75, y = k < 4 ? 33 : 181.5, t = 'x="' + x + '" y="' + y + '" width="110" height="147" rx="1.5"';
+        s += '<rect ' + t + ' fill="url(#pc-tile)"/>';
+        glaze += '<rect ' + t + ' fill="url(#pc-gloss)" opacity="' + gloss[k] + '"/><rect ' + t + ' fill="#000" opacity="' + dark[k] + '"/>' +
+          '<rect ' + t + ' filter="url(#pc-speck)" opacity="0.12"/><rect ' + t + ' fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="0.8"/>';
+      }
+      s += '<g' + PAINT + '><rect class="s-line" x="8" y="40" width="432" height="282" fill="none" stroke-width="1.5"/>' +
+        '<rect class="s-line" x="12" y="44" width="424" height="274" fill="none" stroke-width="0.6"/>' + use('clouds') +
+        '<path fill="url(#pc-mtn)" data-role="mtn"/>' +
+        '<path class="s-pool" fill="none" stroke-width="0.8" stroke-linecap="round" opacity="0.55" data-role="tex"/>' +
+        '<path class="s-pool" fill="none" stroke-width="1.6" stroke-linejoin="round" data-role="ridge"/>' +
+        '<path class="c-line" opacity="0.9" data-role="hills"/>' +
+        '<path class="s-pool" fill="none" stroke-width="1.2" data-role="hillRidge"/>' + use('water') +
+        '<text class="sc c-line" x="24" y="76" font-size="12" font-weight="600" letter-spacing="2">In</text>' +
+        '<text class="c-line" x="66" y="77" font-size="26" data-role="in">--</text>' +
+        '<text class="sc c-line" x="24" y="98" font-size="12" font-weight="600" letter-spacing="2">Out</text>' +
+        '<text class="c-line" x="66" y="99" font-size="18" data-role="out">--</text>' +
+        '<text class="sc c-line" x="96" y="99" font-size="11" font-weight="600" letter-spacing="1.5" data-role="unit">MB/s</text>' +
+        '<text class="sc c-line" x="22" y="312" font-size="10" font-weight="600" letter-spacing="1.5">−60 s</text>' +
+        '<text class="sc c-line" x="426" y="312" text-anchor="end" font-size="10" font-weight="600" letter-spacing="1.5">now</text></g>' +
+        '<circle class="s-hot pc-pulse" r="6.5" fill="none" stroke-width="2" opacity="0.85" data-role="now" hidden/>' + glaze;
+      return s;
+    }
+  };
+  each('[data-pc]', function (g) {
+    var draw = DRAW[g.getAttribute('data-pc')];
+    if (draw) g.innerHTML = draw(g);
+  });
+  // Plum blossoms: five petals round a dot.
+  each('[data-blossom]', function (g) {
+    var s = '';
+    for (var i = 0; i < 5; i++) { var p = at(7.4, i * 72); s += '<circle class="c-wash" cx="' + f1(p[0]) + '" cy="' + f1(p[1]) + '" r="6"/>'; }
+    g.innerHTML = s + '<circle class="c-line" r="3"/>';
+  });
+
+  // ------------------------------------------------------- the screen
+  // Split-bamboo slats across whatever box the panel has, each with its
+  // nodes at its own spacing.
+  var screenSize = '';
+  function slats() {
+    var svg = document.querySelector('[data-screen]'), g = svg && svg.querySelector('[data-slats]');
+    if (!g) return;
+    var w = svg.clientWidth, h = svg.clientHeight, key = w + 'x' + h;
+    if (!(w > 0 && h > 0) || key === screenSize) return;
+    screenSize = key;
+    var s = '', x = -6, i = 0;
+    var OP = [1, 0.93, 0.97, 0.9, 1, 0.95];
+    while (x < w) {
+      var sw = 25.6 + (i % 6), step = 300 + (i * 37) % 60, phase = (i * 113) % step, nodes = '', hi = '';
+      for (var y = phase + 60; y < h + 20; y += step) { nodes += 'M' + (x + 1) + ' ' + y + ' H' + f1(x + sw + 1) + ' '; hi += 'M' + (x + 2) + ' ' + f1(y + 2.2) + ' H' + f1(x + sw) + ' '; }
+      s += '<rect x="' + x + '" y="0" width="' + sw + '" height="' + h + '" rx="2" fill="url(#pc-slat)" opacity="' + OP[i % 6] + '"/>' +
+        '<path d="' + nodes + '" fill="none" stroke="#A88552" stroke-width="2.4" opacity="0.75"/>' +
+        '<path d="' + hi + '" fill="none" stroke="#F3E7C8" stroke-width="1.2" opacity="0.9"/>';
+      x += sw + 1.4; i++;
+    }
+    g.innerHTML = s;
+  }
+  window.addEventListener('resize', slats);
+  window.addEventListener('rg-layout', slats);
+  if (window.ResizeObserver) new ResizeObserver(slats).observe(document.querySelector('[data-screen]'));
+  slats();
+
+  // ------------------------------------------------------- history
+  var latest = {}, hist = {}, limit = {};
+  var everMapped = false;
+  var STORE = 'rg-porcelain-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist) {
+      Object.keys(saved.hist).forEach(function (id) { hist[id] = saved.hist[id].slice(-SAMPLES); });
+    }
+  } catch (e) { /* no storage: the landscape starts empty */ }
+  function fullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    var full = 1;                       // 1, 2, 4, 8 ...: no rescale for every small change
+    while (full < peak) full *= 2;
+    return full;
+  }
+  function demo(kind) {
+    var out = [];
+    for (var i = 0; i < SAMPLES; i++) {
+      out.push(kind === 'out' ? 1.1 + 0.6 * Math.sin(i * 0.8) + 0.4 * Math.sin(i * 2.3 + 1)
+                              : 8.6 + 3.6 * Math.sin(i * 0.47 + 0.6) + 2.4 * Math.sin(i * 1.31) + 1.2 * Math.sin(i * 3.1 + 2));
+    }
+    return out;
+  }
+  function paintLand() {
+    each('[data-pc="land"]', function (g) {
+      var inId = g.getAttribute('data-in'), outId = g.getAttribute('data-out');
+      var listIn = everMapped ? (hist[inId] || []) : demo('in');
+      var listOut = everMapped ? (hist[outId] || []) : demo('out');
+      var fullIn = !everMapped ? 16 : limit[inId] > 0 ? limit[inId] : fullScale(Math.max.apply(null, listIn.concat([0])), cssNum('--net-in-max', 0));
+      var fullOut = !everMapped ? 4 : limit[outId] > 0 ? limit[outId] : fullScale(Math.max.apply(null, listOut.concat([0])), cssNum('--net-out-max', 0));
+      function pts(list, full, height) {
+        var n = list.length;
+        return list.map(function (val, i) { return [16 + (SAMPLES - n + i) * 416 / (SAMPLES - 1), 268 - clamp01(val / full) * height]; });
+      }
+      var pin = pts(listIn, fullIn, 168), ridge = smooth(pin);
+      attr(one(g, 'ridge'), 'd', ridge);
+      attr(one(g, 'mtn'), 'd', ridge ? ridge + ' L' + f1(pin[pin.length - 1][0]) + ' 268 L' + f1(pin[0][0]) + ' 268 Z' : '');
+      // Short slanted brush strokes down the slopes, under the ridge.
+      var tex = '';
+      for (var i = 0; i < pin.length - 1; i++) {
+        var mx = (pin[i][0] + pin[i + 1][0]) / 2, my = Math.max(pin[i][1], pin[i + 1][1]);
+        for (var k = 0; k < 3 && my + 10 + k * 9 < 256; k++) tex += 'M' + f1(mx + 4 * k) + ' ' + f1(my + 10 + k * 9) + ' q-2 6 -5 12 ';
+      }
+      attr(one(g, 'tex'), 'd', tex);
+      var pout = pts(listOut, fullOut, 66), hills = smooth(pout);
+      attr(one(g, 'hillRidge'), 'd', hills);
+      attr(one(g, 'hills'), 'd', hills ? hills + ' L' + f1(pout[pout.length - 1][0]) + ' 268 L' + f1(pout[0][0]) + ' 268 Z' : '');
+      var now = one(g, 'now');
+      hide(now, pin.length === 0);
+      if (pin.length) { attr(now, 'cx', f1(pin[pin.length - 1][0])); attr(now, 'cy', f1(pin[pin.length - 1][1])); }
+    });
+  }
+  function sample() {
+    var any = false;
+    each('[data-pc="land"]', function (g) {
+      [g.getAttribute('data-in'), g.getAttribute('data-out')].forEach(function (id) {
+        if (hist[id] && hist[id].stamp === sample.round) return;
+        if (!isFinite(latest[id])) return;
+        var list = hist[id] || (hist[id] = []);
+        list.push(Math.round(latest[id] * 100) / 100);
+        if (list.length > SAMPLES) list.shift();
+        list.stamp = sample.round;
+        any = true;
+      });
+    });
+    sample.round++;
+    if (!any) return;
+    paintLand();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  sample.round = 1;
+  setInterval(sample, SAMPLE_MS);
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+  function bar(g, f, bx, bw) {
+    var w = Math.max(f * bw, f > 0 ? 10 : 0);
+    attr(one(g, 'fill'), 'width', f1(w));
+    var blob = one(g, 'blob');
+    attr(blob, 'cx', f1(bx + w - 5));
+    hide(blob, f <= 0);
+  }
+
+  // Text is cut to fit by its measured width, so measure again once the
+  // bundled fonts have loaded.
+  var lastValues = {};
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      each('[data-full]', function (el) { el.removeAttribute('data-full'); });
+      window.updateValues(lastValues);
+    });
+  }
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    lastValues = v;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+    var first = anyMapped && !everMapped;
+    if (anyMapped) everMapped = true;
+
+    // Clocks: ten past ten until the time is known. "5:14 PM" reads as 17:14.
+    each('[data-pc="clock"]', function (g) {
+      var t = v[g.getAttribute('data-time')];
+      var hm = /(\d{1,2}):(\d{2})/.exec(known(t) ? String(t) : ''), h = hm ? +hm[1] : 10, m = hm ? +hm[2] : 10;
+      if (hm && /pm/i.test(String(t)) && h < 12) h += 12;
+      if (hm && /am/i.test(String(t)) && h === 12) h = 0;
+      each('[data-hand="hour"]', function (el) { attr(el, 'transform', 'rotate(' + f1((h % 12 + m / 60) * 30) + ')'); }, g);
+      each('[data-hand="minute"]', function (el) { attr(el, 'transform', 'rotate(' + (m * 6) + ')'); }, g);
+      text(one(g, 'time'), hm ? ('0' + h).slice(-2) + ':' + hm[2] : '--:--');
+      var ids = (g.getAttribute('data-date') || '').split(' '), day = num(v[ids[1]]);
+      text(one(g, 'date'), [known(v[ids[0]]) ? String(v[ids[0]]) : '', [isFinite(day) ? String(Math.round(day)) : '', known(v[ids[2]]) ? String(v[ids[2]]) : ''].filter(Boolean).join(' ')]
+        .filter(Boolean).join(' · ') || ' ', 186);
+    });
+
+    // Dishes: the wash sweeps 270 degrees from the lower left. A hand-
+    // written dish reads 20 to 100 degrees; a generated one 0 to its
+    // sensor's maximum, warm and hot at the same shares of the scale.
+    each('[data-pc="dish"]', function (g) {
+      var val = num(v[g.getAttribute('data-v')]), lo = 0, hi, unit = unitOf(v, g);
+      if (g.hasAttribute('data-lo')) { lo = +g.getAttribute('data-lo'); hi = +g.getAttribute('data-hi'); }
+      else { var r = reading(v, g.getAttribute('data-v'), g.getAttribute('data-max'), g.getAttribute('data-unit-of')); val = r.val; hi = r.full; }
+      var f = isFinite(val) ? clamp01((val - lo) / (hi - lo)) : 0, end = -135 + f * 270;
+      attr(one(g, 'wash'), 'd', f > 0 ? arc(72, -135, end) : '');
+      attr(one(g, 'pooled'), 'd', end - 6 > -133 ? arc(74.5, -133, end - 6) : '');
+      var blob = one(g, 'blob'), p = at(72, end);
+      attr(blob, 'cx', f1(p[0])); attr(blob, 'cy', f1(p[1])); hide(blob, f <= 0);
+      var warmAt = lo + (hi - lo) * (WARM - 20) / 80, hotAt = lo + (hi - lo) * (HOT - 20) / 80;
+      var hot = isFinite(val) && val >= hotAt;
+      flag(g, 'hot', hot);
+      attr(one(g, 'sweep'), 'filter', hot ? 'url(#pc-red)' : 'url(#pc-blue)');
+      text(one(g, 'lo'), fmt(lo, 1));
+      text(one(g, 'hi'), fmt(hi, 1));
+      text(one(g, 'cap'), caption(v, g), 120);
+      var temp = g.hasAttribute('data-lo') || /°|^c$/i.test(unit);
+      text(one(g, 'val'), isFinite(val) ? (temp ? Math.round(val) + '°' : fmt(val, val < 10 ? 2 : 1)) : '--', 120);
+      text(one(g, 'state'), !isFinite(val) ? '' : temp ? (hot ? 'Running hot' : val >= warmAt ? 'Warm' : 'Temperate') : unit, 120);
+    });
+    each('[data-pc="tile"]', function (g) {
+      g.getAttribute('data-rows').split('|').forEach(function (row, k) {
+        var p = row.split(' '), r = reading(v, p[1], p[2], p[3], p[4]);
+        var f = isFinite(r.val) ? clamp01(r.val / r.full) : 0;
+        each('[data-row="' + k + '"]', function (el) {
+          if (one(el, 'fill')) bar(el, f, 18, 172);
+          if (one(el, 'val')) text(one(el, 'val'), withUnit(r.val, unitOf(v, g, p[3]), r.val < 10 ? 2 : 1));
+        }, g);
+      });
+    });
+    each('[data-pc="slip"]', function (g) {
+      var r = reading(v, g.getAttribute('data-v'), g.getAttribute('data-max'), g.getAttribute('data-unit-of'), g.getAttribute('data-scale'));
+      var geom = g.getAttribute('data-geom').split(' ').map(Number), f = isFinite(r.val) ? clamp01(r.val / r.full) : 0;
+      bar(g, f, geom[0], geom[1]);
+      var valEl = one(g, 'val');
+      text(valEl, withUnit(r.val, unitOf(v, g), r.val < 10 ? 2 : 1), g.hasAttribute('data-row') ? 62 : 90);
+      var w = +g.getAttribute('data-w');
+      text(one(g, 'cap'), caption(v, g), g.hasAttribute('data-row') ? 108 : w - 20);
+    });
+    each('[data-pc="saucer"]', function (g) {
+      var id = g.getAttribute('data-v'), rpm = num(v[id]);
+      fanRpm[id] = isFinite(rpm) ? rpm : 0;
+      text(one(g, 'cap'), caption(v, g), 92);
+      text(one(g, 'val'), isFinite(rpm) ? fmt(Math.round(rpm), 0, true) + ' rpm' : '--', 100);
+    });
+    // Vases: a painted sea fills the main field (y 96 to 226) to the share
+    // in use, its crest at the level and white wave marks below.
+    each('[data-pc="vase"]', function (g) {
+      var r = reading(v, g.getAttribute('data-v'), g.getAttribute('data-max'), g.getAttribute('data-unit-of'));
+      var f = isFinite(r.val) ? clamp01(r.val / r.full) : 0, y = 226 - f * 130, crest = 'M-60 ' + f1(y), marks = '';
+      for (var x = -60; x < 60; x += 15) crest += ' Q' + (x + 5) + ' ' + f1(y - 7) + ' ' + (x + 11) + ' ' + f1(y - 2) + ' Q' + (x + 13) + ' ' + f1(y) + ' ' + (x + 15) + ' ' + f1(y);
+      for (var row = 1; y + row * 9 < 222; row++) {
+        for (var mx = row % 2 ? -53 : -60; mx < 56; mx += 16) marks += 'M' + mx + ' ' + f1(y + row * 9) + ' q4 -3.5 8 0 ';
+      }
+      attr(one(g, 'sea'), 'd', f > 0 ? crest + ' L60 224 L-60 224 Z' : '');
+      attr(one(g, 'crest'), 'd', f > 0 ? crest : '');
+      attr(one(g, 'marks'), 'd', f > 0 ? marks : '');
+      hide(one(g, 'vine'), y < 142);
+      var pct = one(g, 'pct');
+      text(pct, isFinite(r.val) ? Math.round(f * 100) + '%' : '--');
+      text(one(g, 'cap'), caption(v, g), Math.max(104 - (pct.getBBox ? pct.getBBox().width : 36) - 8, 12));
+      var unit = unitOf(v, g), max = num(v[g.getAttribute('data-max')]);
+      text(one(g, 'of'), isFinite(r.val) ? fmt(r.val, 1) + (max > 0 ? ' / ' + fmt(max, 1) : '') + (unit ? ' ' + unit : '') : '', 112);
+    });
+    each('[data-pc="card"]', function (g) {
+      var val = num(v[g.getAttribute('data-v')]), unit = unitOf(v, g);
+      if (isMhz(v, g.getAttribute('data-unit-of'))) val /= 1000;
+      text(one(g, 'cap'), caption(v, g), 112);
+      text(one(g, 'val'), withUnit(val, unit, val < 10 ? 2 : 1), 112);
+    });
+    each('[data-pc="land"]', function (g) {
+      ['in', 'out'].forEach(function (k) {
+        var id = g.getAttribute('data-' + k), val = num(v[id]);
+        latest[id] = val;
+        limit[id] = num(v[g.getAttribute('data-max-' + k)]);
+        text(one(g, k), isFinite(val) ? fmt(val, 1) : '--');
+      });
+      text(one(g, 'unit'), unitOf(v, g) || 'MB/s');
+    });
+    if (first) { sample(); paintLand(); }   // the sample landscape makes way for real data
+    each('[data-uptime]', function (el) {   // 4 days · 7 hrs
+      var sec = num(v[el.getAttribute('data-uptime')]), out = '--';
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        out = d > 0 ? d + (d === 1 ? ' day' : ' days') + ' · ' + hr + (hr === 1 ? ' hr' : ' hrs') : hr + (hr === 1 ? ' hr' : ' hrs') + ' · ' + mn + ' min';
+      }
+      text(el, out);
+    });
+    // "All well" unless a dish runs hot.
+    each('[data-well]', function (el) { text(el, document.querySelector('[data-pc="dish"].hot') ? 'Too hot' : 'All well'); });
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      var raw = v[el.getAttribute('data-need')];
+      hide(el, anyMapped && !isFinite(num(raw)) && !known(raw));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a cached list would revive cancelled ones.
+    var anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;
+    // Whorls: one turn every 6000 / RPM seconds, but never more than about
+    // 28 degrees a frame. The six blades repeat every 60 degrees, so a
+    // bigger step would read as standing still or turning backwards.
+    each('[data-pc="saucer"]', function (g) {
+      var id = g.getAttribute('data-v'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(0.06 * rpm * dt * speed, 28 * (1 - Math.exp(-rpm / 1200)));
+      var slot = g.closest('[data-rg-slot]'), key = id + '@' + (slot ? slot.getAttribute('data-rg-slot') : '');
+      rotorAngle[key] = ((rotorAngle[key] || 0) + step) % 360;
+      attr(g.querySelector('[data-rotor]'), 'transform', 'rotate(' + rotorAngle[key].toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  paintLand();
+  window.updateValues({});              // hands, sweeps and seas in place before the first values arrive
+})();
+
+</script>
+</body>
+</html>

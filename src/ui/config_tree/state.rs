@@ -158,6 +158,10 @@ pub struct State {
     pub(super) inline_source: RefCell<Option<(String, Rc<Box<dyn SourceEditor>>)>>,
     /// Item editors by slot, built on first use by any page of the item.
     pub(super) item_editors: RefCell<HashMap<String, Rc<ItemEditor>>>,
+    /// Set between a reorder of the model and the rebuild of the item
+    /// editors: until then they are filed under the slots they had before,
+    /// and their source settings must not be read back by slot name.
+    pub(super) item_editors_stale: Cell<bool>,
     /// Title-bar editors by group, built with the group's page (over the
     /// frame's `group_titles`, so dropped with the Content pages).
     pub(super) group_editors: RefCell<HashMap<usize, Rc<SchemaEditor>>>,
@@ -320,18 +324,12 @@ impl State {
             other => other,
         };
 
+        // The item editors hold the newest source settings; the model gets
+        // them here, so nothing that later rebuilds those editors from the
+        // model (any structural change) can lose them.
+        self.absorb_item_sources();
         if let Some(cs) = self.combo_source.borrow().as_ref() {
-            let mut cs = cs.clone();
-            for (slot, item) in self.item_editors.borrow().iter() {
-                if let Some(cfg) = item.source_editor.borrow().as_ref().and_then(|e| e.store()) {
-                    if let Some(slot_cfg) = cs.slots.get_mut(slot) {
-                        if slot_cfg.source_id == cfg.source_type() {
-                            slot_cfg.source_config = flatten_source_config(&cfg);
-                        }
-                    }
-                }
-            }
-            data.source_config = SourceConfig::Combo(cs);
+            data.source_config = SourceConfig::Combo(cs.clone());
         } else if let Some(cfg) = self.source_editor.borrow().as_ref().and_then(|e| e.store()) {
             if cfg.source_type() == data.source_config.source_type() {
                 data.source_config = cfg;
@@ -348,7 +346,68 @@ impl State {
                 data.displayer_config = cfg;
             }
         }
+        // A CSS template's custom layout shows every slot with a widget its
+        // source is offered. Only then is the template read: this runs on
+        // every commit.
+        if let (DisplayerConfig::CssTemplate(cfg), SourceConfig::Combo(cs)) =
+            (&mut data.displayer_config, &data.source_config)
+        {
+            if cfg.layout.custom {
+                Self::coerce_css_layout(cfg, cs);
+            }
+        }
         data
+    }
+
+    fn coerce_css_layout(
+        cfg: &mut rg_sens_types::display_configs::CssTemplateDisplayConfig,
+        cs: &ComboSourceConfig,
+    ) -> Option<crate::ui::css_template_layout::LayoutSpec> {
+        use crate::ui::css_template_layout::{coerce_layout, layout_spec, read_template};
+        let spec = layout_spec(&read_template(cfg)?);
+        if cfg.layout.custom && spec.usable() {
+            let mappings = cfg.mappings.clone();
+            coerce_layout(&mut cfg.layout, &spec, &combo_slot_kinds(cs), &mappings);
+        }
+        Some(spec)
+    }
+
+    /// The CSS template's config as the page will show it, and what its
+    /// template offers for custom layouts. `None` for any other displayer.
+    pub(super) fn css_layout(
+        self: &Rc<Self>,
+    ) -> Option<(
+        rg_sens_types::display_configs::CssTemplateDisplayConfig,
+        crate::ui::css_template_layout::LayoutSpec,
+    )> {
+        if self.displayer_type() != "css_template" {
+            return None;
+        }
+        self.ensure_display_editor();
+        let stored = self.display_editor.borrow().as_ref().and_then(|e| e.store());
+        let Some(DisplayerConfig::CssTemplate(mut cfg)) = stored else {
+            return None;
+        };
+        let combo = self.combo_source.borrow();
+        let spec = Self::coerce_css_layout(&mut cfg, combo.as_ref()?)?;
+        Some((cfg, spec))
+    }
+
+    /// Edit the CSS template's custom layout and apply it.
+    pub(super) fn edit_css_layout(
+        self: &Rc<Self>,
+        edit: impl FnOnce(&mut rg_sens_types::display_configs::CssLayoutConfig),
+    ) {
+        let Some((mut cfg, _)) = self.css_layout() else {
+            return;
+        };
+        edit(&mut cfg.layout);
+        if let Some(e) = self.display_editor.borrow().as_ref() {
+            let was = self.loading.replace(true);
+            e.load(&DisplayerConfig::CssTemplate(cfg));
+            self.loading.set(was);
+        }
+        self.changed();
     }
 
     /// Apply the editors' state to the live panel.
@@ -911,7 +970,7 @@ impl State {
     /// Run `f` on the next main-loop iteration. Structural changes are
     /// triggered from signal handlers of widgets they would destroy (a
     /// dropdown on the page being rebuilt), so the rebuild is deferred.
-    fn defer(self: &Rc<Self>, f: impl FnOnce(&Rc<State>) + 'static) {
+    pub(super) fn defer(self: &Rc<Self>, f: impl FnOnce(&Rc<State>) + 'static) {
         let weak = Rc::downgrade(self);
         glib::idle_add_local_once(move || {
             if let Some(state) = weak.upgrade() {
@@ -995,8 +1054,39 @@ impl State {
     // Combo structure
     // ------------------------------------------------------------------
 
+    /// Change the working combo model. The source settings typed into the
+    /// item editors are written into it first: a change of structure drops
+    /// those editors and rebuilds them from the model, which used to bring
+    /// back whatever the slot held when the dialog opened (or the source's
+    /// defaults).
     fn with_combo<R>(&self, f: impl FnOnce(&mut ComboSourceConfig) -> R) -> Option<R> {
+        self.absorb_item_sources();
         self.combo_source.borrow_mut().as_mut().map(f)
+    }
+
+    /// Write each built item editor's source settings into the model.
+    fn absorb_item_sources(&self) {
+        if self.item_editors_stale.get() {
+            return;
+        }
+        let stored: Vec<(String, SourceConfig)> = self
+            .item_editors
+            .borrow()
+            .iter()
+            .filter_map(|(slot, item)| {
+                let cfg = item.source_editor.borrow().as_ref()?.store()?;
+                Some((slot.clone(), cfg))
+            })
+            .collect();
+        if let Some(cs) = self.combo_source.borrow_mut().as_mut() {
+            for (slot, cfg) in stored {
+                if let Some(slot_cfg) = cs.slots.get_mut(&slot) {
+                    if slot_cfg.source_id == cfg.source_type() {
+                        slot_cfg.source_config = flatten_source_config(&cfg);
+                    }
+                }
+            }
+        }
     }
 
     /// Push the working combo structure into the display editor and rebuild
@@ -1039,6 +1129,10 @@ impl State {
     /// Drop every item editor and every page under Content (the structure
     /// changed: counts, order or a slot's source); they rebuild on demand.
     pub(super) fn drop_item_pages(&self) {
+        // No reading back here: whatever changed the structure went through
+        // `with_combo`, which took the editors' settings before it changed
+        // the model; a slot it rewrote (a pasted item) must keep the new one.
+        self.item_editors_stale.set(false);
         let ids: Vec<String> = self
             .pages
             .borrow()
@@ -1423,6 +1517,8 @@ impl State {
             e.set_theme(&self.resolved_theme());
         }
         if self.is_combo() {
+            // The sources are untouched by a new display config.
+            self.absorb_item_sources();
             self.drop_item_pages();
             self.coerce_item_displays();
             self.rebuild_tree(self.selected_node());
@@ -1435,6 +1531,15 @@ impl State {
     }
 
     pub(super) fn reorder(self: &Rc<Self>, op: ComboReorder) {
+        let reselect = self.reorder_models(op);
+        self.defer(move |state| state.structure_changed(reselect));
+    }
+
+    /// Swap two groups or items in the source model and in everything the
+    /// displayer keys by slot; returns the node the moved thing is now.
+    fn reorder_models(self: &Rc<Self>, op: ComboReorder) -> NodeKind {
+        // What the displayer keys by slot must follow, opened or not.
+        self.ensure_display_editor();
         let reselect = match op {
             ComboReorder::Group { a, b } => {
                 self.with_combo(|cs| cs.swap_groups(a, b));
@@ -1466,12 +1571,20 @@ impl State {
                         }
                     };
                 }
+                // The custom layout's titles and widgets follow too.
+                match op {
+                    ComboReorder::Group { a, b } => cfg.layout.swap_groups(a, b),
+                    ComboReorder::Item { group, i, j } => cfg.layout.swap_items(group, i, j),
+                }
                 self.loading.set(true);
                 e.load(&DisplayerConfig::CssTemplate(cfg));
                 self.loading.set(false);
             }
         }
-        self.defer(move |state| state.structure_changed(reselect));
+        // The item editors are filed under the old slots until the deferred
+        // rebuild; the model is right.
+        self.item_editors_stale.set(true);
+        reselect
     }
 
     pub(super) fn set_item_source(self: &Rc<Self>, slot: &str, source_id: &str) {

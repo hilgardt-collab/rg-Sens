@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1000 1440x770 2880x520">
+<!-- custom layouts: the room a group gets, plus the title strip, the title block and the sheet's margins -->
+<meta name="rg-group-size" content="480x275+270">
+<title>Blueprint Sensor Panel</title>
+<!--
+  Blueprint sensor panel for the rg-Sens CSS Template displayer, drawn for
+  480x1920 portrait: an engineering print taped to a drafting board. Mottled
+  cyanotype paper with fibres, fold creases and a coffee ring; single-weight
+  ink linework with a slight wobble and bleed; a sheet frame with zone
+  markers, centre lines, section hatching, dimension lines, leader callouts,
+  view captions and a title block; red pencil for the review marks. A sibling
+  of the other example panels: the same placeholders 0-73 and the same
+  setup, plus the year.
+
+  Keep it a drawing when editing: one ink, one line family, hand lettering
+  for words and numbers, monospace for small technical text, and red pencil
+  only for what a checker would mark.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names, year
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the label)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Captions label the two dials ("PKG", "EDGE"), the fans and the tanks; set
+  them on the sensors.
+
+  Anything left unbound is hidden: a dimension line, a fan, a tank, a whole
+  view. The processor's power line has no rg-Sens source and stays hidden
+  unless you bind a sensor to it by hand on the Bindings tab.
+
+  A dial reads 20 to 100 degrees over 270 degrees; its ring is section-hatched
+  up to the reading (the two views hatch in opposite directions, as drawings
+  do) and a leader calls the reading out. The note beside it turns to red
+  pencil from 72 degrees and asks for a review from 85, when the reading is
+  ringed in red pencil and the OK above the title block becomes REVIEW.
+
+  A dimension line runs from zero to the value; the dash-dot construction
+  line carries on to full scale: the sensor's own maximum, else the limit in
+  the options.
+
+  The network graph keeps the last minute (31 samples, one every 2 s) in the
+  page: inbound as a solid curve with circles, outbound dashed with squares,
+  a marker on every fifth sample, on one shared scale. It starts empty and
+  survives a reload of the template, not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of blueprint_panel.css): print
+  (Cyanotype, Whiteprint, Sepia), the ink bleed, how the design fits the
+  panel, the layout, the frame rate, and the full scale of the dimension
+  lines and of the network graph.
+
+  Size: the design is drawn for 480x1920, but its six groups (the clock's
+  front elevation and views A to E) re-arrange to suit the panel: one column
+  of six, two of three, three of two or six side by side (the rg-layouts list
+  gives the size each needs). The views are drawings of a fixed size and sit
+  in the middle of their cells; the paper, the folds, the sheet frame with
+  its zone markers and the tape follow any size, and the title block stays
+  bottom right. The Layout option fixes the column count; the Fit option can
+  crop, letterbox or distort instead.
+
+  Custom layouts: the prototypes after the page (a view shell with its
+  captions alternating or left; clock, dial, dimension line, fan, tank and reading
+  widgets) let the user build other groups from the same parts.
+
+  The paper and the board are noise filters, which are costly to redraw;
+  they carry data-rg-bake, so rg-Sens draws each once into a bitmap. The ink
+  filter is applied to each view on its own, so a changing value redraws one
+  view, not the sheet; the Ink bleed option turns it off.
+
+  Motion: the fan blades turn with RPM and the red-pencil ring on the newest
+  point of the graph pulses, at --motion-fps frames a second. 0 turns motion
+  off, as do the panel's Animation switch and the system's reduced-motion
+  setting.
+
+  Fonts: Architects Daughter (lettering, numbers) and IBM Plex Mono (small
+  technical text), loaded from the fonts folder next to this file; copy that
+  folder along with the template. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="blueprint_panel.css">
+<style>
+/* These point at definitions in this page, so they cannot live in the stylesheet. */
+.ink { filter: url(#bp-ink); }
+:root[data-ink="off"] .ink { filter: none; }
+.tblock .ok { filter: url(#bp-pencil); }
+</style>
+</head>
+<body>
+<div class="panel">
+  <!-- ===== drafting board (z 0) and the definitions the drawing uses ===== -->
+  <svg class="board" aria-hidden="true" width="100%" height="100%">
+    <defs>
+      <filter id="bp-fibre" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0.55 0 0 0 -0.24"></feColorMatrix></filter>
+      <filter id="bp-mottle" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.006 0.004" numOctaves="4" seed="9"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0.02  0 0 0 0 0.08  0 0 0 0 0.2  0 0 0 1.4 -0.55"></feColorMatrix></filter>
+      <filter id="bp-vinyl" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="2"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.5 0 0 0 -0.2"></feColorMatrix></filter>
+      <!-- ink on a print: slightly wobbly, slightly bled -->
+      <filter id="bp-ink" x="-6%" y="-12%" width="112%" height="124%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="6" result="n"></feTurbulence>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="1.3" xChannelSelector="R" yChannelSelector="G" result="w"></feDisplacementMap>
+        <feGaussianBlur in="w" stdDeviation="0.9" result="b"></feGaussianBlur>
+        <feComponentTransfer in="b" result="bb"><feFuncA type="linear" slope="0.55"></feFuncA></feComponentTransfer>
+        <feMerge><feMergeNode in="bb"></feMergeNode><feMergeNode in="w"></feMergeNode></feMerge>
+      </filter>
+      <filter id="bp-pencil" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="3" result="n"></feTurbulence>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 2 -0.5" result="m"></feColorMatrix>
+        <feComposite in="SourceGraphic" in2="m" operator="in"></feComposite>
+      </filter>
+      <pattern id="bp-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><rect class="i" x="0" y="0" width="1.1" height="5"></rect></pattern>
+      <pattern id="bp-hatchX" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(-45)"><rect class="i" x="0" y="0" width="0.9" height="4"></rect></pattern>
+      <pattern id="bp-water" patternUnits="userSpaceOnUse" width="14" height="7"><rect class="i" x="2" y="3" width="8" height="0.9" opacity="0.7"></rect></pattern>
+      <pattern id="bp-grid" patternUnits="userSpaceOnUse" width="8" height="8"><path class="l" d="M8 0 H0 V8" stroke-width="0.4" opacity="0.28"></path></pattern>
+      <marker id="bp-arrowE" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="i" d="M0 1.5 L10 5 L0 8.5 Z"></path></marker>
+      <marker id="bp-arrowS" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="i" d="M10 1.5 L0 5 L10 8.5 Z"></path></marker>
+    </defs>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#bp-vinyl)"></rect>
+  </svg>
+
+  <!-- ===== the sheet: paper, folds, coffee ring ===== -->
+  <div class="sheet">
+    <svg class="paper" aria-hidden="true" width="100%" height="100%">
+      <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#bp-mottle)"></rect>
+      <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#bp-fibre)" opacity="0.35"></rect>
+    </svg>
+    <div class="edge"></div>
+    <div class="fold across" style="top: 33.2%"></div>
+    <div class="fold across" style="top: 66.3%"></div>
+    <div class="fold down"></div>
+    <svg class="coffee" aria-hidden="true" viewBox="0 0 80 80">
+      <circle data-rg-bake cx="40" cy="40" r="34" fill="none" stroke="#000000" stroke-width="3" opacity="0.18" filter="url(#bp-fibre)"></circle>
+      <circle cx="40" cy="40" r="34" fill="none" stroke="#000000" stroke-width="1.4" opacity="0.22"></circle>
+    </svg>
+
+    <!-- sheet frame with zone markers: drawn by the script for the sheet's size -->
+    <svg class="frame" data-frame aria-hidden="true" width="100%" height="100%"></svg>
+
+    <div class="content">
+      <!-- ===== title strip ===== -->
+      <header class="strip ink">
+        <div class="top">
+          <h1>SYSTEM SENSORS</h1>
+          <span class="dwg mono">DWG SS-480-01</span>
+        </div>
+        <span class="notes mono">GENERAL ARRANGEMENT · TEMPS IN °C · DO NOT SCALE</span>
+      </header>
+
+      <!-- the six groups: one, two, three or six columns, by the panel's shape -->
+      <div class="groups">
+      <!--rg-groups 0-1 4-71-->
+      <!-- ===== FRONT ELEVATION: CLOCK ===== -->
+      <section class="view" data-section="clock">
+        <div class="g ink">
+          <div class="clockrow" data-need="0">
+            <svg data-clockface="0" role="img" aria-label="Clock drawing" width="190" height="190" viewBox="0 0 200 200"></svg>
+            <div class="side">
+              <span class="time" data-clock="0">--:--</span>
+              <div class="hhmm">
+                <svg aria-hidden="true" width="40" height="8" viewBox="0 0 40 8"><line class="l" x1="1" y1="4" x2="39" y2="4" stroke-width="0.8" marker-start="url(#bp-arrowS)" marker-end="url(#bp-arrowE)"></line></svg>
+                <span>HH:MM · LOCAL</span>
+              </div>
+              <span class="date" data-date="1 2 3">&nbsp;</span>
+              <span class="angles" data-angles="0">&nbsp;</span>
+            </div>
+          </div>
+          <span class="cap" style="padding-left: 40px">FRONT ELEVATION — CLOCK</span>
+        </div>
+      </section>
+
+      <!-- ===== VIEW A: PROCESSOR ===== -->
+      <section class="view" data-section="cpu">
+        <div class="g ink">
+          <div class="row">
+            <div class="dial" data-need="5">
+              <svg data-dial="5" data-unit-of="6" data-hatch="bp-hatch" role="img" aria-label="CPU temperature" width="172" height="172" viewBox="0 0 200 200"></svg>
+              <div class="read">
+                <span class="v"><span data-num="5" data-places="0">--</span><span data-unit="6" data-default="°" data-deg></span></span>
+                <span class="n" data-cap="4" data-default="PKG" data-upper></span>
+              </div>
+            </div>
+            <div class="stats">
+              <span class="note" data-note="5" data-unit-of="6" data-need="5">Note: within limits</span>
+              <svg class="dim" data-need="9" width="208" height="50" viewBox="0 0 208 50"><text class="label" x="0" y="10">LOAD <tspan data-unit="10" data-default="%"></tspan></text><g data-dim="9" data-max="11" data-unit-of="10" data-scale="100" data-places="0" data-suffix></g></svg>
+              <svg class="dim" data-need="13" width="208" height="50" viewBox="0 0 208 50"><text class="label" x="0" y="10">CLOCK <tspan data-unit="14" data-default="GHz" data-ghz></tspan></text><g data-dim="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" data-places="2" data-ghz></g></svg>
+              <svg class="dim" data-need="17" width="208" height="50" viewBox="0 0 208 50"><text class="label" x="0" y="10">POWER <tspan data-unit="18" data-default="W"></tspan></text><g data-dim="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" data-places="0" data-suffix></g></svg>
+            </div>
+          </div>
+          <span class="cap">VIEW A — PROCESSOR <small>SCALE 1:1</small></span>
+        </div>
+      </section>
+
+      <!-- ===== VIEW B: GRAPHICS (mirrored) ===== -->
+      <section class="view" data-section="gpu">
+        <div class="g ink">
+          <div class="row">
+            <div class="stats">
+              <span class="note" data-note="21" data-unit-of="22" data-need="21">Note: within limits</span>
+              <svg class="dim" data-need="25" width="208" height="50" viewBox="0 0 208 50"><text class="label" x="0" y="10">LOAD <tspan data-unit="26" data-default="%"></tspan></text><g data-dim="25" data-max="27" data-unit-of="26" data-scale="100" data-places="0" data-suffix></g></svg>
+              <svg class="dim" data-need="29" width="208" height="50" viewBox="0 0 208 50"><text class="label" x="0" y="10">CLOCK <tspan data-unit="30" data-default="GHz" data-ghz></tspan></text><g data-dim="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" data-places="2" data-ghz></g></svg>
+              <svg class="dim" data-need="33" width="208" height="50" viewBox="0 0 208 50"><text class="label" x="0" y="10">POWER <tspan data-unit="34" data-default="W"></tspan></text><g data-dim="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" data-places="0" data-suffix></g></svg>
+            </div>
+            <div class="dial" data-need="21">
+              <svg data-dial="21" data-unit-of="22" data-hatch="bp-hatchX" role="img" aria-label="GPU temperature" width="172" height="172" viewBox="0 0 200 200"></svg>
+              <div class="read">
+                <span class="v"><span data-num="21" data-places="0">--</span><span data-unit="22" data-default="°" data-deg></span></span>
+                <span class="n" data-cap="20" data-default="EDGE" data-upper></span>
+              </div>
+            </div>
+          </div>
+          <span class="cap right">VIEW B — GRAPHICS <small>SCALE 1:1</small></span>
+        </div>
+      </section>
+
+      <!-- ===== VIEW C: COOLING, PLAN ===== -->
+      <section class="view" data-section="fans">
+        <div class="g ink">
+          <div class="fans">
+            <div class="fan" data-need="37"><svg data-fan="37" role="img" aria-label="Fan" width="90" height="100" viewBox="-45 -45 90 100"></svg><span class="v" data-num="37" data-places="0">--</span><span class="n"><span data-cap="36" data-default="FAN 1" data-upper></span> · <span data-unit="38" data-default="RPM" data-upper></span></span></div>
+            <div class="fan" data-need="41"><svg data-fan="41" role="img" aria-label="Fan" width="90" height="100" viewBox="-45 -45 90 100"></svg><span class="v" data-num="41" data-places="0">--</span><span class="n"><span data-cap="40" data-default="FAN 2" data-upper></span> · <span data-unit="42" data-default="RPM" data-upper></span></span></div>
+            <div class="fan" data-need="45"><svg data-fan="45" role="img" aria-label="Fan" width="90" height="100" viewBox="-45 -45 90 100"></svg><span class="v" data-num="45" data-places="0">--</span><span class="n"><span data-cap="44" data-default="FAN 3" data-upper></span> · <span data-unit="46" data-default="RPM" data-upper></span></span></div>
+            <div class="fan" data-need="49"><svg data-fan="49" role="img" aria-label="Fan" width="90" height="100" viewBox="-45 -45 90 100"></svg><span class="v" data-num="49" data-places="0">--</span><span class="n"><span data-cap="48" data-default="FAN 4" data-upper></span> · <span data-unit="50" data-default="RPM" data-upper></span></span></div>
+          </div>
+          <span class="cap">VIEW C — COOLING, PLAN <small data-count=".fan">4 OFF</small></span>
+        </div>
+      </section>
+
+      <!-- ===== SECTION D-D: MEMORY TANKS ===== -->
+      <section class="view" data-section="memory">
+        <div class="g ink">
+          <div class="tanks">
+            <div class="tank" data-need="53"><svg data-tank="53" data-max="55" role="img" aria-label="Memory in use" width="124" height="186" viewBox="0 0 124 186"></svg><span class="name" data-cap="52" data-default="Memory"></span><span class="sub"><span data-num="53" data-places="1" data-plain>--</span> / <span data-num="55" data-places="1" data-plain>--</span> <span data-unit="54" data-default="GB"></span></span></div>
+            <div class="tank" data-need="57"><svg data-tank="57" data-max="59" role="img" aria-label="Video memory in use" width="124" height="186" viewBox="0 0 124 186"></svg><span class="name" data-cap="56" data-default="Video"></span><span class="sub"><span data-num="57" data-places="1" data-plain>--</span> / <span data-num="59" data-places="1" data-plain>--</span> <span data-unit="58" data-default="GB"></span></span></div>
+            <div class="tank" data-need="61"><svg data-tank="61" data-max="63" role="img" aria-label="Disk in use" width="124" height="186" viewBox="0 0 124 186"></svg><span class="name" data-cap="60" data-default="Disk"></span><span class="sub"><span data-num="61" data-places="1" data-plain>--</span> / <span data-num="63" data-places="1" data-plain>--</span> <span data-unit="62" data-default="GB"></span></span></div>
+          </div>
+          <span class="cap right">SECTION D–D — MEMORY TANKS</span>
+        </div>
+      </section>
+
+      <!-- ===== GRAPH E: NETWORK ===== -->
+      <section class="view" data-section="network">
+        <div class="g ink">
+          <div class="inout">
+            <span data-need="65">IN <b data-num="65" data-places="1">--</b> <small data-unit="66" data-default="MB/s"></small></span>
+            <span data-need="69">OUT <b data-num="69" data-places="1">--</b> <small data-unit="70" data-default="MB/s"></small></span>
+          </div>
+          <svg class="graph" data-chart data-in="65" data-out="69" data-need="65" role="img" aria-label="Network traffic over the last minute" width="392" height="176" viewBox="0 0 392 176">
+            <rect x="30" y="6" width="354" height="140" fill="url(#bp-grid)"></rect>
+            <line class="l" x1="30" y1="146" x2="388" y2="146" stroke-width="1.2" marker-end="url(#bp-arrowE)"></line>
+            <line class="l" x1="30" y1="146" x2="30" y2="2" stroke-width="1.2" marker-end="url(#bp-arrowE)"></line>
+            <path class="l" stroke-width="0.8" d="M26 113 H30 M26 80 H30 M26 47 H30 M26 14 H30 M36 146 V150 M92.7 146 V150 M149.3 146 V150 M206 146 V150 M262.7 146 V150 M319.3 146 V150 M376 146 V150"></path>
+            <g font-size="7.5" text-anchor="end"><text data-ytick="1" x="22" y="116"></text><text data-ytick="2" x="22" y="83"></text><text data-ytick="3" x="22" y="50"></text><text data-ytick="4" x="22" y="17"></text></g>
+            <g font-size="7.5" text-anchor="middle"><text x="36" y="159">-60</text><text x="92.7" y="159">-50</text><text x="149.3" y="159">-40</text><text x="206" y="159">-30</text><text x="262.7" y="159">-20</text><text x="319.3" y="159">-10</text><text x="376" y="159">0</text></g>
+            <text x="388" y="170" text-anchor="end" font-size="7.5">t (s)</text>
+            <text x="34" y="4" font-size="7.5" data-unit="66" data-default="MB/s"></text>
+            <path class="l" data-line="out" d="" stroke-width="1" stroke-dasharray="5 3"></path>
+            <g data-marks="out"></g>
+            <path class="l" data-line="in" d="" stroke-width="1.6"></path>
+            <g data-marks="in"></g>
+            <circle class="red" data-now hidden cx="376" cy="146" r="5" stroke-width="1.6"></circle>
+            <path class="l" data-nowlead d="" stroke-width="0.7"></path>
+            <text class="hand" data-nowtext x="0" y="0" text-anchor="end" font-size="12"></text>
+            <rect class="pp" x="40" y="10" width="148" height="34" stroke-width="0.9"></rect>
+            <line class="l" x1="48" y1="21" x2="70" y2="21" stroke-width="1.6"></line><circle class="pp" cx="59" cy="21" r="2.6" stroke-width="1"></circle>
+            <text x="76" y="24" font-size="8">INBOUND</text>
+            <line class="l" x1="48" y1="35" x2="70" y2="35" stroke-width="1" stroke-dasharray="5 3"></line><rect class="pp" x="56.5" y="32.5" width="5" height="5" stroke-width="0.9"></rect>
+            <text x="76" y="38" font-size="8">OUTBOUND</text>
+          </svg>
+          <span class="cap">GRAPH E — NETWORK TRAFFIC, LAST 60 s</span>
+        </div>
+      </section>
+      <!--/rg-groups-->
+      </div>
+
+      <!-- ===== title block ===== -->
+      <footer class="tblock ink">
+        <div class="title"><span class="k">TITLE</span><span class="v">System Sensors</span><span class="sub">GENERAL ARRANGEMENT</span></div>
+        <div><span class="k">UPTIME</span><span class="v" data-uptime="73">--</span></div>
+        <div class="e"><span class="k">DATE</span><span class="v" data-dmy="2 3 90">--</span></div>
+        <div class="s"><span class="k">SCALE</span><span class="v">1 : 1</span></div>
+        <div class="s e"><span class="k">SHEET</span><span class="v">1 of 1</span></div>
+        <svg class="ok" aria-hidden="true" width="86" height="40" viewBox="0 0 86 40">
+          <path class="red" data-check d="M6 22 L16 32 L38 6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+          <text class="hand red" data-oktext x="44" y="30" font-size="15">OK</text>
+        </svg>
+      </footer>
+    </div>
+  </div>
+
+  <!-- masking tape over the sheet's corners -->
+  <div class="tape tl"></div><div class="tape tr"></div><div class="tape bl"></div><div class="tape br"></div>
+</div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout).
+     rg-Sens builds the groups from these in place of the ones between the
+     rg-groups markers; a field name in double braces (value, caption, unit,
+     max, time ...) becomes a placeholder bound to the widget's own sensor.
+     The script draws each widget's linework from its data- attributes. -->
+<template data-rg-group="view" data-rg-label="View, captions alternating">
+  <section class="view" data-section><div class="g ink"><!--rg-items--><span class="cap {{parity}}">{{title}}</span></div></section>
+</template>
+<template data-rg-group="view-left" data-rg-label="View, caption left">
+  <section class="view" data-section><div class="g ink"><!--rg-items--><span class="cap">{{title}}</span></div></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock elevation" data-rg-size="large" data-rg-sources="clock" data-rg-width="392" data-rg-height="196">
+  <div class="w-clock" data-need="{{time}}"><div class="clockrow">
+    <svg data-clockface="{{time}}" role="img" aria-label="Clock drawing" width="190" height="190" viewBox="0 0 200 200"></svg>
+    <div class="side">
+      <span class="time" data-clock="{{time}}">--:--</span>
+      <div class="hhmm"><svg aria-hidden="true" width="40" height="8" viewBox="0 0 40 8"><line class="l" x1="1" y1="4" x2="39" y2="4" stroke-width="0.8" marker-start="url(#bp-arrowS)" marker-end="url(#bp-arrowE)"></line></svg><span>HH:MM · LOCAL</span></div>
+      <span class="date" data-date="{{day_name}} {{day}} {{month_name}}">&nbsp;</span>
+      <span class="angles" data-angles="{{time}}">&nbsp;</span>
+    </div>
+  </div></div>
+</template>
+<template data-rg-widget="dial" data-rg-label="Dial" data-rg-size="large" data-rg-colors="hatch-right hatch-left" data-rg-width="200" data-rg-height="198">
+  <div class="w-dial" data-need="{{value}}"><div class="dial">
+    <svg data-dial="{{value}}" data-min="{{min}}" data-max="{{max}}" data-unit-of="{{unit}}" data-hatch="{{color}}" role="img" aria-label="Dial" width="172" height="172" viewBox="0 0 200 200"></svg>
+    <div class="read"><span class="v"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}" data-ghz>--</span><span data-unit="{{unit}}" data-default="" data-deg data-ghz></span></span><span class="n" data-cap="{{caption}}" data-default="" data-upper></span></div>
+  </div></div>
+</template>
+<template data-rg-widget="dial" data-rg-label="Dial" data-rg-size="medium" data-rg-colors="hatch-right hatch-left" data-rg-width="180" data-rg-height="180">
+  <div class="w-dial" style="padding-top: 4px" data-need="{{value}}"><div class="dial">
+    <svg data-dial="{{value}}" data-min="{{min}}" data-max="{{max}}" data-unit-of="{{unit}}" data-hatch="{{color}}" data-plain role="img" aria-label="Dial" width="172" height="172" viewBox="0 0 200 200"></svg>
+    <div class="read"><span class="v"><span data-num="{{value}}" data-places="0" data-unit-of="{{unit}}" data-ghz>--</span><span data-unit="{{unit}}" data-default="" data-deg data-ghz></span></span><span class="n" data-cap="{{caption}}" data-default="" data-upper></span></div>
+  </div></div>
+</template>
+<template data-rg-widget="bar" data-rg-label="Dimension line" data-rg-size="small" data-rg-width="136" data-rg-height="50">
+  <svg class="dim" data-need="{{value}}" width="136" height="50" viewBox="0 0 136 50"><text class="label" x="0" y="10" data-cap="{{caption}}" data-default="" data-upper data-chars="19"></text><g data-dim="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-places="1" data-suffix data-ghz data-w="136"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Dimension line" data-rg-size="large" data-rg-width="392" data-rg-height="40">
+  <svg class="dim" data-need="{{value}}" width="392" height="40" viewBox="0 0 392 40"><text class="label" x="0" y="30" data-cap="{{caption}}" data-default="" data-upper data-chars="16"></text><g transform="translate(118 -8)" data-dim="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-places="1" data-suffix data-ghz data-w="274"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Dimension line" data-rg-size="medium" data-rg-width="208" data-rg-height="50">
+  <svg class="dim" data-need="{{value}}" width="208" height="50" viewBox="0 0 208 50"><text class="label" x="0" y="10" data-cap="{{caption}}" data-default="" data-upper data-chars="29"></text><g data-dim="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-scale="100" data-places="1" data-suffix data-ghz></g></svg>
+</template>
+<template data-rg-widget="fan" data-rg-label="Fan, plan view" data-rg-size="small" data-rg-sources="fan" data-rg-width="96" data-rg-height="136">
+  <div class="fan" data-need="{{value}}"><svg data-fan="{{value}}" role="img" aria-label="Fan" width="90" height="100" viewBox="-45 -45 90 100"></svg><span class="v" data-num="{{value}}" data-places="0">--</span><span class="n"><span data-cap="{{caption}}" data-default="" data-upper></span> · <span data-unit="{{unit}}" data-default="RPM" data-upper></span></span></div>
+</template>
+<template data-rg-widget="tank" data-rg-label="Tank, in section" data-rg-size="medium" data-rg-default-for="memory disk" data-rg-width="128" data-rg-height="222">
+  <div class="tank" data-need="{{value}}"><svg data-tank="{{value}}" data-max="{{max}}" role="img" aria-label="Tank" width="124" height="186" viewBox="0 0 124 186"></svg><span class="name" data-cap="{{caption}}" data-default=""></span><span class="sub"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-ghz data-plain>--</span> / <span data-num="{{max}}" data-places="1" data-unit-of="{{unit}}" data-ghz data-plain>--</span> <span data-unit="{{unit}}" data-default="" data-ghz></span></span></div>
+</template>
+<template data-rg-widget="reading" data-rg-label="Reading" data-rg-size="small" data-rg-width="128" data-rg-height="50">
+  <div class="reading" data-need="{{value}}"><span class="v"><span data-num="{{value}}" data-places="1" data-unit-of="{{unit}}" data-ghz>--</span> <small data-unit="{{unit}}" data-default="" data-ghz></small></span><span class="n" data-cap="{{caption}}" data-default="" data-upper></span></div>
+</template>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "print", "label": "Print", "type": "choice", "var": "--print", "default": "cyan", "choices": [{"value": "cyan", "label": "Cyanotype"}, {"value": "white", "label": "Whiteprint"}, {"value": "sepia", "label": "Sepia"}]},
+    {"id": "ink_bleed", "label": "Ink bleed", "type": "toggle", "var": "--ink-bleed", "default": true, "help": "Slightly wobbly, bled linework; off is crisp and costs less to redraw"},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 6)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "6", "label": "Six columns (6 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Network graph full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 0, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"},
+    "90": {"hint": "Clock - Year", "source": "clock", "instance": 1, "field": "year", "format": "{:.0}"}
+}
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var T_MIN = 20, T_MAX = 100;          // the two dials of the template's own layout
+  var WARM = 0.65, HOT = 0.8125;        // of a dial's range: 72 and 85 on 20 to 100
+  var SAMPLES = 31, SAMPLE_MS = 2000;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  var NET_MAX = cssNum('--net-max', 0);
+  var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  // The print is a keyword; the stylesheet holds each one's colours, and the
+  // paper's mottle and fibres are noise filters whose colour is set here,
+  // before rg-Sens bakes them.
+  var print = (css.getPropertyValue('--print') || 'cyan').trim() || 'cyan';
+  root.setAttribute('data-print', print);
+  var PAPER = {
+    white: ['0 0 0 0 0.45  0 0 0 0 0.4  0 0 0 0 0.32  0 0 0 0.9 -0.36', '0 0 0 0 0.3  0 0 0 0 0.27  0 0 0 0 0.22  0.55 0 0 0 -0.24'],
+    sepia: ['0 0 0 0 0.42  0 0 0 0 0.25  0 0 0 0 0.08  0 0 0 1.0 -0.4', '0 0 0 0 0.3  0 0 0 0 0.18  0 0 0 0 0.08  0.55 0 0 0 -0.24']
+  };
+  if (PAPER[print]) {
+    document.querySelector('#bp-mottle feColorMatrix').setAttribute('values', PAPER[print][0]);
+    document.querySelector('#bp-fibre feColorMatrix').setAttribute('values', PAPER[print][1]);
+  }
+  if (cssNum('--ink-bleed', 1) === 0) root.setAttribute('data-ink', 'off');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el && el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function text(el, value) { if (el && el.textContent !== value) el.textContent = value; }
+  function flag(el, name, on) { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el && el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function share(val, max, fallback) {
+    if (!isFinite(val)) return 0;
+    return clamp01(val / (max > 0 ? max : fallback));
+  }
+  function isMhz(v, id) { return /^mhz$/i.test(String(v[id] || '')); }
+  // A clock given in MHz is shown, and scaled, in GHz.
+  function inGhz(el, v) { return el.hasAttribute('data-ghz') && isMhz(v, el.getAttribute('data-unit-of') || el.getAttribute('data-unit')); }
+  function unitOf(el, v, fallback) {
+    var u = v[el.getAttribute('data-unit-of')];
+    return inGhz(el, v) ? 'GHz' : known(u) ? String(u) : fallback;
+  }
+  // A point on a circle about (100, 100): the angle in degrees, clockwise from 3 o'clock.
+  function P(r, a) { a = a * Math.PI / 180; return [100 + r * Math.cos(a), 100 + r * Math.sin(a)]; }
+  function xy(p) { return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }
+  function spokes(count, step, from, r1, r2, keep) {
+    var d = '';
+    for (var i = 0; i < count; i++) if (keep(i)) d += 'M' + xy(P(r1, from + i * step)) + 'L' + xy(P(r2, from + i * step));
+    return d;
+  }
+
+  // ------------------------------------------------------- linework
+  // Each drawing is built here from its element's data- attributes, so the
+  // hand-written views and the widgets of a custom layout share one copy.
+  var CENTRE = '<line class="cl" x1="100" y1="5" x2="100" y2="195"/><line class="cl" x1="5" y1="100" x2="195" y2="100"/>';
+  each('svg[data-clockface]', function (svg) {
+    svg.innerHTML = CENTRE +
+      '<circle class="l" cx="100" cy="100" r="84" stroke-width="2"/><circle class="l" cx="100" cy="100" r="78" stroke-width="0.8"/>' +
+      '<path class="l" stroke-width="1.6" d="' + spokes(12, 30, -90, 68, 78, function () { return true; }) + '"/>' +
+      '<path class="l" stroke-width="0.6" d="' + spokes(60, 6, -90, 73, 78, function (i) { return i % 5 !== 0; }) + '"/>' +
+      '<g class="hand" font-size="13" text-anchor="middle"><text class="hand" x="100" y="47.5">12</text><text class="hand" x="157" y="104.5">3</text><text class="hand" x="100" y="161.5">6</text><text class="hand" x="43" y="104.5">9</text></g>' +
+      '<path class="l" data-arc d="" stroke-width="0.7" marker-end="url(#bp-arrowE)"/><text data-arclabel font-size="7.5"></text>' +
+      '<g data-hour hidden><path class="hx" d="M97 108 L98.5 52 L100 46 L101.5 52 L103 108 Z" fill="url(#bp-hatch)" stroke-width="1.1"/></g>' +
+      '<g data-minute hidden><path class="l" d="M98 110 L99 30 L100 24 L101 30 L102 110 Z" stroke-width="1.1"/></g>' +
+      '<circle class="pp" cx="100" cy="100" r="5" stroke-width="1.2"/>' +
+      '<path class="l" d="M28 168 L40.6 159.4" stroke-width="0.7"/><text x="10" y="178" font-size="7.5">Ø168</text>';
+  });
+  each('svg[data-dial]', function (svg) {
+    var plain = svg.hasAttribute('data-plain');
+    var hatch = /left|X$/.test(svg.getAttribute('data-hatch') || '') ? 'bp-hatchX' : 'bp-hatch';
+    var labels = '';
+    for (var i = 0; i < 5; i++) {
+      var p = P(59, 135 + i * 67.5);
+      labels += '<text data-step="' + i + '" x="' + p[0].toFixed(1) + '" y="' + (p[1] + 3).toFixed(1) + '"></text>';
+    }
+    svg.innerHTML = CENTRE.replace(/"5"/g, '"6"').replace(/"195"/g, '"194"') +
+      '<path data-sector d="" fill="url(#' + hatch + ')"/>' +
+      '<path class="l" stroke-width="1.6" d="M' + xy(P(84, 135)) + ' A84 84 0 1 1 ' + xy(P(84, 45)) + ' L' + xy(P(70, 45)) + ' A70 70 0 1 0 ' + xy(P(70, 135)) + ' Z"/>' +
+      '<path class="l" stroke-width="1.4" d="' + spokes(5, 67.5, 135, 84, 92, function () { return true; }) + '"/>' +
+      '<path class="l" stroke-width="0.7" d="' + spokes(17, 16.875, 135, 84, 88, function (i) { return i % 4 !== 0; }) + '"/>' +
+      '<g font-size="9" text-anchor="middle">' + labels + '</g>' +
+      '<line class="l" data-needle hidden x1="100" y1="100" x2="100" y2="34" stroke-width="2" marker-end="url(#bp-arrowE)"/>' +
+      '<circle class="pp" cx="100" cy="100" r="4" stroke-width="1.2"/>' +
+      (plain ? '' : '<path class="l" data-leader d="" stroke-width="0.7"/><text data-callout font-size="8"></text>') +
+      '<ellipse class="red" data-hot hidden cx="100" cy="160" rx="46" ry="27" stroke-width="2.2" transform="rotate(-5 100 160)" filter="url(#bp-pencil)"/>';
+  });
+  // A dimension line: extension lines at zero and at the value, the arrowed
+  // dimension between them and a dash-dot construction line on to full scale.
+  each('[data-dim]', function (g) {
+    var W = +g.getAttribute('data-w') || 208, R = W - 4;
+    g.innerHTML = '<line class="l" x1="4" y1="16" x2="4" y2="44" stroke-width="0.7"/>' +
+      '<line class="l" data-ext x1="4" y1="16" x2="4" y2="44" stroke-width="0.7"/>' +
+      '<line class="l" x1="' + R + '" y1="30" x2="' + R + '" y2="44" stroke-width="0.6" stroke-dasharray="2 2"/>' +
+      '<path class="l" data-rest data-to="' + R + '" d="" stroke-width="0.6" stroke-dasharray="6 2 1 2" stroke-opacity="0.7"/>' +
+      '<line class="l" data-span hidden x1="4" y1="38" x2="4" y2="38" stroke-width="0.9" marker-start="url(#bp-arrowS)" marker-end="url(#bp-arrowE)"/>' +
+      '<text class="hand" data-val x="4" y="33" text-anchor="middle" font-size="15">--</text>' +
+      '<text data-full x="' + R + '" y="26" text-anchor="end" font-size="7" opacity="0.75"></text>';
+  });
+  // An 80 mm fan in plan: frame, mounting holes, opening, seven swept blades, hatched hub.
+  var BLADE = 'M11 0 Q23.8 3.3 30 16 L20.9 26.8 Q18.1 18.7 9.5 5.5', blades = '';
+  for (var b = 0; b < 7; b++) blades += '<path class="l" stroke-width="1.1" d="' + BLADE + '" transform="rotate(' + (b * 360 / 7).toFixed(2) + ')"/>';
+  each('svg[data-fan]', function (svg) {
+    svg.innerHTML = '<rect class="l" x="-40" y="-40" width="80" height="80" rx="7" stroke-width="1.4"/>' +
+      '<path class="l" stroke-width="0.9" d="M-30 -33 a3 3 0 1 0 -6 0 a3 3 0 1 0 6 0 M36 -33 a3 3 0 1 0 -6 0 a3 3 0 1 0 6 0 M-30 33 a3 3 0 1 0 -6 0 a3 3 0 1 0 6 0 M36 33 a3 3 0 1 0 -6 0 a3 3 0 1 0 6 0"/>' +
+      '<circle class="l" r="37" stroke-width="1"/>' +
+      '<line class="cl fine" x1="-44" y1="0" x2="44" y2="0"/><line class="cl fine" x1="0" y1="-44" x2="0" y2="44"/>' +
+      '<g data-rotor>' + blades + '</g>' +
+      '<circle class="pp" r="11" stroke-width="1.2"/><circle r="11" fill="url(#bp-hatch)" opacity="0.8"/>' +
+      '<path class="l" d="M30 -30 A42 42 0 0 1 40 -12" stroke-width="0.8" marker-end="url(#bp-arrowE)"/>' +
+      '<text x="0" y="52" text-anchor="middle" font-size="7">Ø80</text>';
+  });
+  // A tank in section: hatched walls and base, a flange lip, the liquid with
+  // the water-level symbol and a dimension from the floor to the level.
+  each('svg[data-tank]', function (svg) {
+    svg.innerHTML = '<rect data-water x="24" y="166" width="60" height="0" fill="url(#bp-water)"/>' +
+      '<path d="M18 24 V166 H90 V24 H96 V172 H12 V24 Z" fill="url(#bp-hatch)"/>' +
+      '<path class="l" d="M18 24 V166 H90 V24 M12 24 V172 H96 V24 M6 24 H30 M78 24 H102" stroke-width="1.3"/>' +
+      '<g data-level><line class="l" x1="24" y1="0" x2="84" y2="0" stroke-width="1.2"/>' +
+      '<path class="l" d="M48 -9 H60 L54 0 Z M50 3 H58 M52 6 H56" stroke-width="1"/>' +
+      '<line class="l" x1="88" y1="0" x2="118" y2="0" stroke-width="0.6"/></g>' +
+      '<line class="cl fine" x1="54" y1="8" x2="54" y2="180"/>' +
+      '<line class="l" x1="98" y1="166" x2="118" y2="166" stroke-width="0.6"/>' +
+      '<line class="l" data-rise x1="112" y1="166" x2="112" y2="166" stroke-width="0.8" marker-start="url(#bp-arrowS)" marker-end="url(#bp-arrowE)"/>' +
+      '<text class="hand" data-share text-anchor="middle" font-size="13"></text>';
+  });
+
+  // The sheet frame and its zone markers, for whatever size the sheet has:
+  // letters down both sides, numbers along the top.
+  function drawFrame() {
+    var svg = document.querySelector('[data-frame]');
+    if (!svg) return;
+    var W = svg.clientWidth, H = svg.clientHeight;
+    if (!(W > 60 && H > 60)) return;
+    var rows = Math.max(1, Math.round((H - 24) / 234.5)), cols = Math.max(1, Math.round((W - 24) / 145.3));
+    var d = '', letters = '';
+    for (var i = 1; i <= rows; i++) {
+      var y = 12 + i * (H - 24) / rows, mid = y - (H - 24) / rows / 2 + 2;
+      if (i < rows) d += 'M12 ' + y.toFixed(1) + ' H18 M' + (W - 18) + ' ' + y.toFixed(1) + ' H' + (W - 12);
+      var letter = String.fromCharCode(64 + (i - 1) % 26 + 1);
+      letters += '<text x="15" y="' + mid.toFixed(1) + '">' + letter + '</text><text x="' + (W - 15) + '" y="' + mid.toFixed(1) + '">' + letter + '</text>';
+    }
+    for (var j = 1; j <= cols; j++) {
+      var x = 12 + j * (W - 24) / cols;
+      if (j < cols) d += 'M' + x.toFixed(1) + ' 12 V18';
+      letters += '<text x="' + (x - (W - 24) / cols / 2).toFixed(1) + '" y="17">' + j + '</text>';
+    }
+    var drawn = '<rect class="l" x="12" y="12" width="' + (W - 24) + '" height="' + (H - 24) + '" stroke-width="2.3"/>' +
+      '<rect class="l" x="18" y="18" width="' + (W - 36) + '" height="' + (H - 36) + '" stroke-width="1"/>' +
+      '<path class="l" stroke-width="0.8" d="' + d + '"/><g font-size="5.5" text-anchor="middle">' + letters + '</g>';
+    if (svg.getAttribute('data-drawn') !== W + 'x' + H) { svg.innerHTML = drawn; svg.setAttribute('data-drawn', W + 'x' + H); }
+  }
+  window.addEventListener('resize', drawFrame);
+  window.addEventListener('rg-layout', function () { setTimeout(drawFrame, 0); });
+  drawFrame();
+
+  // ------------------------------------------------------- history
+  var latest = { down: NaN, up: NaN };
+  var hist = { down: [], up: [] };
+  var seq = 0;                           // samples taken so far: a marker sits on every fifth
+  var STORE = 'rg-blueprint-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist.down.length === saved.hist.up.length) {
+      hist.down = saved.hist.down.slice(-SAMPLES); hist.up = saved.hist.up.slice(-SAMPLES);
+      seq = saved.seq > 0 ? saved.seq : hist.down.length;
+    }
+  } catch (e) { /* no storage: the graph starts empty */ }
+
+  // The value the top of the graph stands for, shared by both curves: the
+  // Network graph full scale option, else the peak of the last minute in
+  // steps (1, 2, 4, 8, 16 ...), so the curves do not rescale each time the
+  // peak moves a little.
+  function netFullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    var full = 1;
+    while (full < peak) full *= 2;
+    return full;
+  }
+  // A smooth curve through the points (Catmull-Rom, as cubic segments).
+  function curve(pts) {
+    if (pts.length < 2) return '';
+    var d = 'M' + xy(pts[0]);
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+      // (the control points stay on the plot: a curve must not dip under the axis)
+      d += ' C' + xy([p1[0] + (p2[0] - p0[0]) / 6, Math.min(p1[1] + (p2[1] - p0[1]) / 6, 146)]) + ' ' +
+        xy([p2[0] - (p3[0] - p1[0]) / 6, Math.min(p2[1] - (p3[1] - p1[1]) / 6, 146)]) + ' ' + xy(p2);
+    }
+    return d;
+  }
+  // Inbound solid with circles, outbound dashed with squares, the newest
+  // sample at the right; a red-pencil ring and a leader on the newest point.
+  function drawChart() {
+    var svg = document.querySelector('[data-chart]');
+    if (!svg) return;
+    var full = netFullScale(Math.max.apply(null, hist.down.concat(hist.up, [0])), NET_MAX);
+    each('[data-ytick]', function (el) { text(el, fmt(full * el.getAttribute('data-ytick') / 4, full < 4 ? 2 : 1)); }, svg);
+    var pitch = 340 / (SAMPLES - 1);
+    function points(list) {
+      return list.map(function (v, i) { return [376 - (list.length - 1 - i) * pitch, 146 - clamp01(v / full) * 132]; });
+    }
+    var inPts = points(hist.down), outPts = points(hist.up), n = inPts.length;
+    attr(svg.querySelector('[data-line="in"]'), 'd', curve(inPts));
+    attr(svg.querySelector('[data-line="out"]'), 'd', curve(outPts));
+    var circles = '', squares = '';
+    for (var i = 0; i < n; i++) {
+      if ((seq - n + 1 + i) % 5 !== 0) continue;
+      circles += '<circle class="pp" cx="' + inPts[i][0].toFixed(1) + '" cy="' + inPts[i][1].toFixed(1) + '" r="2.8" stroke-width="1.1"/>';
+      squares += '<rect class="pp" x="' + (outPts[i][0] - 2.5).toFixed(1) + '" y="' + (outPts[i][1] - 2.5).toFixed(1) + '" width="5" height="5" stroke-width="0.9"/>';
+    }
+    var holder = svg.querySelector('[data-marks="in"]');
+    if (holder.getAttribute('data-drawn') !== circles) {
+      holder.innerHTML = circles; holder.setAttribute('data-drawn', circles);
+      svg.querySelector('[data-marks="out"]').innerHTML = squares;
+    }
+    var ring = svg.querySelector('[data-now]'), lead = svg.querySelector('[data-nowlead]'), label = svg.querySelector('[data-nowtext]');
+    hide(ring, n === 0);
+    if (n === 0) { attr(lead, 'd', ''); text(label, ''); return; }
+    var x = inPts[n - 1][0], y = inPts[n - 1][1], up = y > 40 ? -1 : 1;      // the leader goes down when the point is near the top
+    attr(ring, 'cx', x.toFixed(1)); attr(ring, 'cy', y.toFixed(1));
+    attr(lead, 'd', 'M' + (x - 4).toFixed(1) + ' ' + (y + 4 * up).toFixed(1) + ' L' + (x - 24).toFixed(1) + ' ' + (y + 30 * up).toFixed(1) + ' H' + (x - 70).toFixed(1));
+    attr(label, 'x', (x - 26).toFixed(1)); attr(label, 'y', (y + 30 * up - 3).toFixed(1));
+    text(label, 'now: ' + fmt(hist.down[n - 1], 1));
+  }
+  function sample() {
+    if (!isFinite(latest.down) && !isFinite(latest.up)) return;
+    hist.down.push(isFinite(latest.down) ? Math.round(latest.down * 100) / 100 : 0);
+    hist.up.push(isFinite(latest.up) ? Math.round(latest.up * 100) / 100 : 0);
+    seq++;
+    if (hist.down.length > SAMPLES) { hist.down.shift(); hist.up.shift(); }
+    drawChart();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist, seq: seq })); } catch (e) { /* ignore */ }
+  }
+  setInterval(sample, SAMPLE_MS);
+  drawChart();
+
+  // ------------------------------------------------------- values
+  // A dial's range: 20 to 100 for the template's own, the sensor's limits
+  // for a widget that names them.
+  function range(el, v) {
+    if (!el.hasAttribute('data-max')) return [T_MIN, T_MAX];
+    var lo = num(v[el.getAttribute('data-min')]), hi = num(v[el.getAttribute('data-max')]);
+    if (!isFinite(lo)) lo = 0;
+    if (!(hi > lo)) hi = lo + 100;
+    if (inGhz(el, v)) { lo /= 1000; hi /= 1000; }
+    return [lo, hi];
+  }
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+
+    // Clock: hours and minutes of the bound time ("9:24 PM" shows 9:24).
+    function hhmm(id) { var t = v[id]; return /(\d{1,2}):(\d{2})/.exec(known(t) ? String(t) : ''); }
+    each('[data-clock]', function (el) {
+      var hm = hhmm(el.getAttribute('data-clock'));
+      text(el, hm ? hm[1] + ':' + hm[2] : '--:--');
+    });
+    // The hands, and an angle dimension from 12 o'clock to the minute hand.
+    each('svg[data-clockface]', function (svg) {
+      var hm = hhmm(svg.getAttribute('data-clockface'));
+      var hour = svg.querySelector('[data-hour]'), minute = svg.querySelector('[data-minute]');
+      hide(hour, !hm); hide(minute, !hm);
+      var ma = hm ? +hm[2] * 6 : 0, ha = hm ? (+hm[1] % 12) * 30 + +hm[2] * 0.5 : 0;
+      attr(hour, 'transform', 'rotate(' + ha + ' 100 100)');
+      attr(minute, 'transform', 'rotate(' + ma + ' 100 100)');
+      var arc = ma >= 18;
+      attr(svg.querySelector('[data-arc]'), 'd', arc ? 'M100 60 A40 40 0 ' + (ma > 180 ? 1 : 0) + ' 1 ' + xy(P(40, ma - 90)) : '');
+      var at = P(46, ma / 2 - 90), label = svg.querySelector('[data-arclabel]');
+      attr(label, 'x', at[0].toFixed(1)); attr(label, 'y', (at[1] + 1).toFixed(1));
+      text(label, arc ? ma + '°' : '');
+    });
+    each('[data-angles]', function (el) {    // HR HAND 157° · MIN HAND 84°
+      var hm = hhmm(el.getAttribute('data-angles'));
+      text(el, hm ? 'HR HAND ' + Math.round((+hm[1] % 12) * 30 + +hm[2] * 0.5) + '° · MIN HAND ' + (+hm[2] * 6) + '°' : ' ');
+    });
+    each('[data-date]', function (el) {      // Friday, 13 November: the ids of day name, day and month
+      var ids = el.getAttribute('data-date').split(' '), day = num(v[ids[1]]);
+      var rest = [isFinite(day) ? String(Math.round(day)) : '', known(v[ids[2]]) ? String(v[ids[2]]) : ''].filter(Boolean).join(' ');
+      text(el, [known(v[ids[0]]) ? String(v[ids[0]]) : '', rest].filter(Boolean).join(', ') || ' ');
+    });
+    each('[data-dmy]', function (el) {       // 13.11.26: the ids of day, month name and year
+      var ids = el.getAttribute('data-dmy').split(' '), day = num(v[ids[0]]), year = num(v[ids[2]]);
+      var month = MONTHS.indexOf(String(v[ids[1]] || '').slice(0, 3).toLowerCase()) + 1;
+      text(el, [isFinite(day) ? two(Math.round(day)) : '', month ? two(month) : '', isFinite(year) ? two(Math.round(year) % 100) : '']
+        .filter(Boolean).join('.') || '--');
+    });
+
+    each('[data-num]', function (el) {
+      var n = num(v[el.getAttribute('data-num')]);
+      if (inGhz(el, v)) n /= 1000;
+      var shown = fmt(n, +el.getAttribute('data-places'));
+      text(el, el.hasAttribute('data-plain') ? shown.replace(/,/g, '') : shown);   // "412 / 1000 GB"
+    });
+    each('[data-unit]', function (el) {
+      var id = el.getAttribute('data-unit'), u = v[id];
+      var shown = el.hasAttribute('data-ghz') && isMhz(v, id) ? 'GHz' : known(u) ? String(u) : el.getAttribute('data-default');
+      if (el.hasAttribute('data-deg')) {       // 58 and a degree sign in a dial, the whole unit in its callout; any other unit small
+        if (shown.charAt(0) === '\u00b0') shown = '\u00b0';
+        flag(el, 'deg', shown === '\u00b0');
+      }
+      text(el, el.hasAttribute('data-upper') ? shown.toUpperCase() : shown);
+    });
+    each('[data-cap]', function (el) {
+      var c = v[el.getAttribute('data-cap')];
+      var name = known(c) ? String(c) : el.getAttribute('data-default');
+      if (el.hasAttribute('data-upper')) name = name.toUpperCase();
+      var room = +el.getAttribute('data-chars');   // an SVG label cannot clip itself
+      text(el, room > 0 && name.length > room ? name.slice(0, room - 1) + '…' : name);
+    });
+    each('[data-uptime]', function (el) {    // 4 d 7 h
+      var sec = num(v[el.getAttribute('data-uptime')]), shown = '--';
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        shown = d > 0 ? d + ' d ' + hr + ' h' : hr + ' h ' + mn + ' min';
+      }
+      text(el, shown);
+    });
+
+    // Dials: the ring is hatched from the start of the scale to the reading,
+    // the needle points at it and a leader calls it out.
+    var review = false;
+    each('svg[data-dial]', function (svg) {
+      var t = num(v[svg.getAttribute('data-dial')]), r = range(svg, v);
+      if (inGhz(svg, v)) t /= 1000;
+      var f = isFinite(t) ? clamp01((t - r[0]) / (r[1] - r[0])) : 0, a = 135 + f * 270, big = f * 270 > 180 ? 1 : 0;
+      attr(svg.querySelector('[data-sector]'), 'd', f > 0.004 ? 'M' + xy(P(84, 135)) + ' A84 84 0 ' + big + ' 1 ' + xy(P(84, a)) +
+        ' L' + xy(P(70, a)) + ' A70 70 0 ' + big + ' 0 ' + xy(P(70, 135)) + ' Z' : '');
+      var needle = svg.querySelector('[data-needle]'), tip = P(66, a);
+      hide(needle, !isFinite(t));
+      attr(needle, 'x2', tip[0].toFixed(1)); attr(needle, 'y2', tip[1].toFixed(1));
+      each('[data-step]', function (el) { text(el, fmt(r[0] + (r[1] - r[0]) * el.getAttribute('data-step') / 4, 1)); }, svg);
+      var leader = svg.querySelector('[data-leader]'), callout = svg.querySelector('[data-callout]');
+      if (leader) {
+        var from = P(84, a), to = P(104, a), left = to[0] < 100;
+        attr(leader, 'd', isFinite(t) ? 'M' + xy(from) + ' L' + xy(to) + ' h' + (left ? -18 : 18) : '');
+        attr(callout, 'x', (left ? to[0] - 46 : to[0] + 2).toFixed(1)); attr(callout, 'y', (to[1] - 3).toFixed(1));
+        text(callout, isFinite(t) ? (fmt(t, 0) + ' ' + unitOf(svg, v, '°C')).trim() : '');
+      }
+      // only a temperature is marked for review (the template's own dials are temperatures)
+      var hot = isFinite(t) && f >= HOT && (!svg.hasAttribute('data-max') || /\u00b0/.test(unitOf(svg, v, '')));
+      hide(svg.querySelector('[data-hot]'), !hot);
+      if (hot) review = true;
+    });
+    // The design note beside a dial; red pencil once it wants attention.
+    each('[data-note]', function (el) {
+      var t = num(v[el.getAttribute('data-note')]), r = range(el, v), f = isFinite(t) ? (t - r[0]) / (r[1] - r[0]) : 0;
+      var unit = ' ' + unitOf(el, v, '°C');
+      text(el, f >= HOT ? 'Note: exceeds ' + fmt(r[0] + (r[1] - r[0]) * HOT, 0) + unit + ' — REVIEW'
+        : f >= WARM ? 'Note: above ' + fmt(r[0] + (r[1] - r[0]) * WARM, 0) + unit + ', monitor' : 'Note: within limits');
+      flag(el, 'hot', f >= HOT); flag(el, 'warm', f >= WARM && f < HOT);
+    });
+    each('[data-check]', function (el) { hide(el, review); });
+    each('[data-oktext]', function (el) { text(el, review ? 'REVIEW' : 'OK'); attr(el, 'x', review ? '6' : '44'); });
+
+    // Dimension lines, against the sensor's own maximum, else the limit in
+    // the stylesheet (a number, or the name of a custom property).
+    each('[data-dim]', function (g) {
+      var val = num(v[g.getAttribute('data-dim')]), max = num(v[g.getAttribute('data-max')]);
+      var scale = g.getAttribute('data-scale') || '100', fallback = scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+      if (inGhz(g, v)) { val /= 1000; max /= 1000; }
+      var W = +g.getAttribute('data-w') || 208, x = 4 + share(val, max, fallback) * (W - 8), places = +g.getAttribute('data-places');
+      attr(g.querySelector('[data-ext]'), 'x1', x.toFixed(1)); attr(g.querySelector('[data-ext]'), 'x2', x.toFixed(1));
+      attr(g.querySelector('[data-rest]'), 'd', 'M' + x.toFixed(1) + ' 38 H' + (W - 4));
+      var span = g.querySelector('[data-span]');
+      hide(span, !(x > 18));                 // no room for two arrowheads
+      attr(span, 'x2', x.toFixed(1));
+      var shown = fmt(val, places) + (g.hasAttribute('data-suffix') && isFinite(val) ? ' ' + unitOf(g, v, '') : '');
+      var label = g.querySelector('[data-val]');
+      text(label, shown.trim());
+      // between the extension lines when it fits, else just past the value's
+      var wide = shown.trim().length * 7.8;
+      attr(label, 'x', (x - 4 >= wide + 8 ? (4 + x) / 2 : Math.min(x + 5 + wide / 2, W - 4 - wide / 2)).toFixed(1));
+      text(g.querySelector('[data-full]'), fmt(max > 0 ? max : fallback, 1));
+    });
+    // Fans: the blades turn with the RPM (the motion ticker reads it).
+    each('svg[data-fan]', function (svg) {
+      var rpm = num(v[svg.getAttribute('data-fan')]);
+      svg.querySelector('[data-rotor]').rpm = isFinite(rpm) ? rpm : 0;
+    });
+    // Tanks: the liquid stands at the share in use, with its level symbol
+    // and a dimension from the floor up to it.
+    each('svg[data-tank]', function (svg) {
+      var val = num(v[svg.getAttribute('data-tank')]), f = share(val, num(v[svg.getAttribute('data-max')]), 100);
+      var y = 166 - 136 * f, rise = svg.querySelector('[data-rise]'), label = svg.querySelector('[data-share]');
+      attr(svg.querySelector('[data-water]'), 'y', y.toFixed(1)); attr(svg.querySelector('[data-water]'), 'height', (166 - y).toFixed(1));
+      attr(svg.querySelector('[data-level]'), 'transform', 'translate(0 ' + y.toFixed(1) + ')');
+      hide(rise, !(166 - y > 16));
+      attr(rise, 'y2', y.toFixed(1));
+      // lettered along the dimension; above it when the dimension is too short
+      attr(label, 'transform', 'translate(106 ' + (166 - y > 34 ? (166 + y) / 2 : y - 20).toFixed(1) + ') rotate(-90)');
+      text(label, isFinite(val) ? Math.round(f * 100) + '%' : '');
+    });
+
+    var chart = document.querySelector('[data-chart]');
+    latest.down = chart ? num(v[chart.getAttribute('data-in')]) : NaN;
+    latest.up = chart ? num(v[chart.getAttribute('data-out')]) : NaN;
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+    each('[data-count]', function (el) {     // 4 OFF
+      var view = el.closest('[data-section]') || document;
+      text(el, view.querySelectorAll(el.getAttribute('data-count') + ':not([hidden])').length + ' OFF');
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, anims = [], last = 0;
+  var EPOCH = 1700000000000;
+
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    anims = document.getAnimations();    // asked for afresh: a hidden ring's animation is cancelled
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;
+    // Blades: one turn every 4800 / RPM seconds, but never more than about
+    // 20 degrees a frame. Seven blades repeat every 51 degrees, so a bigger
+    // step would read as standing still or turning backwards.
+    each('[data-rotor]', function (el) {
+      var rpm = el.rpm || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(360 / 4800 * rpm * dt * speed, 20 * (1 - Math.exp(-rpm / 900)));
+      el.angle = ((el.angle || 0) + step) % 360;
+      el.setAttribute('transform', 'rotate(' + el.angle.toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still-motion', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) return;
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  window.updateValues({});              // every drawing in its empty state before the first values arrive
+})();
+</script>
+</body>
+</html>

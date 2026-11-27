@@ -146,3 +146,48 @@ html, body { margin: 0; background: var(--wall-1); }
 [data-state].hot { color: var(--hot) !important; }
 /* A hot dial's end dot pulses. */
 [data-end].hot { animation: jp-pulse 2s ease-in-out infinite; }
+
+/* ---- custom layouts: groups built from the prototypes -------------------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). The groups share the
+   height equally; a card hands what is left under its title to the grid.
+   The .jp- classes are used by the prototypes only. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > section:has(.rg-items) { min-height: 0; min-width: 0; overflow: hidden; justify-content: flex-start; }
+.groups > .still:has(.rg-items) { align-items: stretch; }
+.rg-fit > * { box-sizing: border-box; width: 100%; height: 100%; }
+
+/* clock without the shelf */
+.jp-clock { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 6px; }
+
+/* river-stone dial: the reading on the stone, or the caption beneath it */
+.jp-dial { display: flex; flex-direction: column; align-items: center; padding-top: 4px; }
+.jp-dial-l { gap: 12px; }
+.jp-du { margin-left: 2px; font-size: 15px; font-weight: 400; letter-spacing: 0; color: var(--on-stone-sub); }
+.jp-cap-l { max-width: 100%; font-family: 'Shippori Mincho', serif; font-size: 16px; line-height: 1.2; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* hairline bar: stacked, caption and value over the line, or one long row */
+.jp-cap { min-width: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.16em; line-height: 1.2; color: var(--sub);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jp-val { flex: none; font-weight: 500; font-size: 20px; line-height: 1; color: var(--ink); white-space: nowrap; }
+.jp-unit { font-size: 12px; font-weight: 500; color: var(--sub); }
+.jp-bar { display: flex; flex-direction: column; justify-content: center; gap: 7px; min-width: 0; padding: 0 5px; }
+.jp-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.jp-bar-s { gap: 6px; }
+.jp-bar-m { gap: 12px; }
+.jp-bar-m .jp-val { font-size: 22px; }
+.jp-bar-l { flex-direction: row; align-items: center; gap: 14px; }
+.jp-bar-l .jp-cap { flex: none; width: 112px; }
+.jp-bar-l [data-bar] { flex: 1; }
+.jp-bar-l .jp-val { min-width: 84px; text-align: right; }
+
+/* oak fan, glazed cup, reading */
+.jp-fan { justify-content: center; }
+.jp-cupw { justify-content: center; }
+.jp-g-sage { fill: var(--glaze-1); }
+.jp-g-honey { fill: var(--glaze-2); }
+.jp-g-umber { fill: var(--glaze-3); }
+.jp-reading { display: flex; flex-direction: column; justify-content: center; gap: 5px; min-width: 0; padding: 0 5px; }
+.jp-reading .jp-val { font-weight: 300; font-size: 26px; }

@@ -229,6 +229,7 @@ impl Displayer for CssTemplateDisplayer {
                     if let Some(ref html) = html_content {
                         display_data.detected_placeholders = detect_placeholders(html);
                         display_data.placeholder_hints = extract_placeholder_hints(html);
+                        display_data.refresh_layout(html);
                     }
                 }
                 return Ok(());

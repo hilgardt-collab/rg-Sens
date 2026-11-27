@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1380 1440x1050 2400x710">
+<meta name="rg-group-size" content="480x330+290">
+<title>Memphis Sensor Panel</title>
+<!--
+  Memphis sensor panel for the rg-Sens CSS Template displayer, drawn for
+  480x1920 portrait: a 1980s Italian design-studio still life of glossy
+  laminate slabs, lacquered discs and simple solids, each casting a hard
+  offset shadow onto a confetti wall. A sibling of the other example panels:
+  the same placeholders 0-73 and the same setup.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption is the tag's name)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Anything left unbound is hidden: a cylinder, a disc, an arch, a whole group.
+  The processor's power cylinder has no rg-Sens source and stays hidden unless
+  you bind a sensor to it by hand on the Bindings tab.
+
+  A half-disc gauge sweeps 180 degrees from 20 to 100 degrees; from 85 its
+  value and pivot ball turn red. A cylinder rises to its share of the full
+  scale, an arch fills from the base to the share in use. The clock's hands
+  follow the bound time; the second hand steps with the system's seconds
+  while motion is on.
+
+  The network board keeps the last minute (31 samples, one every 2 s) in the
+  page: inbound as a pink tube, outbound as blue balls on every second sample,
+  on one shared scale. It starts empty and survives a reload of the template,
+  not a restart of rg-Sens.
+
+  Options (the panel's Display tab, or the top of memphis_panel.css): palette
+  (Milano, Pastel, Primary), how the design fits the panel, the layout, the
+  frame rate, and the full scale of the cylinders and of the network board.
+
+  Size: the design is drawn for 480x1920, but its five groups (the clock and
+  the four labelled ones) re-arrange to suit the panel: one column of five,
+  two, three or five side by side (the rg-layouts list gives the size each
+  needs). Each group is one drawing that keeps its proportions and grows into
+  its cell; the confetti wall is scattered over whatever box the panel has.
+
+  Custom layouts: the template elements at the end of the body are the
+  building blocks (two group styles and the clock, gauge, lying cylinder,
+  standing cylinder, pinwheel, arch and tag widgets) that "My own groups and
+  widgets" builds groups from; see the guide's "Custom Layouts" section.
+
+  The wall's grain is a noise filter, which is costly to redraw; it carries
+  data-rg-bake, so rg-Sens draws it once into a bitmap.
+
+  Motion: the pinwheels turn with RPM (one turn every 6000 / RPM seconds), the
+  second hand steps and the newest network sample pulses, at --motion-fps
+  frames a second. 0 turns motion off, as do the panel's Animation switch and
+  the system's reduced-motion setting.
+
+  Fonts: Archivo Black (title, numbers) and Space Mono (labels), loaded from
+  the fonts folder next to this file; copy that folder along with the
+  template. Nothing is fetched from the network. The design is an original
+  take on the general 1980s Memphis look and copies no designer's pattern or
+  furniture piece.
+-->
+<link rel="stylesheet" href="memphis_panel.css">
+</head>
+<body>
+<div class="panel">
+
+  <!-- ===== the wall, and every shared drawing (never hidden) ===== -->
+  <svg class="wall" aria-hidden="true" data-wall>
+    <defs>
+      <filter id="mp-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="4"></feTurbulence><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.9 0 0 0 -0.38"></feColorMatrix></filter>
+      <filter id="mp-soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"></feGaussianBlur></filter>
+      <filter id="mp-soft4" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4"></feGaussianBlur></filter>
+      <filter id="mp-tubeShade" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="2.2"></feGaussianBlur></filter>
+      <pattern id="mp-grid" patternUnits="userSpaceOnUse" width="14" height="14"><rect x="0" y="0" width="14" height="14" fill="#FFFFFF"></rect><path d="M14 0 H0 V14" fill="none" stroke="#111" stroke-width="1.4"></path></pattern>
+      <pattern id="mp-gridFine" patternUnits="userSpaceOnUse" width="9" height="9"><rect class="f-cream" x="0" y="0" width="9" height="9"></rect><path class="s-ink" d="M9 0 H0 V9" fill="none" stroke-width="0.8" opacity="0.55"></path></pattern>
+      <pattern id="mp-dots" patternUnits="userSpaceOnUse" width="10" height="10"><circle cx="5" cy="5" r="1.6" fill="#FFFFFF" opacity="0.85"></circle></pattern>
+      <pattern id="mp-dotsInk" patternUnits="userSpaceOnUse" width="12" height="12"><circle class="f-ink" cx="3" cy="3" r="1.3" opacity="0.5"></circle><circle class="f-ink" cx="9" cy="9" r="1.3" opacity="0.5"></circle></pattern>
+      <!-- photographic shading overlays, independent of colour -->
+      <linearGradient id="mp-cyl" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#000" stop-opacity="0.28"></stop>
+        <stop offset="0.18" stop-color="#FFF" stop-opacity="0"></stop>
+        <stop offset="0.3" stop-color="#FFF" stop-opacity="0.5"></stop>
+        <stop offset="0.42" stop-color="#FFF" stop-opacity="0"></stop>
+        <stop offset="0.8" stop-color="#000" stop-opacity="0.1"></stop>
+        <stop offset="1" stop-color="#000" stop-opacity="0.38"></stop>
+      </linearGradient>
+      <linearGradient id="mp-cylH" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#000" stop-opacity="0.28"></stop>
+        <stop offset="0.18" stop-color="#FFF" stop-opacity="0"></stop>
+        <stop offset="0.3" stop-color="#FFF" stop-opacity="0.5"></stop>
+        <stop offset="0.42" stop-color="#FFF" stop-opacity="0"></stop>
+        <stop offset="0.8" stop-color="#000" stop-opacity="0.1"></stop>
+        <stop offset="1" stop-color="#000" stop-opacity="0.38"></stop>
+      </linearGradient>
+      <radialGradient id="mp-sph" cx="0.36" cy="0.3" r="0.78">
+        <stop offset="0" stop-color="#FFF" stop-opacity="0.9"></stop>
+        <stop offset="0.18" stop-color="#FFF" stop-opacity="0.15"></stop>
+        <stop offset="0.65" stop-color="#000" stop-opacity="0"></stop>
+        <stop offset="1" stop-color="#000" stop-opacity="0.5"></stop>
+      </radialGradient>
+      <linearGradient id="mp-gloss" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FFF" stop-opacity="0.35"></stop>
+        <stop offset="0.35" stop-color="#FFF" stop-opacity="0.04"></stop>
+        <stop offset="0.6" stop-color="#FFF" stop-opacity="0"></stop>
+        <stop offset="1" stop-color="#000" stop-opacity="0.12"></stop>
+      </linearGradient>
+      <radialGradient id="mp-disk" cx="0.4" cy="0.35" r="0.75">
+        <stop offset="0" stop-color="#FFF" stop-opacity="0.4"></stop>
+        <stop offset="0.5" stop-color="#FFF" stop-opacity="0"></stop>
+        <stop offset="1" stop-color="#000" stop-opacity="0.18"></stop>
+      </radialGradient>
+    </defs>
+    <rect class="f-wall" x="0" y="0" width="100%" height="100%"></rect>
+    <rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#mp-grain)" opacity="0.25"></rect>
+    <g data-confetti></g>
+    <rect x="0" y="0" width="100%" height="100%" fill="url(#mp-gloss)" opacity="0.5"></rect>
+  </svg>
+
+  <!-- ===== the title slab ===== -->
+  <header class="strip">
+    <svg viewBox="16 14 458 110" role="img" aria-label="System sensors">
+      <rect class="f-shadow" x="30" y="30" width="440" height="90" filter="url(#mp-soft)"></rect>
+      <rect x="20" y="18" width="440" height="90" fill="url(#mp-grid)"></rect>
+      <rect class="s-ink" x="20" y="18" width="440" height="90" fill="none" stroke-width="3"></rect>
+      <rect class="f-shadow" x="40" y="38" width="300" height="62" filter="url(#mp-soft)"></rect>
+      <rect class="f-pink" x="34" y="31" width="300" height="62"></rect>
+      <rect x="34" y="31" width="300" height="62" fill="url(#mp-gloss)"></rect>
+      <rect class="s-ink" x="34" y="31" width="300" height="62" fill="none" stroke-width="2.5"></rect>
+      <text class="big f-ink" x="50" y="74" font-size="27" letter-spacing="0.5" opacity="0.25" transform="translate(2.5 2.5)">SYSTEM SENSORS</text>
+      <text class="big f-white" x="50" y="74" font-size="27" letter-spacing="0.5">SYSTEM SENSORS</text>
+      <path class="f-shadow" d="M358 96 L392 34 L426 96 Z" transform="translate(7 8)" filter="url(#mp-soft)"></path>
+      <path class="f-teal" d="M358 96 L392 34 L426 96 Z"></path>
+      <path d="M358 96 L392 34 L426 96 Z" fill="url(#mp-cyl)"></path>
+      <circle class="f-shadow" cx="436" cy="52" r="15" transform="translate(5 6)" filter="url(#mp-soft)"></circle>
+      <circle class="f-yellow" cx="436" cy="52" r="15"></circle>
+      <circle cx="436" cy="52" r="15" fill="url(#mp-sph)"></circle>
+      <path class="s-ink" d="M40.0 117.0 C42.0 115.3 48.0 107.0 52.0 107.0 C56.0 107.0 60.0 117.0 64.0 117.0 C68.0 117.0 72.0 107.0 76.0 107.0 C80.0 107.0 84.0 117.0 88.0 117.0 C92.0 117.0 96.0 107.0 100.0 107.0 C104.0 107.0 108.0 117.0 112.0 117.0 C116.0 117.0 120.0 107.0 124.0 107.0 C128.0 107.0 132.0 117.0 136.0 117.0 C140.0 117.0 144.0 107.0 148.0 107.0 C152.0 107.0 158.0 115.3 160.0 117.0" fill="none" stroke-width="4" stroke-linecap="round"></path>
+    </svg>
+  </header>
+
+  <!-- ===== the five groups ===== -->
+  <div class="groups">
+<!--rg-groups 0-71-->
+  <section class="g-clock" data-section>
+    <svg viewBox="34 160 436 292" role="img" aria-label="Clock">
+      <g data-mp="clock" data-need="0" transform="translate(172 300)" data-time="0" data-date="1 2 3"></g>
+    </svg>
+  </section>
+
+  <section class="g-temp" data-section>
+    <svg viewBox="16 486 458 412" role="img" aria-label="Temperatures">
+      <rect class="f-ink" x="20" y="490" width="206" height="26"></rect>
+      <text class="f-white" x="32" y="508" font-size="12" letter-spacing="1.5">TEMPERATURE °C</text>
+      <g data-mp="gauge" data-need="5" transform="translate(124 664)" data-v="5" data-unit-of="6" data-lo="20" data-hi="100" data-deg data-label="CPU" data-color="yellow"></g>
+      <g data-mp="cyl" data-need="9" transform="translate(51 760)" data-v="9" data-max="11" data-unit-of="10" data-scale="100" data-label="LOAD" data-color="pink"></g>
+      <g data-mp="cyl" data-need="13" transform="translate(107 760)" data-v="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" data-label="GHZ" data-color="teal" data-bare></g>
+      <g data-mp="cyl" data-need="17" transform="translate(163 760)" data-v="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" data-label="WATT" data-color="blue" data-bare></g>
+      <g data-mp="gauge" data-need="21" transform="translate(356 664)" data-v="21" data-unit-of="22" data-lo="20" data-hi="100" data-deg data-label="GPU" data-color="pink"></g>
+      <g data-mp="cyl" data-need="25" transform="translate(283 760)" data-v="25" data-max="27" data-unit-of="26" data-scale="100" data-label="LOAD" data-color="yellow"></g>
+      <g data-mp="cyl" data-need="29" transform="translate(339 760)" data-v="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" data-label="GHZ" data-color="teal" data-bare></g>
+      <g data-mp="cyl" data-need="33" transform="translate(395 760)" data-v="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" data-label="WATT" data-color="blue" data-bare></g>
+    </svg>
+  </section>
+
+  <section class="g-fans" data-section>
+    <svg viewBox="16 900 458 202" role="img" aria-label="Cooling">
+      <rect class="f-ink" x="20" y="904" width="170" height="26"></rect>
+      <text class="f-white" x="32" y="922" font-size="12" letter-spacing="1.5">COOLING · RPM</text>
+      <g data-mp="fan" data-need="37" transform="translate(68 996)" data-v="37" data-cap="36" data-default="FAN 1" data-color="white"></g>
+      <g data-mp="fan" data-need="41" transform="translate(182 996)" data-v="41" data-cap="40" data-default="FAN 2" data-color="yellow"></g>
+      <g data-mp="fan" data-need="45" transform="translate(296 996)" data-v="45" data-cap="44" data-default="FAN 3" data-color="white"></g>
+      <g data-mp="fan" data-need="49" transform="translate(410 996)" data-v="49" data-cap="48" data-default="FAN 4" data-color="yellow"></g>
+    </svg>
+  </section>
+
+  <section class="g-store" data-section>
+    <svg viewBox="14 1114 460 328" role="img" aria-label="Storage">
+      <rect class="f-ink" x="20" y="1118" width="192" height="26"></rect>
+      <text class="f-white" x="32" y="1136" font-size="12" letter-spacing="1.5">STORAGE · % USED</text>
+      <g data-mp="arch" data-need="53" transform="translate(28 1162)" data-v="53" data-max="55" data-unit-of="54" data-label="MEMORY" data-color="pink"></g>
+      <g data-mp="arch" data-need="57" transform="translate(184 1162)" data-v="57" data-max="59" data-unit-of="58" data-label="VIDEO" data-color="teal"></g>
+      <g data-mp="arch" data-need="61" transform="translate(340 1162)" data-v="61" data-max="63" data-unit-of="62" data-label="DISK" data-color="blue"></g>
+    </svg>
+  </section>
+
+  <section class="g-net" data-section>
+    <svg viewBox="16 1450 458 320" role="img" aria-label="Network">
+      <rect class="f-ink" x="20" y="1454" width="170" height="26"></rect>
+      <text class="f-white" x="32" y="1472" font-size="12" letter-spacing="1.5">NETWORK · 60 S</text>
+      <g data-mp="net" data-need="65" transform="translate(20 1488)" data-in="65" data-out="69" data-unit-of="66" data-max="67" data-scale="--net-max"></g>
+    </svg>
+  </section>
+<!--/rg-groups-->
+  </div>
+
+  <!-- ===== uptime: a terrazzo slab with stacked solids ===== -->
+  <footer class="foot" data-need="73">
+    <svg viewBox="16 1776 458 132" role="img" aria-label="Uptime">
+      <rect class="f-shadow" x="30" y="1790" width="440" height="116" filter="url(#mp-soft)"></rect>
+      <rect class="f-cream" x="20" y="1780" width="440" height="116"></rect>
+      <g data-terrazzo="20 1780 440 116"></g>
+      <rect x="20" y="1780" width="440" height="116" fill="url(#mp-gloss)"></rect>
+      <rect class="s-ink" x="20" y="1780" width="440" height="116" fill="none" stroke-width="3"></rect>
+      <rect x="36" y="1794" width="252" height="88" fill="#FFFFFF" opacity="0.88"></rect>
+      <rect class="s-ink" x="36" y="1794" width="252" height="88" fill="none" stroke-width="2"></rect>
+      <text class="f-ink" x="50" y="1816" font-size="12" letter-spacing="2">UPTIME</text>
+      <text class="big f-ink" x="50" y="1866" font-size="44" data-uptime="73">--</text>
+      <ellipse class="f-shadow" cx="356" cy="1886" rx="26" ry="7" filter="url(#mp-soft)"></ellipse>
+      <path class="f-blue" d="M330 1838 V1880 A26 7 0 0 0 382 1880 V1838 Z"></path>
+      <path d="M330 1838 V1880 A26 7 0 0 0 382 1880 V1838 Z" fill="url(#mp-cyl)"></path>
+      <ellipse class="f-blue" cx="356" cy="1838" rx="26" ry="7"></ellipse>
+      <ellipse cx="356" cy="1838" rx="26" ry="7" fill="#FFF" opacity="0.35"></ellipse>
+      <path class="f-yellow" d="M338 1838 L356 1796 L374 1838 Z"></path>
+      <path d="M338 1838 L356 1796 L374 1838 Z" fill="url(#mp-cyl)"></path>
+      <rect class="f-pink" x="396" y="1838" width="44" height="44"></rect>
+      <path class="f-pink" d="M396 1838 L406 1828 H450 L440 1838 Z"></path>
+      <path d="M396 1838 L406 1828 H450 L440 1838 Z" fill="#FFF" opacity="0.4"></path>
+      <path class="f-pink" d="M440 1838 L450 1828 V1872 L440 1882 Z"></path>
+      <path d="M440 1838 L450 1828 V1872 L440 1882 Z" fill="#000" opacity="0.25"></path>
+      <circle class="f-teal" cx="423" cy="1814" r="13"></circle>
+      <circle cx="423" cy="1814" r="13" fill="url(#mp-sph)"></circle>
+      <path class="s-ink" d="M330 1838 V1880 A26 7 0 0 0 382 1880 V1838 M396 1838 H440 V1882 H396 Z" fill="none" stroke-width="1.6"></path>
+    </svg>
+  </footer>
+</div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): two group styles and the widgets the
+     groups are built from. Each widget is one drawing in its own units,
+     made by the script below from its data-mp kind, so a generated widget
+     is drawn exactly as the template's own. -->
+<template data-rg-group="label" data-rg-label="Label strip">
+  <section class="mp-sec" data-section><div class="mp-head">{{title}}</div><!--rg-items--></section>
+</template>
+<template data-rg-group="bare" data-rg-label="No label">
+  <section class="mp-bare" data-section><!--rg-items--></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock disc" data-rg-size="large" data-rg-sources="clock" data-rg-group="bare" data-rg-width="436" data-rg-height="292">
+  <svg viewBox="-138 -140 436 292" role="img" aria-label="Clock"><g data-mp="clock" data-need="{{time}}" data-time="{{time}}" data-date="{{day_name}} {{day:.0}} {{month_name}}"></g></svg>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock disc" data-rg-size="medium" data-rg-sources="clock" data-rg-group="bare" data-rg-width="290" data-rg-height="290">
+  <svg viewBox="-145 -142 290 290" role="img" aria-label="Clock"><g data-mp="clock" data-need="{{time}}" data-time="{{time}}" data-date="{{day_name}} {{day:.0}} {{month_name}}" data-disc-only></g></svg>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Half-disc gauge" data-rg-size="large" data-rg-colors="yellow pink teal blue" data-rg-width="222" data-rg-height="198">
+  <svg viewBox="-106 -120 222 198" role="img" aria-label="Gauge"><g data-mp="gauge" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-color="{{color}}"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Lying cylinder" data-rg-size="small" data-rg-colors="pink teal blue yellow" data-rg-width="125" data-rg-height="56">
+  <svg viewBox="0 0 125 56" role="img" aria-label="Bar"><g data-mp="bar" data-need="{{value}}" data-w="125" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100" data-color="{{color}}"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Lying cylinder" data-rg-size="medium" data-rg-colors="pink teal blue yellow" data-rg-width="200" data-rg-height="56">
+  <svg viewBox="0 0 200 56" role="img" aria-label="Bar"><g data-mp="bar" data-need="{{value}}" data-w="200" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100" data-color="{{color}}"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Lying cylinder" data-rg-size="large" data-rg-colors="pink teal blue yellow" data-rg-width="390" data-rg-height="34">
+  <svg viewBox="0 0 390 34" role="img" aria-label="Bar"><g data-mp="bar" data-need="{{value}}" data-w="390" data-row data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100" data-color="{{color}}"></g></svg>
+</template>
+<template data-rg-widget="cyl" data-rg-label="Standing cylinder" data-rg-size="small" data-rg-colors="pink teal blue yellow" data-rg-width="96" data-rg-height="176">
+  <svg viewBox="-31 -36 96 176" role="img" aria-label="Cylinder"><g data-mp="cyl" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100" data-color="{{color}}"></g></svg>
+</template>
+<template data-rg-widget="fan" data-rg-label="Pinwheel disc" data-rg-size="small" data-rg-sources="fan" data-rg-colors="white yellow pink teal" data-rg-width="112" data-rg-height="152">
+  <svg viewBox="-52 -46 112 152" role="img" aria-label="Fan"><g data-mp="fan" data-need="{{value}}" data-v="{{value}}" data-cap="{{caption}}" data-default="FAN" data-color="{{color}}"></g></svg>
+</template>
+<template data-rg-widget="arch" data-rg-label="Arch" data-rg-size="medium" data-rg-default-for="memory disk" data-rg-colors="pink teal blue yellow" data-rg-width="140" data-rg-height="278">
+  <svg viewBox="-14 -4 140 278" role="img" aria-label="Arch"><g data-mp="arch" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-color="{{color}}"></g></svg>
+</template>
+<template data-rg-widget="reading" data-rg-label="Tag" data-rg-size="small" data-rg-colors="pink teal blue yellow" data-rg-width="136" data-rg-height="64">
+  <svg viewBox="0 0 136 64" role="img" aria-label="Reading"><g data-mp="tag" data-need="{{value}}" data-v="{{value}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-color="{{color}}"></g></svg>
+</template>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "palette", "label": "Palette", "type": "choice", "var": "--palette", "default": "milano", "choices": [{"value": "milano", "label": "Milano"}, {"value": "pastel", "label": "Pastel"}, {"value": "primary", "label": "Primary"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the groups are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 5)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "5", "label": "Five columns (5 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 6, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "net_max", "label": "Network board full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 16, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+<script>
+(function () {
+  'use strict';
+  var HOT = 85;
+  var SAMPLES = 31, SAMPLE_MS = 2000;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  // The palette is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-palette', (css.getPropertyValue('--palette') || 'milano').trim() || 'milano');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p });
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function f1(n) { return (Math.round(n * 10) / 10).toString(); }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el && el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function flag(el, name, on) { if (el && el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el && el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function one(scope, role) { return scope.querySelector('[data-role="' + role + '"]'); }
+  // Text that may not run wider than `max` units: cut with an ellipsis.
+  function text(el, value, max) {
+    if (!el) return;
+    if (el.getAttribute('data-full') === value && el.textContent !== '') return;
+    el.setAttribute('data-full', value);
+    el.textContent = value;
+    if (!max || !el.getBBox) return;
+    var s = value;
+    // The box, not getComputedTextLength: that leaves out letter-spacing.
+    while (s.length > 1 && el.getBBox().width > max) {
+      s = s.slice(0, -1);
+      el.textContent = s.replace(/[\s·]+$/, '') + '…';
+    }
+  }
+  function isMhz(v, id) { return !!id && /^mhz$/i.test(String(v[id] || '')); }
+  function unitOf(v, g) {
+    var id = g.getAttribute('data-unit-of'), u = v[id];
+    return isMhz(v, id) ? 'GHz' : known(u) ? String(u) : '';
+  }
+  // A reading, its sensor's maximum and the full scale: the sensor's own
+  // maximum, else the scale given (a number or a custom property's name).
+  function reading(v, g) {
+    var val = num(v[g.getAttribute('data-v')]), max = num(v[g.getAttribute('data-max')]);
+    if (isMhz(v, g.getAttribute('data-unit-of'))) { val /= 1000; max /= 1000; }
+    var scale = g.getAttribute('data-scale') || '100';
+    var full = max > 0 ? max : scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+    return { val: val, full: full > 0 ? full : 100 };
+  }
+  function shown(v, g, val) {
+    var unit = unitOf(v, g);
+    if (!isFinite(val)) return '--';
+    return fmt(val, unit === '%' ? 0 : val < 10 ? 2 : 1);
+  }
+  var COLORS = ['pink', 'teal', 'blue', 'yellow', 'white'];
+  function colorOf(g, fallback) {
+    var c = g.getAttribute('data-color');
+    return COLORS.indexOf(c) >= 0 ? c : fallback;
+  }
+  // Seeded, so the confetti and the terrazzo look the same on every render.
+  function rng(seed) {
+    return function () {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function ring(r0, r1, a0, a1) {   // an annular sector, angles in degrees clockwise from the top
+    function p(r, a) { var t = (a - 90) * Math.PI / 180; return f1(r * Math.cos(t)) + ' ' + f1(r * Math.sin(t)); }
+    var large = a1 - a0 > 180 ? 1 : 0;
+    return 'M' + p(r1, a0) + ' A' + r1 + ' ' + r1 + ' 0 ' + large + ' 1 ' + p(r1, a1) +
+      ' L' + p(r0, a1) + ' A' + r0 + ' ' + r0 + ' 0 ' + large + ' 0 ' + p(r0, a0) + ' Z';
+  }
+  function wave(x0, x1, y, amp, step) {   // a squiggle of half-waves `step` wide
+    var d = 'M' + x0 + ' ' + y, up = true;
+    for (var x = x0; x < x1; x += step) {
+      d += ' C' + f1(x + step / 3) + ' ' + y + ' ' + f1(x + step * 2 / 3) + ' ' + f1(up ? y - amp : y) + ' ' + f1(x + step) + ' ' + f1(up ? y - amp : y);
+      y = up ? y - amp : y + amp; up = !up;
+    }
+    return d;
+  }
+  var SHADOW = 'class="f-shadow" filter="url(#mp-soft)"';
+  var archCount = 0;
+
+  // ------------------------------------------------------- drawings
+  // Each kind draws itself once, in its own units, into the element that
+  // names it (data-mp); the values only move and colour its parts.
+  var DRAW = {
+    clock: function (g) {
+      var s = '<circle cx="14" cy="16" r="134" ' + SHADOW.replace('mp-soft', 'mp-soft4') + '/>' +
+        '<circle class="f-side" cx="7" cy="8" r="132"/><circle class="f-ink" r="132"/>';
+      var rim = '';
+      for (var i = 0; i < 24; i++) rim += ring(116, 130, i * 15, i * 15 + 7.5) + ' ';
+      s += '<path d="' + rim + '" fill="#FFFFFF"/>' +
+        '<circle class="f-yellow" r="114"/><circle r="114" fill="url(#mp-dotsInk)" opacity="0.5"/>' +
+        '<path class="s-ink" d="' + wave(-60, 60, 68, 12, 15) + '" fill="none" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>' +
+        '<circle r="132" fill="url(#mp-disk)"/>';
+      var balls = ['ink', 'yellow', 'teal', 'ink', 'pink', 'yellow', 'ink', 'blue', 'pink', 'ink', 'teal', 'blue'];
+      balls.forEach(function (c, k) {
+        var a = k * 30 * Math.PI / 180, x = f1(96 * Math.sin(a)), y = f1(-96 * Math.cos(a)), r = c === 'ink' ? 9.5 : 6;
+        s += '<circle class="f-shadow" cx="' + x + '" cy="' + y + '" r="' + r + '" transform="translate(3 4)"/>' +
+          '<circle class="f-' + c + '" cx="' + x + '" cy="' + y + '" r="' + r + '"/><circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="url(#mp-sph)"/>';
+      });
+      s += '<g data-hand="hour" data-at="6 8"><path d="M-12 0 L0 -64 L12 0 Z" ' + SHADOW + '/></g>' +
+        '<g data-hand="hour"><path class="f-teal" d="M-12 0 L0 -64 L12 0 Z"/><path d="M-12 0 L0 -64 L12 0 Z" fill="url(#mp-cyl)"/></g>' +
+        '<g data-hand="minute" data-at="7 9"><rect x="-4.5" y="-94" width="9" height="104" rx="4.5" ' + SHADOW + '/><circle cy="-96" r="10" ' + SHADOW + '/></g>' +
+        '<g data-hand="minute"><rect class="f-blue" x="-4.5" y="-94" width="9" height="104" rx="4.5"/><rect x="-4.5" y="-94" width="9" height="104" rx="4.5" fill="url(#mp-cyl)"/>' +
+        '<circle class="f-pink" cy="-96" r="10"/><circle cy="-96" r="10" fill="url(#mp-sph)"/></g>' +
+        '<g data-hand="second"><rect class="f-ink" x="-1.4" y="-108" width="2.8" height="128"/><circle class="f-red" cy="-104" r="4.5"/><circle cy="-104" r="4.5" fill="url(#mp-sph)"/></g>' +
+        '<circle cx="3" cy="4" r="13" ' + SHADOW + '/><circle class="f-ink" r="13"/><circle r="13" fill="url(#mp-sph)"/>';
+      if (!g.hasAttribute('data-disc-only')) {
+        s += '<g transform="translate(164 -120)">' +
+          '<rect x="8" y="10" width="120" height="206" ' + SHADOW + '/><rect class="f-teal" width="120" height="206"/>' +
+          '<rect width="120" height="206" fill="url(#mp-dots)" opacity="0.35"/><rect width="120" height="206" fill="url(#mp-gloss)"/>' +
+          '<rect class="s-ink" width="120" height="206" fill="none" stroke-width="2.5"/>' +
+          '<g class="big" font-size="66" text-anchor="middle">' +
+          '<text class="big f-ink" x="63" y="81" data-role="hh">--</text><text class="big f-white" x="60" y="78" data-role="hh">--</text>' +
+          '<text class="big f-ink" x="63" y="173" data-role="mm">--</text><text class="big f-white" x="60" y="170" data-role="mm">--</text></g>' +
+          '<rect class="f-ink" x="16" y="97" width="88" height="8"/>' +
+          '<rect x="8" y="228" width="120" height="40" ' + SHADOW + '/><rect class="f-ink" y="220" width="120" height="40"/>' +
+          '<text class="f-white" x="60" y="245.5" text-anchor="middle" font-size="14" letter-spacing="1" data-role="date"> </text></g>';
+      }
+      return s;
+    },
+    gauge: function (g) {
+      var half = 'M-100 0 A100 100 0 0 1 100 0 Z';
+      var s = '<path d="' + half + '" transform="translate(9 10)" ' + SHADOW + '/>' +
+        '<path class="f-side" d="' + half + '" transform="translate(5 6)"/><path d="' + half + '" fill="#FFFFFF"/>';
+      var stripes = '';
+      for (var i = 0; i < 18; i += 2) stripes += ring(84, 100, -90 + i * 10, -90 + i * 10 + 10) + ' ';
+      s += '<path class="f-ink" d="' + stripes + '"/>' +
+        '<path class="f-teal" d="' + ring(64, 84, -90, 27) + '"/><path class="f-yellow" d="' + ring(64, 84, 27, 56.25) + '"/>' +
+        '<path class="f-red" d="' + ring(64, 84, 56.25, 90) + '"/>' +
+        '<path d="M-64 0 A64 64 0 0 1 64 0 Z" fill="url(#mp-gridFine)"/>';
+      var ticks = '';
+      for (var k = 0; k <= 8; k++) {
+        var a = (k * 22.5 - 90) * Math.PI / 180;
+        ticks += 'M' + f1(63 * Math.sin(a)) + ' ' + f1(-63 * Math.cos(a)) + ' L' + f1(52 * Math.sin(a)) + ' ' + f1(-52 * Math.cos(a)) + ' ';
+      }
+      var color = colorOf(g, 'yellow');
+      s += '<path class="s-ink" d="' + ticks + '" stroke-width="2"/>' +
+        '<path class="s-ink" d="' + half + '" fill="none" stroke-width="3" stroke-linejoin="round"/><path d="' + half + '" fill="url(#mp-disk)"/>' +
+        '<g data-role="needle" data-at="5 7"><path d="M-8 0 L0 -90 L8 0 Z" ' + SHADOW + '/></g>' +
+        '<g data-role="needle"><path class="f-ink" d="M-8 0 L0 -90 L8 0 Z"/><path d="M-8 0 L0 -90 L0 0 Z" fill="#FFFFFF" opacity="0.18"/></g>' +
+        '<circle class="f-hotpink" r="13" data-role="pivot"/><circle r="13" fill="url(#mp-sph)"/>' +
+        '<g font-size="11" text-anchor="middle" class="f-ink"><text x="-86" y="27" data-role="lo"></text><text y="-106" data-role="mid"></text><text x="86" y="27" data-role="hi"></text></g>' +
+        '<g transform="translate(-60 18)"><rect x="8" y="8" width="120" height="52" ' + SHADOW + '/>' +
+        '<rect class="f-' + color + '" width="120" height="52"/><rect width="120" height="52" fill="url(#mp-gloss)"/>' +
+        '<rect class="s-ink" width="120" height="52" fill="none" stroke-width="2.5"/>' +
+        '<text class="f-ink" x="10" y="17" font-size="11" letter-spacing="1.5" data-role="cap"></text>' +
+        '<text class="f-ink" x="112" y="17" font-size="10" text-anchor="end" data-role="unit"></text>' +
+        '<text class="big f-hotink" x="60" y="46" font-size="30" text-anchor="middle" data-role="val">--</text></g>';
+      return s;
+    },
+    cyl: function (g) {
+      var c = colorOf(g, 'pink');
+      return '<ellipse cx="24" cy="108" rx="19" ry="6" ' + SHADOW + '/>' +
+        '<path class="s-ink" d="M0 0 V100 M34 0 V100 M0 0 A17 6 0 0 1 34 0 A17 6 0 0 1 0 0" fill="none" stroke-width="1.4" stroke-dasharray="3 3" opacity="0.5"/>' +
+        '<g data-role="body"><path class="f-' + c + '" data-role="side"/><path fill="url(#mp-cyl)" data-role="side"/><path class="s-ink" fill="none" stroke-width="1.8" data-role="side"/>' +
+        '<ellipse class="f-' + c + '" cx="17" rx="17" ry="6" data-role="top"/><ellipse cx="17" rx="17" ry="6" fill="#FFFFFF" opacity="0.35" data-role="top"/>' +
+        '<ellipse class="s-ink" cx="17" rx="17" ry="6" fill="none" stroke-width="1.8" data-role="top"/></g>' +
+        '<text class="f-ink" x="17" font-size="13" text-anchor="middle" data-role="val">--</text>' +
+        '<text class="f-ink" x="17" y="128" font-size="10" letter-spacing="1.2" text-anchor="middle" data-role="cap"></text>';
+    },
+    bar: function (g) {
+      // A cylinder lying on its side: the colour runs from the left to the
+      // share of the full scale, inside a dashed outline of the whole.
+      var w = +g.getAttribute('data-w') || 200, row = g.hasAttribute('data-row'), c = colorOf(g, 'pink');
+      var x0 = row ? 120 : 6, x1 = row ? w - 74 : w - 10, y = row ? 6 : 26, h = 22;
+      g.setAttribute('data-geom', [x0, x1, y, h].join(' '));
+      var r = h / 2;
+      return '<path class="f-shadow" filter="url(#mp-soft)" transform="translate(5 6)" d="M' + x0 + ' ' + y + ' H' + x1 + ' A6 ' + r + ' 0 0 1 ' + x1 + ' ' + (y + h) + ' H' + x0 + ' A6 ' + r + ' 0 0 1 ' + x0 + ' ' + y + ' Z" opacity="0.6"/>' +
+        '<path class="s-ink" d="M' + x0 + ' ' + y + ' H' + x1 + ' M' + x0 + ' ' + (y + h) + ' H' + x1 + ' M' + x1 + ' ' + y + ' A6 ' + r + ' 0 0 1 ' + x1 + ' ' + (y + h) + ' A6 ' + r + ' 0 0 1 ' + x1 + ' ' + y + '" fill="none" stroke-width="1.4" stroke-dasharray="3 3" opacity="0.5"/>' +
+        '<path class="f-' + c + '" data-role="side"/><path fill="url(#mp-cylH)" data-role="side"/><path class="s-ink" fill="none" stroke-width="1.8" data-role="side"/>' +
+        '<ellipse class="f-' + c + '" cy="' + (y + r) + '" rx="6" ry="' + r + '" data-role="end"/><ellipse cy="' + (y + r) + '" rx="6" ry="' + r + '" fill="#FFFFFF" opacity="0.35" data-role="end"/>' +
+        '<ellipse class="s-ink" cy="' + (y + r) + '" rx="6" ry="' + r + '" fill="none" stroke-width="1.8" data-role="end"/>' +
+        (row ? '<text class="f-ink" x="0" y="22" font-size="11" letter-spacing="1" data-role="cap"></text>' +
+               '<text class="big f-ink" x="' + w + '" y="24" font-size="18" text-anchor="end" data-role="val">--</text>'
+             : '<text class="f-ink" x="4" y="14" font-size="10" letter-spacing="1" data-role="cap"></text>' +
+               '<text class="big f-ink" x="' + (w - 4) + '" y="16" font-size="15" text-anchor="end" data-role="val">--</text>');
+    },
+    fan: function (g) {
+      var tag = colorOf(g, 'white');
+      var zig = '';
+      for (var i = 0; i < 24; i++) {
+        var a = i * 15 * Math.PI / 180, r = i % 2 ? 28.2 : 34;
+        zig += (i ? ' L' : 'M') + f1(r * Math.cos(a)) + ' ' + f1(r * Math.sin(a));
+      }
+      return '<circle cx="8" cy="8" r="42" ' + SHADOW + '/><circle class="f-side" cx="4" cy="4" r="42"/><circle class="f-ink" r="42"/>' +
+        '<g data-rotor><path class="f-pink" d="M0 -38 A38 38 0 0 1 38 0 L0 0 Z"/><path class="f-yellow" d="M38 0 A38 38 0 0 1 0 38 L0 0 Z"/>' +
+        '<path class="f-teal" d="M0 38 A38 38 0 0 1 -38 0 L0 0 Z"/><path class="f-blue" d="M-38 0 A38 38 0 0 1 0 -38 L0 0 Z"/>' +
+        '<path class="s-ink" d="' + zig + ' Z" fill="none" stroke-width="2.2"/><path class="s-ink" d="M-37 0 H37 M0 -37 V37" stroke-width="2"/></g>' +
+        '<circle r="38" fill="url(#mp-disk)"/><circle r="9" fill="#FFFFFF"/><circle r="9" fill="url(#mp-sph)"/>' +
+        '<rect x="-42" y="64" width="96" height="40" ' + SHADOW + '/><rect class="f-' + tag + '" x="-48" y="58" width="96" height="40"/>' +
+        '<rect x="-48" y="58" width="96" height="40" fill="url(#mp-gloss)"/><rect class="s-ink" x="-48" y="58" width="96" height="40" fill="none" stroke-width="2"/>' +
+        '<text class="f-ink" y="73" font-size="9.5" letter-spacing="1" text-anchor="middle" data-role="cap"></text>' +
+        '<text class="big f-ink" y="92" font-size="16" text-anchor="middle" data-role="val">--</text>';
+    },
+    arch: function (g) {
+      var c = colorOf(g, 'pink'), id = 'mp-arch-' + (archCount++);
+      var arch = 'M0 210 V56 A56 56 0 0 1 112 56 V210 Z';
+      return '<clipPath id="' + id + '"><path d="' + arch + '"/></clipPath>' +
+        '<path d="' + arch + '" transform="translate(12 12)" ' + SHADOW + '/><path class="f-side" d="' + arch + '" transform="translate(8 7)"/>' +
+        '<path d="' + arch + '" fill="url(#mp-gridFine)"/>' +
+        '<g clip-path="url(#' + id + ')"><path class="f-' + c + '" data-role="fill"/><path fill="url(#mp-dots)" opacity="0.6" data-role="fill"/>' +
+        '<path class="s-ink" fill="none" stroke-width="3" stroke-linecap="round" data-role="edge"/><path d="' + arch + '" fill="url(#mp-gloss)"/></g>' +
+        '<path class="s-ink" d="' + arch + '" fill="none" stroke-width="3"/>' +
+        '<rect x="-4" y="232" width="132" height="44" ' + SHADOW + '/><rect x="-10" y="226" width="132" height="44" fill="#FFFFFF"/>' +
+        '<rect class="s-ink" x="-10" y="226" width="132" height="44" fill="none" stroke-width="2"/><rect class="f-' + c + '" x="-10" y="226" width="10" height="44"/>' +
+        '<text class="f-ink" x="6" y="244" font-size="10" letter-spacing="1.2" data-role="cap"></text>' +
+        '<text class="big f-ink" x="116" y="248" font-size="20" text-anchor="end" data-role="pct">--</text>' +
+        '<text class="f-ink" x="6" y="263" font-size="10" data-role="of"></text>';
+    },
+    tag: function (g) {
+      var c = colorOf(g, 'pink');
+      return '<rect x="6" y="6" width="128" height="56" ' + SHADOW + '/><rect x="0" y="0" width="128" height="56" fill="#FFFFFF"/>' +
+        '<rect class="s-ink" width="128" height="56" fill="none" stroke-width="2"/><rect class="f-' + c + '" width="10" height="56"/>' +
+        '<text class="f-ink" x="18" y="18" font-size="10" letter-spacing="1.2" data-role="cap"></text>' +
+        '<text class="big f-ink" x="18" y="46" font-size="22" data-role="val">--</text>';
+    },
+    net: function (g) {
+      return '<rect x="10" y="10" width="440" height="268" ' + SHADOW + '/><rect width="440" height="268" fill="url(#mp-grid)"/>' +
+        '<rect width="440" height="268" fill="url(#mp-gloss)"/><rect class="s-ink" width="440" height="268" fill="none" stroke-width="3"/>' +
+        '<path class="s-ink" d="M20 238 H420" stroke-width="4"/>' +
+        '<path data-tube class="f-shadow" fill="none" stroke="rgba(48,26,64,0.3)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" transform="translate(4 6)" filter="url(#mp-tubeShade)"/>' +
+        '<path data-tube class="s-ink" fill="none" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<path data-tube class="s-pink" fill="none" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<path data-tube fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.7" transform="translate(-1 -1.6)"/>' +
+        '<g data-balls></g>' +
+        '<g data-now hidden><circle class="f-yellow mp-pulse s-ink" r="9" stroke-width="2"/></g>' +
+        '<rect class="f-pink s-ink" x="232" y="20" width="92" height="44" stroke-width="2"/>' +
+        '<text class="f-ink" x="242" y="37" font-size="10" letter-spacing="1" data-role="inunit">IN MB/S</text>' +
+        '<text class="big f-ink" x="242" y="58" font-size="20" data-role="in">--</text>' +
+        '<rect class="f-blue s-ink" x="332" y="20" width="92" height="44" stroke-width="2"/>' +
+        '<text class="f-white" x="342" y="37" font-size="10" letter-spacing="1" data-role="outunit">OUT MB/S</text>' +
+        '<text class="big f-white" x="342" y="58" font-size="20" data-role="out">--</text>' +
+        '<text class="f-ink" x="20" y="257" font-size="10">-60 S</text><text class="f-ink" x="420" y="257" font-size="10" text-anchor="end">NOW</text>';
+    }
+  };
+  each('[data-mp]', function (g) {
+    var draw = DRAW[g.getAttribute('data-mp')];
+    if (draw) g.innerHTML = draw(g);
+  });
+  // Hands and needles: the shadow copy carries its offset (data-at).
+  function turn(el, deg) {
+    var at = el.getAttribute('data-at');
+    attr(el, 'transform', (at ? 'translate(' + at + ') ' : '') + 'rotate(' + f1(deg) + ')');
+  }
+
+  // ------------------------------------------------------- the wall
+  // Confetti over whatever box the panel has: dashes, dots, triangles and
+  // little squiggles, about as dense as the design's.
+  var SHAPES = ['M-7 -1.6 H7 V1.6 H-7 Z', 'M-3.2 0 a3.2 3.2 0 1 0 6.4 0 a3.2 3.2 0 1 0 -6.4 0', 'M0 -6 L5.5 4 L-5.5 4 Z',
+                'M-9 0 q2.25 -4 4.5 0 t4.5 0 t4.5 0 t4.5 0 v2.4 q-2.25 -4 -4.5 0 t-4.5 0 t-4.5 0 t-4.5 0 Z'];
+  var TINTS = ['ink', 'ink', 'ink', 'teal', 'purple', 'blue', 'pink', 'yellow'];
+  var wallSize = '';
+  function scatter() {
+    var svg = document.querySelector('[data-wall]'), g = svg && svg.querySelector('[data-confetti]');
+    if (!g) return;
+    var w = svg.clientWidth, h = svg.clientHeight, key = w + 'x' + h;
+    if (!(w > 0 && h > 0) || key === wallSize) return;
+    wallSize = key;
+    var rand = rng(7), n = Math.round(w * h / 8800), s = '';
+    for (var i = 0; i < n; i++) {
+      s += '<path class="f-' + TINTS[Math.floor(rand() * TINTS.length)] + '" d="' + SHAPES[Math.floor(rand() * SHAPES.length)] +
+        '" transform="translate(' + f1(rand() * w) + ' ' + f1(rand() * h) + ') rotate(' + Math.floor(rand() * 180) + ')" opacity="' + (0.6 + rand() * 0.35).toFixed(2) + '"/>';
+    }
+    g.innerHTML = s;
+  }
+  // Terrazzo: random three- to five-sided chips in every palette colour.
+  each('[data-terrazzo]', function (g) {
+    var box = g.getAttribute('data-terrazzo').split(' ').map(Number), rand = rng(7), s = '';
+    for (var i = 0; i < 70; i++) {
+      var cx = box[0] + 6 + rand() * (box[2] - 12), cy = box[1] + 6 + rand() * (box[3] - 12), r = 2.5 + rand() * 4.5, k = 3 + Math.floor(rand() * 3), d = '';
+      for (var j = 0; j < k; j++) {
+        var a = (j / k + rand() * 0.15) * 2 * Math.PI, rr = r * (0.7 + rand() * 0.5);
+        d += (j ? ' L' : 'M') + f1(cx + rr * Math.cos(a)) + ' ' + f1(cy + rr * Math.sin(a));
+      }
+      s += '<path class="f-' + ['ink', 'pink', 'yellow', 'teal', 'blue', 'purple'][Math.floor(rand() * 6)] + '" d="' + d + ' Z"/>';
+    }
+    g.innerHTML = s;
+  });
+  window.addEventListener('resize', scatter);
+  window.addEventListener('rg-layout', scatter);
+  if (window.ResizeObserver) new ResizeObserver(scatter).observe(document.querySelector('[data-wall]'));
+  scatter();
+
+  // ------------------------------------------------------- history
+  // One list of samples for each network sensor a board draws.
+  var latest = {}, hist = {}, limit = {};
+  var everMapped = false;
+  var STORE = 'rg-memphis-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist) {
+      Object.keys(saved.hist).forEach(function (id) { hist[id] = saved.hist[id].slice(-SAMPLES); });
+    }
+  } catch (e) { /* no storage: the board starts empty */ }
+  function fullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    var full = 1;                       // 1, 2, 4, 8 ...: no rescale for every small change
+    while (full < peak) full *= 2;
+    return full;
+  }
+  // With nothing bound at all the board shows the design's sample minute.
+  function demo(kind) {
+    var out = [];
+    for (var i = 0; i < SAMPLES; i++) {
+      out.push(kind === 'out' ? 1.4 + 0.6 * Math.sin(i * 0.9) + 0.4 * Math.sin(i * 2.1 + 1)
+                              : 8.4 + 3.6 * Math.sin(i * 0.47 + 0.6) + 2.2 * Math.sin(i * 1.31) + 1.1 * Math.sin(i * 3.1 + 2));
+    }
+    return out;
+  }
+  function drawBoards() {
+    each('[data-mp="net"]', function (g) {
+      var inId = g.getAttribute('data-in'), outId = g.getAttribute('data-out');
+      var listIn = everMapped ? (hist[inId] || []) : demo('in');
+      var listOut = everMapped ? (hist[outId] || []) : demo('out');
+      var fixed = !everMapped ? 16 : limit[inId] > 0 ? limit[inId] : cssNum(g.getAttribute('data-scale'), 0);
+      var full = fullScale(Math.max.apply(null, listIn.concat(listOut, [0])), fixed);
+      function pts(list) {
+        var n = list.length;
+        return list.map(function (val, i) { return [24 + (SAMPLES - n + i) * 392 / (SAMPLES - 1), 238 - clamp01(val / full) * 150]; });
+      }
+      var p = pts(listIn), d = '';
+      function q(a) { return f1(a[0]) + ' ' + f1(a[1]); }
+      if (p.length > 1) {
+        d = 'M' + q(p[0]);
+        for (var i = 1; i < p.length - 1; i++) d += ' Q' + q(p[i]) + ' ' + q([(p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2]);
+        d += ' L' + q(p[p.length - 1]);
+      }
+      each('[data-tube]', function (path) { attr(path, 'd', d); }, g);
+      var now = g.querySelector('[data-now]');
+      hide(now, p.length === 0);
+      if (p.length) attr(now, 'transform', 'translate(' + q(p[p.length - 1]) + ')');
+      // Outbound: a ball on every second sample, counted from the newest.
+      var o = pts(listOut), balls = '';
+      for (var k = o.length - 1; k >= 0; k -= 2) {
+        balls = '<circle class="f-shadow" cx="' + f1(o[k][0] + 3) + '" cy="' + f1(o[k][1] + 4) + '" r="5.5"/>' +
+          '<circle class="f-blue s-ink" cx="' + f1(o[k][0]) + '" cy="' + f1(o[k][1]) + '" r="5.5" stroke-width="1.4"/>' +
+          '<circle cx="' + f1(o[k][0]) + '" cy="' + f1(o[k][1]) + '" r="5.5" fill="url(#mp-sph)"/>' + balls;
+      }
+      var bg = g.querySelector('[data-balls]');
+      if (bg && bg.getAttribute('data-shown') !== balls.length + '|' + d) { bg.setAttribute('data-shown', balls.length + '|' + d); bg.innerHTML = balls; }
+    });
+  }
+  function sample() {
+    var any = false;
+    each('[data-mp="net"]', function (g) {
+      [g.getAttribute('data-in'), g.getAttribute('data-out')].forEach(function (id) {
+        if (hist[id] && hist[id].stamp === sample.round) return;
+        if (!isFinite(latest[id])) return;
+        var list = hist[id] || (hist[id] = []);
+        list.push(Math.round(latest[id] * 100) / 100);
+        if (list.length > SAMPLES) list.shift();
+        list.stamp = sample.round;
+        any = true;
+      });
+    });
+    sample.round++;
+    if (!any) return;
+    drawBoards();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  sample.round = 1;
+  setInterval(sample, SAMPLE_MS);
+
+  // ------------------------------------------------------- values
+  var fanRpm = {};                      // placeholder id -> latest RPM, read by the motion ticker
+  var DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+  // Text is cut to fit by its measured width, so measure again once the
+  // bundled fonts have loaded.
+  var lastValues = {};
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      each('[data-full]', function (el) { el.removeAttribute('data-full'); });
+      window.updateValues(lastValues);
+    });
+  }
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    lastValues = v;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+    var first = anyMapped && !everMapped;
+    if (anyMapped) everMapped = true;
+
+    // Clocks: ten past ten until the time is known. "5:14 PM" points as 17:14.
+    each('[data-mp="clock"]', function (g) {
+      var t = v[g.getAttribute('data-time')];
+      var hm = /(\d{1,2}):(\d{2})/.exec(known(t) ? String(t) : ''), h = hm ? +hm[1] : 10, m = hm ? +hm[2] : 10;
+      if (hm && /pm/i.test(String(t)) && h < 12) h += 12;
+      if (hm && /am/i.test(String(t)) && h === 12) h = 0;
+      each('[data-hand="hour"]', function (el) { turn(el, (h % 12 + m / 60) * 30); }, g);
+      each('[data-hand="minute"]', function (el) { turn(el, m * 6); }, g);
+      each('[data-role="hh"]', function (el) { text(el, hm ? ('0' + h).slice(-2) : '--'); }, g);
+      each('[data-role="mm"]', function (el) { text(el, hm ? hm[2] : '--'); }, g);
+      var ids = (g.getAttribute('data-date') || '').split(' '), day = num(v[ids[1]]);
+      var name = known(v[ids[0]]) ? String(v[ids[0]]).slice(0, 3).toUpperCase() : '';
+      var month = known(v[ids[2]]) ? String(v[ids[2]]).slice(0, 3).toUpperCase() : '';
+      if (DAYS.indexOf(name) < 0 && name) name = name.slice(0, 3);
+      text(one(g, 'date'), [name, isFinite(day) ? String(Math.round(day)) : '', month].filter(Boolean).join(' ') || ' ');
+    });
+
+    // Gauges: the needle sweeps half a turn, from straight left (the
+    // lowest reading) to straight right. A hand-written gauge has a fixed
+    // range (data-lo, data-hi); a generated one its sensor's maximum.
+    each('[data-mp="gauge"]', function (g) {
+      var val = num(v[g.getAttribute('data-v')]), lo = 0, hi;
+      var unit = unitOf(v, g);
+      if (g.hasAttribute('data-lo')) { lo = +g.getAttribute('data-lo'); hi = +g.getAttribute('data-hi'); }
+      else {
+        var r = reading(v, g); val = r.val; hi = r.full;
+      }
+      var f = isFinite(val) ? clamp01((val - lo) / (hi - lo)) : 0;
+      each('[data-role="needle"]', function (el) { turn(el, -90 + f * 180); }, g);
+      var hot = g.hasAttribute('data-lo') ? val >= HOT : f >= 0.85;
+      flag(g, 'hot', isFinite(val) && hot);
+      text(one(g, 'lo'), String(lo));
+      text(one(g, 'mid'), f1((lo + hi) / 2));
+      text(one(g, 'hi'), f1(hi));
+      var cap = g.getAttribute('data-label') || (known(v[g.getAttribute('data-cap')]) ? String(v[g.getAttribute('data-cap')]).toUpperCase() : '');
+      var deg = g.hasAttribute('data-deg') || /°|^c$/i.test(unit);
+      var unitEl = one(g, 'unit');
+      text(unitEl, deg ? '' : unit.toUpperCase(), 50);
+      var room = 102 - (unitEl && unitEl.textContent ? unitEl.getBBox().width + 6 : 0);
+      text(one(g, 'cap'), cap, room);
+      text(one(g, 'val'), isFinite(val) ? (deg ? Math.round(val) + '°' : shown(v, g, val)) : '--', 108);
+    });
+    // Standing and lying cylinders: the colour rises (or runs) to the share
+    // of the full scale.
+    each('[data-mp="cyl"]', function (g) {
+      var r = reading(v, g), f = isFinite(r.val) ? clamp01(r.val / r.full) : 0, y = f1(100 - f * 100);
+      each('[data-role="side"]', function (el) { attr(el, 'd', 'M0 ' + y + ' V100 A17 6 0 0 0 34 100 V' + y + ' Z'); }, g);
+      each('[data-role="top"]', function (el) { attr(el, 'cy', y); }, g);
+      var unit = unitOf(v, g), val = one(g, 'val');
+      attr(val, 'y', f1(100 - f * 100 - 10));
+      text(val, shown(v, g, r.val) + (unit === '%' ? '%' : g.hasAttribute('data-bare') || !unit ? '' : ' ' + unit));
+      var cap = g.getAttribute('data-label') || (known(v[g.getAttribute('data-cap')]) ? String(v[g.getAttribute('data-cap')]).toUpperCase() : '');
+      text(one(g, 'cap'), cap, 92);
+    });
+    each('[data-mp="bar"]', function (g) {
+      var r = reading(v, g), f = isFinite(r.val) ? clamp01(r.val / r.full) : 0;
+      var geom = g.getAttribute('data-geom').split(' ').map(Number), x0 = geom[0], x1 = geom[1], y = geom[2], h = geom[3], rr = h / 2;
+      var x = f1(x0 + f * (x1 - x0));
+      each('[data-role="side"]', function (el) {
+        attr(el, 'd', 'M' + x + ' ' + y + ' H' + x0 + ' A6 ' + rr + ' 0 0 0 ' + x0 + ' ' + (y + h) + ' H' + x + ' Z');
+      }, g);
+      each('[data-role="end"]', function (el) { attr(el, 'cx', x); }, g);
+      var unit = unitOf(v, g), row = g.hasAttribute('data-row');
+      text(one(g, 'val'), shown(v, g, r.val) + (unit ? (unit === '%' ? '%' : ' ' + unit) : ''));
+      // The caption gets what the value leaves of the line.
+      var c = v[g.getAttribute('data-cap')], valEl = one(g, 'val');
+      var room = row ? 112 : (+g.getAttribute('data-w') - 8) - (valEl.getBBox ? valEl.getBBox().width : 60) - 12;
+      text(one(g, 'cap'), known(c) ? String(c).toUpperCase() : '', Math.max(room, 12));
+    });
+    each('[data-mp="fan"]', function (g) {
+      var id = g.getAttribute('data-v'), rpm = num(v[id]);
+      fanRpm[id] = isFinite(rpm) ? rpm : 0;
+      var c = v[g.getAttribute('data-cap')];
+      text(one(g, 'cap'), known(c) ? String(c).toUpperCase().replace(/_/g, ' ') : g.getAttribute('data-default'), 86);
+      text(one(g, 'val'), isFinite(rpm) ? Math.round(rpm).toLocaleString('en-US') : '--');
+    });
+    // Arches: the colour rises from the base to the share in use, with a
+    // wavy edge (half-waves of 14, 6 either way).
+    each('[data-mp="arch"]', function (g) {
+      var r = reading(v, g), f = isFinite(r.val) ? clamp01(r.val / r.full) : 0, y = 210 - f * 210, d = 'M-4 ' + f1(y), up = true;
+      for (var x = -4; x < 122; x += 14) { d += ' Q' + (x + 7) + ' ' + f1(up ? y - 6 : y + 6) + ' ' + (x + 14) + ' ' + f1(y); up = !up; }
+      each('[data-role="fill"]', function (el) { attr(el, 'd', f > 0 ? d + ' L116 214 L-4 214 Z' : ''); }, g);
+      attr(one(g, 'edge'), 'd', f > 0 ? d : '');
+      text(one(g, 'pct'), isFinite(r.val) ? Math.round(f * 100) + '%' : '--');
+      var unit = unitOf(v, g), max = num(v[g.getAttribute('data-max')]);
+      text(one(g, 'of'), isFinite(r.val) ? fmt(r.val, 1).replace(/,/g, '') + (max > 0 ? '/' + fmt(max, 1).replace(/,/g, '') : '') + (unit ? ' ' + unit : '') : '', 104);
+      var cap = g.getAttribute('data-label') || (known(v[g.getAttribute('data-cap')]) ? String(v[g.getAttribute('data-cap')]).toUpperCase() : '');
+      var pct = one(g, 'pct');
+      text(one(g, 'cap'), cap, Math.max(110 - (pct.getBBox ? pct.getBBox().width : 44) - 12, 12));
+    });
+    each('[data-mp="tag"]', function (g) {
+      var val = num(v[g.getAttribute('data-v')]), unit = unitOf(v, g);
+      if (isMhz(v, g.getAttribute('data-unit-of'))) val /= 1000;
+      var c = v[g.getAttribute('data-cap')];
+      text(one(g, 'cap'), known(c) ? String(c).toUpperCase() : '', 104);
+      text(one(g, 'val'), shown(v, g, val) + (unit ? (unit === '%' ? '%' : ' ' + unit) : ''), 104);
+    });
+    // Network boards: the readouts, and the latest of each for the history.
+    each('[data-mp="net"]', function (g) {
+      var unit = unitOf(v, g) || 'MB/s';
+      ['in', 'out'].forEach(function (k) {
+        var id = g.getAttribute('data-' + k), val = num(v[id]);
+        latest[id] = val;
+        text(one(g, k), isFinite(val) ? fmt(val, 1) : '--');
+        text(one(g, k + 'unit'), (k === 'in' ? 'IN ' : 'OUT ') + unit.toUpperCase());
+      });
+      limit[g.getAttribute('data-in')] = num(v[g.getAttribute('data-max')]);
+    });
+    if (first) { sample(); drawBoards(); }   // the sample minute makes way for real data
+    each('[data-uptime]', function (el) {    // 4D 7H
+      var sec = num(v[el.getAttribute('data-uptime')]), out = '--';
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        out = d > 0 ? d + 'D ' + hr + 'H' : hr + 'H ' + mn + 'M';
+      }
+      text(el, out);
+    });
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      hide(el, anyMapped && !isFinite(num(v[el.getAttribute('data-need')])) && !(el.getAttribute('data-mp') === 'clock' && known(v[el.getAttribute('data-need')])));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, rotorAngle = {}, last = 0;
+  var EPOCH = 1700000000000;
+
+  function secondHands(seconds) {
+    each('[data-hand="second"]', function (el) { turn(el, seconds * 6); });
+  }
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a cached list would revive cancelled ones.
+    var anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;
+    secondHands(new Date(now).getSeconds());
+    // Pinwheels: one turn every 6000 / RPM seconds, but never more than about
+    // 40 degrees a frame. The four quadrants repeat every 90 degrees, so a
+    // bigger step would read as standing still or turning backwards.
+    each('[data-mp="fan"]', function (g) {
+      var id = g.getAttribute('data-v'), rpm = fanRpm[id] || 0;
+      if (rpm <= 0) return;
+      var step = Math.min(0.06 * rpm * dt * speed, 40 * (1 - Math.exp(-rpm / 1200)));
+      var key = id + '@' + (g.closest('[data-rg-slot]') ? g.closest('[data-rg-slot]').getAttribute('data-rg-slot') : '');
+      rotorAngle[key] = ((rotorAngle[key] || 0) + step) % 360;
+      attr(g.querySelector('[data-rotor]'), 'transform', 'rotate(' + rotorAngle[key].toFixed(1) + ')');
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) { secondHands(34); return; }
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  applyMotion();
+  drawBoards();
+  window.updateValues({});              // hands, needles and levels in place before the first values arrive
+})();
+</script>
+</body>
+</html>

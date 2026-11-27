@@ -161,3 +161,17 @@ html, body { margin: 0; background: var(--wall); }
 .ribbon svg { position: absolute; top: 0; left: 0; filter: drop-shadow(0 3px 3px rgba(0,0,0,0.5)); }
 .ribbon div { position: absolute; left: 30px; right: 30px; top: 4px; height: 40px; display: flex; align-items: center;
   justify-content: center; font-style: italic; font-size: 16px; color: #F6EBD3; white-space: nowrap; }
+
+/* ---- custom layouts: groups built from the templates at the end of the
+   page. A group is a gilt frame with a heading (or the masthead frame);
+   each piece is scaled to the cells it is given. */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.groups > .frame:has(.rg-items) { min-height: 0; }
+.frame:has(.rg-items) > .card { min-height: 0; overflow: hidden; justify-content: flex-start; }
+.card > .rg-items { flex: 1; min-height: 0; }
+.card.vc-head { flex-direction: column; align-items: stretch; }
+.vc-watch { display: flex; align-items: center; gap: 12px; width: 100%; height: 100%; }
+.rg-fit > .vc-item, .rg-fit > .vc-engine { width: 100%; height: 100%; box-sizing: border-box; }
+.rg-fit > .vc-item { justify-content: center; }
+.vc-cut { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.frame:has(.rg-items) .heading h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

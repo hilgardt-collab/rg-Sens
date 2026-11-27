@@ -1,0 +1,257 @@
+/* Atomic Sensor Panel: stylesheet for atomic_panel.html (rg-Sens CSS Template
+   displayer). Palettes, fonts, the grid of groups and the classes the page's
+   markup and script use; the shared drawings are inline in the HTML. Setup
+   notes are at the top of the HTML file. */
+
+/* Bundled fonts: Pacifico, Righteous and Josefin Sans, all SIL Open Font
+   License (OFL.txt in each folder). Keep the fonts folder next to this file;
+   without it the page falls back to system fonts. */
+@font-face { font-family: "Pacifico"; font-weight: 400; font-style: normal;
+  src: local("Pacifico"), url("fonts/pacifico/Pacifico-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Righteous"; font-weight: 400; font-style: normal;
+  src: local("Righteous"), url("fonts/righteous/Righteous-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Josefin Sans"; font-weight: 100 700; font-style: normal;
+  src: local("Josefin Sans"), url("fonts/josefin-sans/JosefinSans%5Bwght%5D.ttf") format("truetype"); }
+
+:root {
+  /* How the design fits the panel: fill (the groups re-arrange and stretch
+     to the panel's shape), cover (crop), contain (bands) or stretch. */
+  --rg-fit: fill;
+  /* Columns the groups are arranged in: 0 chooses by the panel's shape. */
+  --rg-columns: 0;
+  /* Palette: mint, flamingo or butterscotch. */
+  --palette: mint;
+  /* Frames a second for everything that moves; 0 turns motion off. */
+  --motion-fps: 6;
+  /* Bar full scale when a sensor has no maximum of its own. Clocks are in
+     GHz (a sensor that reports MHz is shown and scaled in GHz). */
+  --cpu-clock-max: 5.5;
+  --cpu-power-max: 125;
+  --gpu-clock-max: 2.6;
+  --gpu-power-max: 300;
+  /* Television full scale in the network sensors' unit; 0 follows the peak. */
+  --net-max: 0;
+
+  /* Mint */
+  --paper: #F3EBDA;
+  --star: #4FA898;
+  --boom: #E8907A;
+  --laminate: #C4E8DA;
+  --boom-1: #94D2C0;
+  --boom-2: #F4AE9C;
+  --fleck: #C9A54A;
+  --ink: #2C3836;
+  --sub: #566664;
+  /* script titles and pointers; electrons and the dial's second band; cool */
+  --accent: #E0604A;
+  --accent-2: #F2C14E;
+  --accent-3: #2E9A88;
+  --warm: #E8962A;
+  --hot: #D83A2A;
+  --enamel: #F8F0DC;
+  --enamel-edge: #D8CCAE;
+  --knob: #F2EAD6;
+  --knob-shade: #A89A78;
+  /* enamel bars: load, clock, power */
+  --bar-1: #4FB8A4;
+  --bar-2: #F2C14E;
+  --bar-3: #E8806A;
+  /* the television's screen and its two traces */
+  --screen-1: #3E5A52;
+  --screen-2: #0C1614;
+  --trace-in: #C8FFF0;
+  --trace-out: #FFD2B0;
+}
+:root[data-palette="flamingo"] {
+  --paper: #F7E8E6; --star: #E0708E; --boom: #6EC0B6;
+  --laminate: #F8CED8; --boom-1: #F0A4B8; --boom-2: #9ED8D0; --fleck: #C9A54A;
+  --ink: #3A2830; --sub: #7A5E68;
+  --accent: #D8406E; --accent-2: #F2C14E; --accent-3: #3AA49A; --warm: #E8962A; --hot: #D02A3A;
+  --enamel: #FCF2EE; --enamel-edge: #E0C8C2; --knob: #F8ECEA; --knob-shade: #B89A96;
+  --bar-1: #E8749A; --bar-2: #4AB4AA; --bar-3: #F2C14E;
+  --screen-1: #4A4A5A; --screen-2: #120E14; --trace-in: #FFE0EE; --trace-out: #B0FFF2;
+}
+:root[data-palette="butterscotch"] {
+  --paper: #F2E6C6; --star: #D08A26; --boom: #6E8A3A;
+  --laminate: #F2D898; --boom-1: #E6B656; --boom-2: #AEBC70; --fleck: #8A6A2A;
+  --ink: #3A2C16; --sub: #6E5C3A;
+  --accent: #C8562A; --accent-2: #E8B03A; --accent-3: #2E7A86; --warm: #E08A1E; --hot: #C02E1E;
+  --enamel: #FAF0D6; --enamel-edge: #D8C49A; --knob: #F4E8CC; --knob-shade: #A8946A;
+  --bar-1: #D8752E; --bar-2: #6E8A3A; --bar-3: #2E7A86;
+  --screen-1: #4A4A3A; --screen-2: #12120C; --trace-in: #FFF4C8; --trace-out: #C8F0FF;
+}
+html, body { margin: 0; background: var(--paper); }
+[hidden] { display: none !important; }
+.rg-placeholder { transition: none; }
+
+/* What the drawings take from the palette. */
+.f-ink { fill: var(--ink); }            .s-ink { stroke: var(--ink); }
+.f-accent { fill: var(--accent); }
+.f-a2 { fill: var(--accent-2); }        .s-a2 { stroke: var(--accent-2); }
+.f-cool { fill: var(--accent-3); }      .s-cool { stroke: var(--accent-3); }
+.s-warm { stroke: var(--warm); }        .s-hot { stroke: var(--hot); }
+.f-star { fill: var(--star); }          .s-star { stroke: var(--star); }
+.f-boom { fill: var(--boom); }          .s-boom { stroke: var(--boom); }
+.f-boom1 { fill: var(--boom-1); }       .f-boom2 { fill: var(--boom-2); }
+.f-fleck { fill: var(--fleck); }
+
+@keyframes am-flicker { 0%,100% { opacity: 1; } 50% { opacity: .86; } }
+@keyframes am-pulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+/* The script steps every animation at --motion-fps; nothing runs free. */
+* { animation-play-state: paused !important; }
+.still * { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* rg-Sens sets --rg-w / --rg-h to the box the design has (the panel's own
+   shape under the fill fit) and --rg-cols to the number of columns. */
+.panel { width: var(--rg-w, 480px); height: var(--rg-h, 1920px); box-sizing: border-box; position: relative; overflow: hidden;
+  background: var(--paper); font-family: "Josefin Sans", "Futura", sans-serif; font-variant-numeric: lining-nums; color: var(--ink);
+  padding: 20px 26px 22px; display: flex; flex-direction: column; }
+/* The wallpaper: a repeating print over any box, and the room's light. */
+.wall { position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none; }
+.ambient { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 80% 30% at 50% 10%, rgba(255,248,230,0.55) 0%, rgba(255,248,230,0) 70%),
+    radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 55%, rgba(60,40,20,0.28) 100%); }
+
+/* The diner sign. */
+.strip { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+.strip h1 { margin: 0; font-family: Pacifico, cursive; font-weight: 400; font-size: 44px; line-height: 1.25; color: var(--accent); white-space: nowrap;
+  text-shadow: 2px 2px 0 #FFFFFF, -1px -1px 0 #FFFFFF, 1px -1px 0 #FFFFFF, -1px 1px 0 #FFFFFF, 4px 5px 4px rgba(60,30,10,0.35); }
+.strip span { font-weight: 700; font-size: 12px; letter-spacing: 0.34em; color: var(--sub); white-space: nowrap; }
+
+/* The six groups: a grid of --rg-cols columns whose rows share the height
+   left over, so every card stretches to its cell. */
+.groups { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(var(--rg-cols, 1), minmax(0, 1fr)); gap: 20px 26px; align-content: stretch; margin: 4px 0 18px; }
+
+/* The starburst clock, hung on the wall with no card behind it. */
+.hero { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; }
+.sun { position: relative; flex: none; width: 300px; height: 296px; }
+.sun > svg { position: absolute; top: 0; left: 0; }
+.now { display: flex; align-items: baseline; gap: 12px; margin-top: 2px; white-space: nowrap; }
+.now .time { font-family: Righteous, sans-serif; font-size: 30px; line-height: 1; }
+.now i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); align-self: center; }
+.now .date { font-weight: 700; font-size: 15px; letter-spacing: 0.16em; color: var(--sub); text-transform: uppercase; }
+
+/* A card: a rim of ribbed chrome trim round a laminate panel. */
+.card { padding: 7px; border-radius: 22px; min-width: 0; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 14%, rgba(0,0,0,0) 72%, rgba(0,0,0,0.28) 100%),
+    linear-gradient(90deg, rgba(0,0,0,0.18) 0%, rgba(255,255,255,0.35) 22%, rgba(0,0,0,0) 45%, rgba(255,255,255,0.3) 75%, rgba(0,0,0,0.2) 100%),
+    repeating-linear-gradient(90deg, #F4F5F6 0px, #F4F5F6 1px, #A2A6AB 1px, #A2A6AB 2.5px, #D8DADD 2.5px, #D8DADD 4px);
+  box-shadow: 0 14px 24px rgba(70,45,20,0.32), 0 3px 6px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(0,0,0,0.25); }
+.top { position: relative; flex: 1; min-height: 0; border-radius: 16px; background: var(--laminate); box-shadow: inset 0 2px 5px rgba(0,0,0,0.25);
+  padding: 12px 18px 16px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.lam { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.gloss { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none;
+  background: linear-gradient(170deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0) 31%, rgba(255,255,255,0) 100%); }
+.head { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.head h2 { margin: 0; font-family: Pacifico, cursive; font-weight: 400; font-size: 26px; line-height: 1.3; color: var(--accent);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 4px; }
+.tag { font-weight: 700; font-size: 12px; letter-spacing: 0.24em; color: var(--sub); white-space: nowrap; }
+/* A stretched card keeps its heading at the top and centres the rest. */
+.body { position: relative; margin: auto 0; }
+.flip .head, .flip .dialrow, .flip .temp { flex-direction: row-reverse; }
+.fans .top { padding: 12px 12px 14px; gap: 4px; }   .fans .head { padding: 0 6px; }
+.mem .top { padding: 12px 16px 14px; gap: 4px; }    .mem .head { padding: 0 4px; }
+.net .top { padding: 12px 18px 12px; gap: 4px; }
+
+/* Thermostat dial beside its reading and three enamel bars. */
+.dialrow { display: flex; align-items: center; gap: 14px; }
+.dial { flex: none; display: block; }
+.dial text { font-family: Righteous, sans-serif; font-size: 12px; fill: var(--ink); }
+.dial text.dunit { font-family: "Josefin Sans", sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 2px; fill: var(--sub); }
+.read { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.temp { display: flex; align-items: baseline; justify-content: space-between; }
+.temp b { font-family: Righteous, sans-serif; font-weight: 400; font-size: 46px; line-height: 1; }
+.state { font-family: Pacifico, cursive; font-size: 18px; color: var(--accent-3); white-space: nowrap; }
+.state.warm { color: var(--warm); }
+.state.hot { color: var(--hot); }
+.stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stat > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lbl { font-weight: 700; font-size: 11px; letter-spacing: 0.2em; color: var(--sub); text-transform: uppercase; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.val { font-family: Righteous, sans-serif; font-size: 17px; line-height: 1; white-space: nowrap; }
+.val small { font-family: "Josefin Sans", sans-serif; font-weight: 700; font-size: 11px; color: var(--sub); }
+.track { position: relative; height: 14px; border-radius: 7px; background: linear-gradient(180deg, #D8CFBC 0%, #FAF5E8 100%);
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.7); }
+.track i { position: absolute; left: 1px; top: 1px; bottom: 1px; width: 14px; border-radius: 6px; background-color: var(--bar-1);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 45%, rgba(0,0,0,0.12) 100%);
+  box-shadow: inset 0 -2px 2px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.25); }
+.track i::after { content: ""; position: absolute; left: 5px; right: 5px; top: 2px; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.75); }
+.track i.second { background-color: var(--bar-2); }
+.track i.third { background-color: var(--bar-3); }
+
+/* Atoms. */
+.row { display: flex; justify-content: center; gap: 2px; }
+.fan { flex: 0 1 25%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.fan svg, .glass svg { overflow: visible; flex: none; }
+.fan b { font-family: Righteous, sans-serif; font-weight: 400; font-size: 19px; line-height: 1; }
+.fan span { font-weight: 700; font-size: 10px; letter-spacing: 0.16em; color: var(--sub); text-transform: uppercase; white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+/* Martini glasses. */
+.mem .row { gap: 4px; }
+.glass { flex: 0 1 33.3%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.glass b { font-family: Righteous, sans-serif; font-weight: 400; font-size: 24px; line-height: 1; }
+.glass b small { font-size: 14px; color: var(--sub); }
+.glass .name { font-weight: 700; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; }
+.glass .of { font-weight: 600; font-size: 12px; color: var(--sub); white-space: nowrap; }
+.drink { fill: #9BE3C4; opacity: 0.88; }
+.drink.pink { fill: #F59AB0; }
+.drink.gold { fill: #F2C14E; }
+
+/* The television. */
+.io { display: flex; gap: 14px; align-items: baseline; }
+.io b { font-family: Righteous, sans-serif; font-weight: 400; font-size: 22px; letter-spacing: 0; color: var(--ink); }
+.io .lbl { overflow: visible; }
+.tv { position: relative; width: 378px; height: 204px; margin: 0 auto; }
+.tv > svg { position: absolute; top: 0; left: 0; overflow: visible; }
+.tv .glow { animation: am-flicker 0.15s steps(2) infinite; }
+.tv .in { fill: none; stroke: var(--trace-in); stroke-width: 2.2; stroke-linejoin: round; }
+.tv .out { fill: none; stroke: var(--trace-out); stroke-width: 1.4; stroke-dasharray: 4 3; opacity: 0.85; }
+.tv .dot { fill: #FFFFFF; animation: am-pulse 1.6s ease-in-out infinite; }
+.ends { position: relative; display: flex; justify-content: space-between; width: 326px; margin: 4px auto 0; padding-right: 8px; box-sizing: border-box;
+  font-weight: 700; font-size: 10px; letter-spacing: 0.18em; color: var(--sub); white-space: nowrap; }
+
+/* The chrome script badge. */
+.foot { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.foot svg { flex: none; }
+.chrome { font-family: Pacifico, cursive; font-size: 26px; line-height: 1.4; color: transparent; white-space: nowrap; padding: 0 4px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #C9CCD0 30%, #5E6266 50%, #2E3033 54%, #A6AAAE 80%, #F2F3F4 100%);
+  -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 2px 1px rgba(0,0,0,0.35)); }
+
+/* ---- custom layouts: groups built from the prototypes -------------------
+   rg-Sens puts each widget, at the size it is drawn for (data-rg-width /
+   data-rg-height), in a .rg-fit box and scales that to the cells the user
+   gave it on the group's grid (.rg-items > .rg-item). */
+.groups:has(.rg-items) { grid-auto-rows: minmax(0, 1fr); }
+.card:has(.rg-items), .hero:has(.rg-items) { min-height: 0; overflow: hidden; }
+.hero:has(.rg-items) { align-items: stretch; }
+.card:has(.rg-items) { overflow: visible; }
+.top > .rg-items { position: relative; }
+.rg-fit > * { width: 100%; height: 100%; box-sizing: border-box; }
+.w-clock { display: flex; flex-direction: column; align-items: center; }
+.w-dial { display: flex; align-items: center; gap: 14px; }
+.w-dial .temp { justify-content: flex-start; gap: 6px; }
+.w-dial .temp small { font-family: "Josefin Sans", sans-serif; font-weight: 700; font-size: 16px; color: var(--sub); }
+.w-dial .lbl { font-size: 12px; }
+.w-dial.tall { flex-direction: column; gap: 6px; }
+.w-dial.tall .read { flex: none; width: 100%; align-items: center; gap: 4px; }
+.w-dial.tall .temp b { font-size: 30px; }
+.w-dial.tall .lbl { max-width: 100%; }
+.w-bar.long { display: grid; grid-template-columns: 110px 1fr 88px; align-items: center; gap: 10px; }
+.w-bar.long .val { text-align: right; }
+.w-bar.long .lbl { font-size: 12px; }
+.w-bar { justify-content: center; }
+.w-fan, .w-glass { flex: none; justify-content: center; }
+.w-reading { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 0; border-top: 2px solid var(--accent); padding-top: 4px; }
+.w-reading .val { font-size: 28px; }
+.w-reading .val small { font-size: 13px; }
+.w-tv { display: flex; flex-direction: column; gap: 6px; }
+.w-tv > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 8px; }
+.w-tv .val { font-size: 22px; }
+.w-tv .lbl { font-size: 12px; }
+/* sensor captions are long ("GPU · Memory used"): closer letters, more room */
+.rg-item .lbl { letter-spacing: 0.08em; }
+.w-bar .val { font-size: 15px; }

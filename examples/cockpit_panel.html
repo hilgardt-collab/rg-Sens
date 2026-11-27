@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=480">
+<meta name="rg-design-size" content="480x1920">
+<meta name="rg-layouts" content="480x1920 960x1360 1440x1060 2400x652">
+<meta name="rg-group-size" content="480x338+232">
+<title>Aircraft Cockpit Sensor Panel</title>
+<!--
+  Aircraft cockpit sensor panel for the rg-Sens CSS Template displayer, drawn
+  for 480x1920 portrait: instrument plates in wrinkle paint with slotted
+  screws, round gauges under glass with coloured operating ranges, amber
+  readouts in recessed windows, a green-phosphor network display and an hour
+  meter. Generic: no aircraft maker or avionics brand. A sibling of the other
+  example panels: the same placeholders 0-73 and the same setup.
+
+  Setup: give the panel a Combination source, choose this file as the template
+  under Display, and press Scan Placeholders. That adds the sensors below under
+  Content (ones you already have are kept and reused) and binds every
+  placeholder to the sensor with the matching source and metric:
+
+    Clock      time, day and month names
+    CPU        three sensors: temperature, usage, frequency
+    GPU        five sensors: temperature, utilization, core clock, power usage,
+               memory used
+    Fan Speed  up to four fans (the sensor's caption names the rev counter)
+    Memory     used
+    Disk       used
+    Network    two sensors: download speed, upload speed
+    Uptime     one sensor
+
+  Anything left unbound is hidden: a narrow gauge, a rev counter, a quantity
+  gauge, a whole plate. The processor's power gauge has no rg-Sens source and
+  stays hidden unless you bind a sensor to it by hand on the Bindings tab.
+
+  A temperature gauge sweeps 270 degrees from 20 to 100 (green to 72, yellow
+  to 85, red above, a redline at 85); a rev counter 240 degrees from 0 to
+  3000 rpm (redline 2400); a quantity gauge runs E to F over the top. The
+  annunciators: SYS OK is lit unless something is wrong, TEMP lights amber
+  when the CPU or GPU is at 85 degrees or above, FAN when a bound fan turns
+  slower than 200 rpm. A readout over its limit turns red.
+
+  The network display keeps the last minute (31 samples, one every 2 s) in
+  the page: inbound as a solid green line with a faint fill, outbound as a
+  dashed cyan line, on one shared scale. It starts empty and survives a
+  reload of the template, not a restart of rg-Sens. The hour meter counts
+  whole hours since boot, with the tenths on the white drum.
+
+  Options (the panel's Display tab, or the top of cockpit_panel.css): panel
+  finish (Classic Grey, Black Crinkle, Warbird Olive), how the design fits
+  the panel, the layout, the frame rate, and the full scales.
+
+  Size: the design is drawn for 480x1920, but its five instrument plates (the
+  clock, temperatures, cooling, storage and the network display) re-arrange
+  to suit the panel: one column, two, three or five side by side (the
+  rg-layouts list gives the size each needs). A plate stretches to its cell
+  with a screw in each corner; the instruments keep their proportions.
+
+  Custom layouts: the template elements at the end of the body are the
+  building blocks (two plate styles and the clock, round gauge, strip gauge,
+  narrow gauge, rev counter, quantity gauge and readout widgets) that "My own
+  groups and widgets" builds groups from; see the guide's "Custom Layouts"
+  section.
+
+  The wrinkle paint is a lit noise filter, which is costly to redraw; it
+  carries data-rg-bake, so rg-Sens draws it once per plate into a bitmap.
+
+  Motion: needles ease to new readings and wobble very slightly, the second
+  hand steps and the newest network sample pulses, at --motion-fps frames a
+  second. 0 turns motion off, as do the panel's Animation switch and the
+  system's reduced-motion setting.
+
+  Fonts: B612 (placards, dial numbers) and B612 Mono (readouts), loaded from
+  the fonts folder next to this file; copy that folder along with the
+  template. Nothing is fetched from the network.
+-->
+<link rel="stylesheet" href="cockpit_panel.css">
+</head>
+<body>
+<div class="panel">
+  <!-- shared drawings (never hidden) -->
+  <svg class="defs" aria-hidden="true">
+    <defs>
+      <filter id="ck-crinkle" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="3" seed="2" result="n"></feTurbulence>
+        <feDiffuseLighting in="n" surfaceScale="2.2" lighting-color="#ffffff" result="l"><feDistantLight azimuth="235" elevation="48"></feDistantLight></feDiffuseLighting>
+        <feColorMatrix in="l" type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 1 0"></feColorMatrix>
+      </filter>
+      <filter id="ck-shadow" x="-10%" y="-10%" width="120%" height="130%"><feGaussianBlur stdDeviation="4"></feGaussianBlur></filter>
+      <filter id="ck-blur1" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1"></feGaussianBlur></filter>
+      <filter id="ck-nShadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"></feGaussianBlur></filter>
+      <filter id="ck-glow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="2.2" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+      <filter id="ck-annGlow" x="-40%" y="-60%" width="180%" height="220%"><feGaussianBlur stdDeviation="5"></feGaussianBlur></filter>
+      <linearGradient id="ck-bezel" x1="0.2" y1="0" x2="0.8" y2="1">
+        <stop offset="0" stop-color="#6A6E73"></stop><stop offset="0.25" stop-color="#2A2C2F"></stop>
+        <stop offset="0.7" stop-color="#121314"></stop><stop offset="1" stop-color="#3A3D40"></stop>
+      </linearGradient>
+      <radialGradient id="ck-face" cx="0.45" cy="0.4" r="0.6"><stop offset="0" stop-color="#1E2022"></stop><stop offset="1" stop-color="#0E0F10"></stop></radialGradient>
+      <radialGradient id="ck-screwG" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#E6E8EA"></stop><stop offset="0.45" stop-color="#8E9296"></stop><stop offset="1" stop-color="#2C2E30"></stop></radialGradient>
+      <linearGradient id="ck-window" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000000"></stop><stop offset="1" stop-color="#111214"></stop></linearGradient>
+      <linearGradient id="ck-drum" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#000000"></stop><stop offset="0.3" stop-color="#2A2B2D"></stop><stop offset="0.5" stop-color="#3A3C3F"></stop>
+        <stop offset="0.7" stop-color="#2A2B2D"></stop><stop offset="1" stop-color="#000000"></stop>
+      </linearGradient>
+      <linearGradient id="ck-drumW" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5A5A58"></stop><stop offset="0.3" stop-color="#D8D6D0"></stop><stop offset="0.5" stop-color="#F2F0EA"></stop>
+        <stop offset="0.7" stop-color="#D8D6D0"></stop><stop offset="1" stop-color="#5A5A58"></stop>
+      </linearGradient>
+      <radialGradient id="ck-screen" cx="0.5" cy="0.45" r="0.7"><stop offset="0" stop-color="#08160D"></stop><stop offset="1" stop-color="#020805"></stop></radialGradient>
+      <pattern id="ck-scan" patternUnits="userSpaceOnUse" width="4" height="3"><rect x="0" y="0" width="4" height="1" fill="#000" opacity="0.35"></rect></pattern>
+      <linearGradient id="ck-key" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A4D51"></stop><stop offset="0.5" stop-color="#2A2C2F"></stop><stop offset="1" stop-color="#151617"></stop></linearGradient>
+      <radialGradient id="ck-knob" cx="0.4" cy="0.35" r="0.7"><stop offset="0" stop-color="#4E5155"></stop><stop offset="0.7" stop-color="#1C1D1F"></stop><stop offset="1" stop-color="#0A0A0B"></stop></radialGradient>
+      <linearGradient id="ck-toggle" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#6E7276"></stop><stop offset="0.35" stop-color="#F2F4F6"></stop><stop offset="0.6" stop-color="#A6AAAE"></stop><stop offset="1" stop-color="#4A4D50"></stop>
+      </linearGradient>
+      <radialGradient id="ck-glassShade" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#000" stop-opacity="0"></stop><stop offset="0.82" stop-color="#000" stop-opacity="0"></stop>
+        <stop offset="0.94" stop-color="#000" stop-opacity="0.35"></stop><stop offset="1" stop-color="#000" stop-opacity="0.75"></stop>
+      </radialGradient>
+      <linearGradient id="ck-glassTint" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.12"></stop><stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0.02"></stop><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"></stop>
+      </linearGradient>
+      <radialGradient id="ck-hub" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#9A9EA2"></stop><stop offset="0.5" stop-color="#2E3033"></stop><stop offset="1" stop-color="#0A0A0B"></stop></radialGradient>
+      <linearGradient id="ck-lineFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color: var(--line-1)" stop-opacity="0.28"></stop><stop offset="1" style="stop-color: var(--line-1)" stop-opacity="0.02"></stop></linearGradient>
+      <g id="ck-screw"><circle r="5.2" fill="#000" opacity="0.5"></circle><circle r="4.4" fill="url(#ck-screwG)"></circle><path d="M-3.2 0 H3.2" stroke="#1A1B1C" stroke-width="1.3" stroke-linecap="round"></path></g>
+    </defs>
+  </svg>
+
+  <section class="plate strip"><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><svg class="face" viewBox="8 10 464 82" role="img" aria-label="Annunciator panel">
+      <g class="engraved f-mark">
+        <text x="26" y="60" font-size="21" letter-spacing="3.5">SYSTEM SENSORS</text>
+        <text x="26" y="78" font-size="8.5" letter-spacing="2.2" opacity="0.75">ANNUNCIATOR · MONITOR PANEL</text>
+      </g>
+      <g data-ann="ok" transform="translate(268 26)"></g>
+      <g data-ann="temp" transform="translate(334 26)" data-temps="5 21"></g>
+      <g data-ann="fan" transform="translate(400 26)" data-fans="37 41 45 49"></g></svg></section>
+
+  <div class="groups">
+<!--rg-groups 0-71-->
+  <section class="plate g-clock" data-section><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><svg class="face" viewBox="8 100 464 292" role="img" aria-label="Clock">
+      <g data-ck="clock" data-need="0" transform="translate(148 246)" data-time="0" data-date="1 2 3"></g></svg></section>
+  <section class="plate g-temp" data-section><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><svg class="face" viewBox="8 400 464 400" role="img" aria-label="Temperatures">
+      <text class="engraved f-mark" x="240" y="424" text-anchor="middle" font-size="9" letter-spacing="2.4" opacity="0.85">TEMP °C</text>
+      <g data-ck="gauge" data-need="5" transform="translate(124 524)" data-v="5" data-unit-of="6" data-lo="20" data-hi="100" data-label="CPU TEMP" data-screws></g>
+      <g data-ck="gauge" data-need="21" transform="translate(356 524)" data-v="21" data-unit-of="22" data-lo="20" data-hi="100" data-label="GPU TEMP" data-screws></g>
+      <g data-ck="tape" data-need="9" transform="translate(55 660)" data-v="9" data-max="11" data-unit-of="10" data-scale="100" data-label="LOAD" data-short></g>
+      <g data-ck="tape" data-need="13" transform="translate(111 660)" data-v="13" data-max="15" data-unit-of="14" data-scale="--cpu-clock-max" data-label="CLK" data-short></g>
+      <g data-ck="tape" data-need="17" transform="translate(167 660)" data-v="17" data-max="19" data-unit-of="18" data-scale="--cpu-power-max" data-label="PWR" data-short></g>
+      <g data-ck="tape" data-need="25" transform="translate(287 660)" data-v="25" data-max="27" data-unit-of="26" data-scale="100" data-label="LOAD" data-short></g>
+      <g data-ck="tape" data-need="29" transform="translate(343 660)" data-v="29" data-max="31" data-unit-of="30" data-scale="--gpu-clock-max" data-label="CLK" data-short></g>
+      <g data-ck="tape" data-need="33" transform="translate(399 660)" data-v="33" data-max="35" data-unit-of="34" data-scale="--gpu-power-max" data-label="PWR" data-short></g></svg></section>
+  <section class="plate g-fans" data-section><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><svg class="face" viewBox="8 808 464 236" role="img" aria-label="Cooling">
+      <text class="engraved f-mark" x="24" y="834" font-size="10" letter-spacing="2.4">COOLING · FAN RPM</text>
+      <g data-ck="rpm" data-need="37" transform="translate(70 918)" data-v="37" data-cap="36" data-default="FAN 1"></g>
+      <g data-ck="rpm" data-need="41" transform="translate(186 918)" data-v="41" data-cap="40" data-default="FAN 2"></g>
+      <g data-ck="rpm" data-need="45" transform="translate(302 918)" data-v="45" data-cap="44" data-default="FAN 3"></g>
+      <g data-ck="rpm" data-need="49" transform="translate(418 918)" data-v="49" data-cap="48" data-default="FAN 4"></g></svg></section>
+  <section class="plate g-store" data-section><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><svg class="face" viewBox="8 1052 464 288" role="img" aria-label="Storage">
+      <text class="engraved f-mark" x="24" y="1078" font-size="10" letter-spacing="2.4">STORAGE · QUANTITY USED</text>
+      <g data-ck="tank" data-need="53" transform="translate(84 1180)" data-v="53" data-max="55" data-unit-of="54" data-label="MEMORY"></g>
+      <g data-ck="tank" data-need="57" transform="translate(240 1180)" data-v="57" data-max="59" data-unit-of="58" data-label="VIDEO"></g>
+      <g data-ck="tank" data-need="61" transform="translate(396 1180)" data-v="61" data-max="63" data-unit-of="62" data-label="DISK"></g></svg></section>
+  <section class="plate mfd g-mfd" data-section><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><svg class="face" viewBox="16 1356 448 420" role="img" aria-label="Network display">
+      <g data-ck="mfd" data-need="65" transform="translate(16 1356)" data-in="65" data-out="69" data-unit-of="66" data-max="67" data-scale="--net-max"></g></svg></section>
+<!--/rg-groups-->
+  </div>
+
+  <section class="plate foot" data-need="73"><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><svg class="face" viewBox="8 1796 464 114" role="img" aria-label="Uptime">
+      <g class="engraved f-mark">
+        <text x="28" y="1824" font-size="10" letter-spacing="2.4">UPTIME</text>
+        <text x="28" y="1838" font-size="7.5" letter-spacing="1.8" opacity="0.75">HOURS SINCE BOOT</text>
+        <text x="346" y="1882" font-size="7.5" letter-spacing="1.6" opacity="0.75">HOURS</text>
+        <text x="104" y="1866" font-size="8" letter-spacing="1.4" opacity="0.85">ON</text>
+      </g>
+      <g data-ck="toggle" transform="translate(72 1872)" data-small></g>
+      <g data-ck="hobbs" transform="translate(146 1814)" data-uptime="73"></g>
+      <text class="mono f-mark" x="440" y="1852" text-anchor="end" font-size="18" letter-spacing="1" data-uptime-text="73">--</text></svg></section>
+</div>
+
+<!-- Building blocks for a custom layout (Panel Properties > Display > Layout >
+     "My own groups and widgets"): two plate styles and the instruments the
+     groups are built from. Each instrument is one drawing in its own units,
+     made by the script below from its data-ck kind, so a generated
+     instrument is drawn exactly as the template's own. -->
+
+<template data-rg-group="plate" data-rg-label="Instrument plate">
+  <section class="plate ck-shell" data-section><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><div class="ck-title">{{title}}</div><!--rg-items--></section>
+</template>
+<template data-rg-group="bare" data-rg-label="Plate, no title">
+  <section class="plate ck-shell" data-section><svg class="crinkle" aria-hidden="true"><rect data-rg-bake x="0" y="0" width="100%" height="100%" filter="url(#ck-crinkle)"></rect></svg><svg class="screw tl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(35)"></use></svg><svg class="screw tr" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(120)"></use></svg><svg class="screw bl" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(75)"></use></svg><svg class="screw br" viewBox="-6 -6 12 12" aria-hidden="true"><use href="#ck-screw" transform="rotate(160)"></use></svg><!--rg-items--></section>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock and windows" data-rg-size="large" data-rg-sources="clock" data-rg-width="438" data-rg-height="256">
+  <svg viewBox="-126 -128 438 256" role="img" aria-label="Clock and windows"><g data-ck="clock" data-need="{{time}}" data-time="{{time}}" data-date="{{day_name}} {{day:.0}} {{month_name}}"></g></svg>
+</template>
+<template data-rg-widget="clock" data-rg-label="Clock and windows" data-rg-size="medium" data-rg-sources="clock" data-rg-width="252" data-rg-height="252">
+  <svg viewBox="-126 -126 252 252" role="img" aria-label="Clock and windows"><g data-ck="clock" data-need="{{time}}" data-time="{{time}}" data-date="{{day_name}} {{day:.0}} {{month_name}}" data-dial-only></g></svg>
+</template>
+<template data-rg-widget="gauge" data-rg-label="Round gauge" data-rg-size="large" data-rg-width="206" data-rg-height="206">
+  <svg viewBox="-103 -103 206 206" role="img" aria-label="Round gauge"><g data-ck="gauge" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Strip gauge" data-rg-size="small" data-rg-width="125" data-rg-height="46">
+  <svg viewBox="0 0 125 46" role="img" aria-label="Strip gauge"><g data-ck="hbar" data-need="{{value}}" data-w="125" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Strip gauge" data-rg-size="medium" data-rg-width="200" data-rg-height="46">
+  <svg viewBox="0 0 200 46" role="img" aria-label="Strip gauge"><g data-ck="hbar" data-need="{{value}}" data-w="200" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100"></g></svg>
+</template>
+<template data-rg-widget="bar" data-rg-label="Strip gauge" data-rg-size="large" data-rg-width="390" data-rg-height="30">
+  <svg viewBox="0 0 390 30" role="img" aria-label="Strip gauge"><g data-ck="hbar" data-need="{{value}}" data-w="390" data-row data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100"></g></svg>
+</template>
+<template data-rg-widget="tape" data-rg-label="Narrow gauge" data-rg-size="small" data-rg-width="58" data-rg-height="150">
+  <svg viewBox="-16 -18 58 150" role="img" aria-label="Narrow gauge"><g data-ck="tape" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}" data-scale="100"></g></svg>
+</template>
+<template data-rg-widget="fan" data-rg-label="Rev counter" data-rg-size="small" data-rg-sources="fan" data-rg-width="112" data-rg-height="172">
+  <svg viewBox="-56 -56 112 172" role="img" aria-label="Rev counter"><g data-ck="rpm" data-need="{{value}}" data-v="{{value}}" data-cap="{{caption}}" data-default="FAN" data-max="{{max}}"></g></svg>
+</template>
+<template data-rg-widget="tank" data-rg-label="Quantity gauge" data-rg-size="medium" data-rg-default-for="memory disk" data-rg-width="140" data-rg-height="204">
+  <svg viewBox="-70 -70 140 204" role="img" aria-label="Quantity gauge"><g data-ck="tank" data-need="{{value}}" data-v="{{value}}" data-max="{{max}}" data-unit-of="{{unit}}" data-cap="{{caption}}"></g></svg>
+</template>
+<template data-rg-widget="reading" data-rg-label="Readout window" data-rg-size="small" data-rg-width="130" data-rg-height="56">
+  <svg viewBox="0 0 130 56" role="img" aria-label="Readout window"><g data-ck="readout" data-need="{{value}}" data-v="{{value}}" data-unit-of="{{unit}}" data-cap="{{caption}}"></g></svg>
+</template>
+
+<script type="application/json" id="rg-template-options">
+[
+    {"id": "finish", "label": "Panel finish", "type": "choice", "var": "--finish", "default": "grey", "choices": [{"value": "grey", "label": "Classic Grey"}, {"value": "black", "label": "Black Crinkle"}, {"value": "olive", "label": "Warbird Olive"}]},
+    {"id": "fit", "label": "Fit to panel", "type": "choice", "var": "--rg-fit", "default": "fill", "help": "How the design is fitted to the panel's size", "choices": [{"value": "fill", "label": "Arrange and stretch to fit"}, {"value": "cover", "label": "Fill the panel (crop)"}, {"value": "contain", "label": "Whole design visible"}, {"value": "stretch", "label": "Distort to the panel"}]},
+    {"id": "columns", "label": "Layout", "type": "choice", "var": "--rg-columns", "default": "0", "help": "How many columns the plates are arranged in", "choices": [{"value": "0", "label": "Automatic"}, {"value": "1", "label": "One column (1 x 5)"}, {"value": "2", "label": "Two columns (2 x 3)"}, {"value": "3", "label": "Three columns (3 x 2)"}, {"value": "5", "label": "Five columns (5 x 1)"}]},
+    {"id": "fps", "label": "Motion frames per second", "type": "number", "var": "--motion-fps", "min": 0, "max": 30, "step": 1, "default": 10, "help": "0 turns motion off; higher is smoother and costs more CPU"},
+    {"id": "cpu_clock_max", "label": "CPU clock full scale (GHz)", "type": "number", "var": "--cpu-clock-max", "min": 1, "max": 10, "step": 0.1, "default": 5.5, "help": "Used when the sensor has no maximum of its own"},
+    {"id": "cpu_power_max", "label": "CPU power full scale (W)", "type": "number", "var": "--cpu-power-max", "min": 10, "max": 1000, "step": 5, "default": 125},
+    {"id": "gpu_clock_max", "label": "GPU clock full scale (GHz)", "type": "number", "var": "--gpu-clock-max", "min": 0.5, "max": 10, "step": 0.1, "default": 2.6},
+    {"id": "gpu_power_max", "label": "GPU power full scale (W)", "type": "number", "var": "--gpu-power-max", "min": 10, "max": 1500, "step": 5, "default": 300},
+    {"id": "fan_max", "label": "Rev counter full scale (rpm)", "type": "number", "var": "--fan-max", "min": 1000, "max": 20000, "step": 100, "default": 3000},
+    {"id": "net_max", "label": "Network display full scale", "type": "number", "var": "--net-max", "min": 0, "max": 10000, "step": 1, "default": 16, "help": "In the network sensors' unit; 0 follows the peak of the last minute"}
+]
+</script>
+<script type="application/json" id="rg-placeholder-config">
+{
+    "0": {"hint": "Clock - Time", "source": "clock", "instance": 1, "field": "time"},
+    "1": {"hint": "Clock - Day name", "source": "clock", "instance": 1, "field": "day_name"},
+    "2": {"hint": "Clock - Day of month", "source": "clock", "instance": 1, "field": "day", "format": "{:.0}"},
+    "3": {"hint": "Clock - Month name", "source": "clock", "instance": 1, "field": "month_name"},
+    "4": {"hint": "CPU temperature (gauge) - Caption", "source": "cpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "5": {"hint": "CPU temperature (gauge) - Value", "source": "cpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "6": {"hint": "CPU temperature (gauge) - Unit", "source": "cpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "7": {"hint": "CPU temperature (gauge) - Max", "source": "cpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "8": {"hint": "CPU usage - Caption", "source": "cpu", "metric": "usage", "instance": 0, "field": "caption"},
+    "9": {"hint": "CPU usage - Value", "source": "cpu", "metric": "usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "10": {"hint": "CPU usage - Unit", "source": "cpu", "metric": "usage", "instance": 0, "field": "unit"},
+    "11": {"hint": "CPU usage - Max", "source": "cpu", "metric": "usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "12": {"hint": "CPU frequency - Caption", "source": "cpu", "metric": "frequency", "instance": 0, "field": "caption"},
+    "13": {"hint": "CPU frequency - Value", "source": "cpu", "metric": "frequency", "instance": 0, "field": "value", "format": "{:.2}"},
+    "14": {"hint": "CPU frequency - Unit", "source": "cpu", "metric": "frequency", "instance": 0, "field": "unit"},
+    "15": {"hint": "CPU frequency - Max", "source": "cpu", "metric": "frequency", "instance": 0, "field": "max", "format": "{:.2}"},
+    "16": {"hint": "CPU power (no source; map by hand) - Caption", "source": "", "instance": 0, "field": "caption"},
+    "17": {"hint": "CPU power (no source; map by hand) - Value", "source": "", "instance": 0, "field": "value", "format": "{:.0}"},
+    "18": {"hint": "CPU power (no source; map by hand) - Unit", "source": "", "instance": 0, "field": "unit"},
+    "19": {"hint": "CPU power (no source; map by hand) - Max", "source": "", "instance": 0, "field": "max", "format": "{:.0}"},
+    "20": {"hint": "GPU temperature (gauge) - Caption", "source": "gpu", "metric": "temperature", "instance": 0, "field": "caption"},
+    "21": {"hint": "GPU temperature (gauge) - Value", "source": "gpu", "metric": "temperature", "instance": 0, "field": "value", "format": "{:.0}"},
+    "22": {"hint": "GPU temperature (gauge) - Unit", "source": "gpu", "metric": "temperature", "instance": 0, "field": "unit"},
+    "23": {"hint": "GPU temperature (gauge) - Max", "source": "gpu", "metric": "temperature", "instance": 0, "field": "max", "format": "{:.0}"},
+    "24": {"hint": "GPU utilisation - Caption", "source": "gpu", "metric": "utilization", "instance": 0, "field": "caption"},
+    "25": {"hint": "GPU utilisation - Value", "source": "gpu", "metric": "utilization", "instance": 0, "field": "value", "format": "{:.0}"},
+    "26": {"hint": "GPU utilisation - Unit", "source": "gpu", "metric": "utilization", "instance": 0, "field": "unit"},
+    "27": {"hint": "GPU utilisation - Max", "source": "gpu", "metric": "utilization", "instance": 0, "field": "max", "format": "{:.0}"},
+    "28": {"hint": "GPU core clock - Caption", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "caption"},
+    "29": {"hint": "GPU core clock - Value", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "value", "format": "{:.0}"},
+    "30": {"hint": "GPU core clock - Unit", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "unit"},
+    "31": {"hint": "GPU core clock - Max", "source": "gpu", "metric": "clock_core", "instance": 0, "field": "max", "format": "{:.0}"},
+    "32": {"hint": "GPU power - Caption", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "caption"},
+    "33": {"hint": "GPU power - Value", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "value", "format": "{:.0}"},
+    "34": {"hint": "GPU power - Unit", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "unit"},
+    "35": {"hint": "GPU power - Max", "source": "gpu", "metric": "power_usage", "instance": 0, "field": "max", "format": "{:.0}"},
+    "36": {"hint": "Fan 1 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "37": {"hint": "Fan 1 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "38": {"hint": "Fan 1 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "39": {"hint": "Fan 1 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "40": {"hint": "Fan 2 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "41": {"hint": "Fan 2 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "42": {"hint": "Fan 2 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "43": {"hint": "Fan 2 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "44": {"hint": "Fan 3 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "45": {"hint": "Fan 3 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "46": {"hint": "Fan 3 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "47": {"hint": "Fan 3 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "48": {"hint": "Fan 4 - Caption", "source": "fan", "instance": 0, "field": "caption"},
+    "49": {"hint": "Fan 4 - Value", "source": "fan", "instance": 0, "field": "value", "format": "{:.0}"},
+    "50": {"hint": "Fan 4 - Unit", "source": "fan", "instance": 0, "field": "unit"},
+    "51": {"hint": "Fan 4 - Max", "source": "fan", "instance": 0, "field": "max", "format": "{:.0}"},
+    "52": {"hint": "Memory used - Caption", "source": "memory", "metric": "used", "instance": 0, "field": "caption"},
+    "53": {"hint": "Memory used - Value", "source": "memory", "metric": "used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "54": {"hint": "Memory used - Unit", "source": "memory", "metric": "used", "instance": 0, "field": "unit"},
+    "55": {"hint": "Memory used - Max", "source": "memory", "metric": "used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "56": {"hint": "GPU memory used - Caption", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "caption"},
+    "57": {"hint": "GPU memory used - Value", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "value", "format": "{:.1}"},
+    "58": {"hint": "GPU memory used - Unit", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "unit"},
+    "59": {"hint": "GPU memory used - Max", "source": "gpu", "metric": "memory_used", "instance": 0, "field": "max", "format": "{:.1}"},
+    "60": {"hint": "Disk used - Caption", "source": "disk", "metric": "used", "instance": 0, "field": "caption"},
+    "61": {"hint": "Disk used - Value", "source": "disk", "metric": "used", "instance": 0, "field": "value", "format": "{:.0}"},
+    "62": {"hint": "Disk used - Unit", "source": "disk", "metric": "used", "instance": 0, "field": "unit"},
+    "63": {"hint": "Disk used - Max", "source": "disk", "metric": "used", "instance": 0, "field": "max", "format": "{:.0}"},
+    "64": {"hint": "Network download - Caption", "source": "network", "metric": "download_speed", "instance": 0, "field": "caption"},
+    "65": {"hint": "Network download - Value", "source": "network", "metric": "download_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "66": {"hint": "Network download - Unit", "source": "network", "metric": "download_speed", "instance": 0, "field": "unit"},
+    "67": {"hint": "Network download - Max", "source": "network", "metric": "download_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "68": {"hint": "Network upload - Caption", "source": "network", "metric": "upload_speed", "instance": 0, "field": "caption"},
+    "69": {"hint": "Network upload - Value", "source": "network", "metric": "upload_speed", "instance": 0, "field": "value", "format": "{:.1}"},
+    "70": {"hint": "Network upload - Unit", "source": "network", "metric": "upload_speed", "instance": 0, "field": "unit"},
+    "71": {"hint": "Network upload - Max", "source": "network", "metric": "upload_speed", "instance": 0, "field": "max", "format": "{:.1}"},
+    "72": {"hint": "Clock - Hour (for morning / afternoon / evening / night)", "source": "clock", "instance": 1, "field": "hour", "format": "{:.0}"},
+    "73": {"hint": "Uptime - Seconds", "source": "uptime", "instance": 1, "field": "seconds", "format": "{:.0}"}
+}
+</script>
+<script>
+(function () {
+  'use strict';
+  var HOT = 85, STALL = 200;
+  var SAMPLES = 31, SAMPLE_MS = 2000;   // one minute of history
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  function cssNum(name, fallback) { var n = parseFloat(css.getPropertyValue(name)); return isFinite(n) ? n : fallback; }
+  // The finish is a keyword; the stylesheet holds each one's colours.
+  root.setAttribute('data-finish', (css.getPropertyValue('--finish') || 'grey').trim() || 'grey');
+
+  function num(v) {
+    if (v === undefined || v === null) return NaN;
+    var n = parseFloat(String(v).replace(/,/g, ''));
+    return isFinite(n) ? n : NaN;
+  }
+  // Whole numbers from 100 up, otherwise at most `places` decimals.
+  function fmt(n, places) {
+    if (!isFinite(n)) return '--';
+    var p = Math.abs(n) >= 100 ? 0 : places;
+    return n.toLocaleString('en-US', { maximumFractionDigits: p }).replace(/,/g, '');
+  }
+  function known(s) { return s !== undefined && s !== null && s !== '' && s !== '--'; }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function f1(n) { return (Math.round(n * 10) / 10).toString(); }
+  // Write only what changed: an untouched page does not repaint.
+  function attr(el, name, value) { if (el && el.getAttribute(name) !== value) el.setAttribute(name, value); }
+  function flag(el, name, on) { if (el && el.classList.contains(name) !== on) el.classList.toggle(name, on); }
+  function hide(el, on) { if (el && el.hasAttribute('hidden') !== on) el.toggleAttribute('hidden', on); }
+  function each(sel, fn, scope) { Array.prototype.forEach.call((scope || document).querySelectorAll(sel), fn); }
+  function one(scope, role) { return scope.querySelector('[data-role="' + role + '"]'); }
+  // Text that may not run wider than `max` units: cut with an ellipsis.
+  function text(el, value, max) {
+    if (!el) return;
+    if (el.getAttribute('data-full') === value && el.textContent !== '') return;
+    el.setAttribute('data-full', value);
+    el.textContent = value;
+    if (!max || !el.getBBox) return;
+    var s = value;
+    // The box, not getComputedTextLength: that leaves out letter-spacing.
+    while (s.length > 1 && el.getBBox().width > max) {
+      s = s.slice(0, -1);
+      el.textContent = s.replace(/[\s·]+$/, '') + '…';
+    }
+  }
+  function isMhz(v, id) { return !!id && /^mhz$/i.test(String(v[id] || '')); }
+  function unitOf(v, g) {
+    var id = g.getAttribute('data-unit-of'), u = v[id];
+    return isMhz(v, id) ? 'GHz' : known(u) ? String(u) : '';
+  }
+  // A reading and its full scale: the sensor's own maximum, else the scale
+  // given (a number or a custom property's name).
+  function reading(v, g, fallback) {
+    var val = num(v[g.getAttribute('data-v')]), max = num(v[g.getAttribute('data-max')]);
+    if (isMhz(v, g.getAttribute('data-unit-of'))) { val /= 1000; max /= 1000; }
+    var scale = g.getAttribute('data-scale') || String(fallback || 100);
+    var full = max > 0 ? max : scale.charAt(0) === '-' ? cssNum(scale, 100) : +scale;
+    return { val: val, full: full > 0 ? full : 100 };
+  }
+  function caption(v, g) {
+    var label = g.getAttribute('data-label');
+    if (label) return label;
+    var c = v[g.getAttribute('data-cap')];
+    return known(c) ? String(c).toUpperCase().replace(/_/g, ' ') : (g.getAttribute('data-default') || '');
+  }
+  // A point `r` from the centre, `deg` clockwise from straight up.
+  function at(r, deg) { var a = deg * Math.PI / 180; return [r * Math.sin(a), -r * Math.cos(a)]; }
+  function xy(p) { return f1(p[0]) + ' ' + f1(p[1]); }
+  function arc(r, d0, d1) {
+    return 'M' + xy(at(r, d0)) + ' A' + r + ' ' + r + ' 0 ' + (d1 - d0 > 180 ? 1 : 0) + ' 1 ' + xy(at(r, d1));
+  }
+  function ticks(r0, r1, degs) { return degs.map(function (d) { return 'M' + xy(at(r0, d)) + ' L' + xy(at(r1, d)); }).join(' '); }
+  function knurl(r0, r1) { var d = []; for (var a = 0; a < 360; a += 10) d.push(a); return ticks(r0, r1, d); }
+  var SCREW = function (x, y, s, rot) { return '<use href="#ck-screw" transform="translate(' + f1(x) + ' ' + f1(y) + ') scale(' + s + ') rotate(' + rot + ')"/>'; };
+
+  // ------------------------------------------------------- instruments
+  // A round instrument: bezel, face, operating ranges, ticks, a tapered
+  // needle that casts a shadow, and glass over it all. `o` describes its
+  // scale: radius, where the scale starts and how far it sweeps (degrees
+  // clockwise from straight up), the ranges as shares of the scale.
+  function dial(g, o) {
+    var R = o.R, k = R / 92, s = '';
+    s += '<circle cy="6" r="' + (R + 9) + '" fill="#000" opacity="0.7" filter="url(#ck-shadow)"/>';
+    if (o.screws) [45, 135, 225, 315].forEach(function (d, i) { var p = at((R + 9) * 1.24, d); s += SCREW(p[0], p[1], 0.86, [40, 95, 140, 10][i]); });
+    s += '<circle r="' + (R + 9) + '" fill="url(#ck-bezel)"/><circle r="' + (R + 2.5) + '" fill="#050505"/><circle r="' + R + '" fill="url(#ck-face)"/>';
+    function deg(f) { return o.start + f * o.sweep; }
+    o.bands.forEach(function (b) { s += '<path class="s-' + b[2] + '" d="' + arc(o.bandR, deg(b[0]), deg(b[1])) + '" fill="none" stroke-width="' + o.bandW + '"/>'; });
+    var minor = [], major = [];
+    for (var i = 0; i <= o.minors; i++) {
+      var f = i / o.minors;
+      if (Math.abs(f * o.majors - Math.round(f * o.majors)) < 1e-6) major.push(deg(f)); else minor.push(deg(f));
+    }
+    s += '<path class="s-mark" d="' + ticks(o.minR[0], o.minR[1], minor) + '" stroke-width="1"/>' +
+      '<path class="s-mark" d="' + ticks(o.majR[0], o.majR[1], major) + '" stroke-width="2.4"/>';
+    if (o.redline !== undefined) s += '<path class="s-red" d="' + ticks(o.redR[0], o.redR[1], [deg(o.redline)]) + '" stroke-width="3"/>';
+    s += '<g class="f-mark" font-size="' + o.numSize + '" text-anchor="middle">';
+    o.labels.forEach(function (f, n) { var p = at(o.numR, deg(f)); s += '<text x="' + f1(p[0]) + '" y="' + f1(p[1] + o.numSize * 0.36) + '" data-role="n' + n + '"></text>'; });
+    s += '</g>' + (o.face || '');
+    var L = o.needle * R, w = 3.4 * k, tl = 0.24 * L;
+    var needle = 'M' + f1(-w) + ' 0 L' + f1(-w * 0.55) + ' ' + f1(-L * 0.82) + ' L0 ' + f1(-L) + ' L' + f1(w * 0.55) + ' ' + f1(-L * 0.82) + ' L' + f1(w) + ' 0 Z';
+    s += '<g data-needle data-at="2.5 3.5"><path d="' + needle + '" fill="#000" opacity="0.55" filter="url(#ck-nShadow)"/></g>' +
+      '<g data-needle><path d="M' + f1(-w * 1.3) + ' 0 L' + f1(-w * 0.9) + ' ' + f1(tl) + ' L' + f1(w * 0.9) + ' ' + f1(tl) + ' L' + f1(w * 1.3) + ' 0 Z" fill="#1A1B1C"/>' +
+      '<path class="f-needle" d="' + needle + '" stroke="#000" stroke-width="0.5"/></g>' +
+      '<circle r="' + f1(o.hub) + '" fill="url(#ck-hub)"/>';
+    s += glass(R);
+    return s;
+  }
+  function glass(R) {
+    var k = R / 92;
+    return '<circle r="' + R + '" fill="url(#ck-glassShade)"/><circle r="' + R + '" fill="url(#ck-glassTint)"/>' +
+      '<path d="M' + f1(-86 * k) + ' ' + f1(-23 * k) + ' A' + f1(89 * k) + ' ' + f1(89 * k) + ' 0 0 1 ' + f1(30.4 * k) + ' ' + f1(-83.6 * k) +
+      ' A' + f1(115 * k) + ' ' + f1(115 * k) + ' 0 0 0 ' + f1(-86 * k) + ' ' + f1(-23 * k) + ' Z" fill="#FFFFFF" opacity="0.16" filter="url(#ck-nShadow)"/>' +
+      '<ellipse cx="' + f1(-38.6 * k) + '" cy="' + f1(-46 * k) + '" rx="' + f1(14.7 * k) + '" ry="' + f1(4.6 * k) + '" transform="rotate(-40 ' + f1(-38.6 * k) + ' ' + f1(-46 * k) + ')" fill="#FFFFFF" opacity="0.55" filter="url(#ck-nShadow)"/>';
+  }
+  function windowBox(x, y, w, h, inset) {
+    inset = inset || 4;
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="3" fill="#0A0A0B" stroke="#2C2E31" stroke-width="1"/>' +
+      '<rect x="' + (x + inset) + '" y="' + (y + inset) + '" width="' + (w - 2 * inset) + '" height="' + (h - 2 * inset) + '" rx="1.5" fill="url(#ck-window)"/>';
+  }
+  function amber(x, y, size, role, extra) {
+    return '<text class="mono f-amber" x="' + x + '" y="' + y + '" font-size="' + size + '" text-anchor="middle" filter="url(#ck-glow)" data-role="' + role + '"' + (extra || '') + '>--</text>';
+  }
+  function toggle(small) {
+    return (small ? '<rect x="-20" y="-20" width="40" height="40" rx="4" fill="#0B0B0C"/><circle r="9" fill="url(#ck-knob)" stroke="#5A5D61" stroke-width="1"/>'
+                  : '<circle r="13" fill="#0B0B0C"/><circle r="10" fill="url(#ck-knob)" stroke="#5A5D61" stroke-width="1"/>') +
+      '<path d="M-3.5 2 L-2 -24 L2 -24 L3.5 2 Z" fill="#000" opacity="0.45" transform="translate(3 3)"/>' +
+      '<path d="M-3.5 2 L-2 -24 L2 -24 L3.5 2 Z" fill="url(#ck-toggle)"/><ellipse cy="-24" rx="3.6" ry="2.2" fill="#F2F4F6"/>';
+  }
+  function knob(R) {
+    return '<circle r="' + R + '" fill="#0B0B0C"/><circle r="' + (R - 3) + '" fill="url(#ck-knob)"/>' +
+      '<path d="' + knurl(R - 6, R - 3) + '" stroke="#000" stroke-width="1" opacity="0.6"/><circle r="' + (R - 8) + '" fill="url(#ck-knob)"/>';
+  }
+
+  var DRAW = {
+    clock: function (g) {
+      var hours = [], minutes = [];
+      for (var i = 0; i < 60; i++) (i % 5 ? minutes : hours).push(i * 6);
+      var s = '<circle cy="6" r="117" fill="#000" opacity="0.7" filter="url(#ck-shadow)"/>';
+      [45, 135, 225, 315].forEach(function (d, n) { var p = at(144, d); s += SCREW(p[0], p[1], 0.86, [40, 95, 140, 10][n]); });
+      s += '<circle r="117" fill="url(#ck-bezel)"/><circle r="110.5" fill="#050505"/><circle r="108" fill="url(#ck-face)"/>' +
+        '<path class="s-mark" d="' + ticks(96.4, 105, minutes) + '" stroke-width="1"/>' +
+        '<path class="s-mark" d="' + ticks(88.8, 105, hours) + '" stroke-width="2.4"/>' +
+        '<g class="f-mark" font-size="18" text-anchor="middle">';
+      for (var h = 1; h <= 12; h++) { var p = at(76, h * 30); s += '<text x="' + f1(p[0]) + '" y="' + f1(p[1] + 6.5) + '">' + h + '</text>'; }
+      s += '</g><text class="f-mark" y="-34.7" font-size="7.5" letter-spacing="2" text-anchor="middle" opacity="0.6">12 HR</text>' +
+        '<text class="f-mark" y="43" font-size="8.5" letter-spacing="2.4" text-anchor="middle" opacity="0.8">CLOCK</text>';
+      var hour = 'M-5 14 L-6 -10 L-3.5 -52 L0 -60 L3.5 -52 L6 -10 L5 14 Z', minute = 'M-3.6 16 L-4.2 -10 L-2.2 -84 L0 -92 L2.2 -84 L4.2 -10 L3.6 16 Z';
+      s += '<g data-hand="hour" data-at="2.5 3.5"><path d="' + hour + '" fill="#000" opacity="0.55" filter="url(#ck-nShadow)"/></g>' +
+        '<g data-hand="hour"><path class="f-needle" d="' + hour + '" stroke="#000" stroke-width="0.5"/></g><circle r="6" fill="url(#ck-hub)"/>' +
+        '<g data-hand="minute" data-at="2.5 3.5"><path d="' + minute + '" fill="#000" opacity="0.55" filter="url(#ck-nShadow)"/></g>' +
+        '<g data-hand="minute"><path class="f-needle" d="' + minute + '" stroke="#000" stroke-width="0.5"/></g><circle r="6" fill="url(#ck-hub)"/>' +
+        '<g data-hand="second"><path class="f-second" d="M-0.9 22 L-0.9 -96 L0.9 -96 L0.9 22 Z"/><circle class="f-second" cy="22" r="3.2"/></g>' +
+        '<circle class="f-second" r="3"/>' + glass(108);
+      if (!g.hasAttribute('data-dial-only')) {
+        s += '<g class="engraved f-mark" font-size="8" letter-spacing="1.6" opacity="0.8">' +
+          '<text x="152" y="-102">TIME · LOCAL</text><text x="152" y="-12">DATE</text>' +
+          '<text x="144" y="60">UTC</text><text x="144" y="126">LT</text><text x="272" y="120" text-anchor="middle">SET</text></g>' +
+          '<rect x="142" y="-96" width="166" height="66" rx="4" fill="#0A0A0B" stroke="#2C2E31" stroke-width="1.5"/>' +
+          '<rect x="148" y="-90" width="154" height="54" rx="2" fill="url(#ck-window)"/>' +
+          '<text class="mono f-amber" x="225" y="-48" font-size="38" text-anchor="middle" opacity="0.08">88:88</text>' +
+          amber(225, -48, 38, 'time') +
+          '<rect x="142" y="-6" width="166" height="38" rx="4" fill="#0A0A0B" stroke="#2C2E31" stroke-width="1.5"/>' +
+          '<rect x="148" y="-1" width="154" height="28" rx="2" fill="url(#ck-window)"/>' +
+          amber(225, 19, 15, 'date', ' letter-spacing="1.5"') +
+          '<g transform="translate(192 92)">' + toggle(false) + '</g><g transform="translate(272 92)">' + knob(17) + '</g>';
+      }
+      return s;
+    },
+    gauge: function (g) {
+      // Temperatures: 270 degrees from the lower left. A hand-written gauge
+      // reads 20 to 100; a generated one 0 to its sensor's maximum.
+      var face = '<text class="f-mark" y="31" font-size="9.5" letter-spacing="2.2" text-anchor="middle" data-role="cap"></text>' +
+        '<rect x="-28" y="40" width="56" height="24" fill="url(#ck-window)" stroke="#2A2C2E" stroke-width="1"/>' +
+        amber(0, 58, 17, 'val') +
+        '<text class="f-mark" x="40" y="58" font-size="7" letter-spacing="1" opacity="0.8" data-role="unit"></text>';
+      return dial(g, { R: 92, start: -135, sweep: 270, bandR: 73.6, bandW: 5.1, minors: 16, majors: 4,
+        minR: [81.6, 89], majR: [75, 89], redline: 0.8125, redR: [68, 90], numR: 55, numSize: 15,
+        labels: [0, 0.25, 0.5, 0.75, 1], needle: 0.86, hub: 8, screws: g.hasAttribute('data-screws'),
+        bands: [[0, 0.65, 'green'], [0.65, 0.8125, 'yellow'], [0.8125, 1, 'red']], face: face });
+    },
+    rpm: function (g) {
+      var face = '<text class="f-mark" y="18" font-size="7" letter-spacing="1" text-anchor="middle">RPM</text>' +
+        '<text class="f-mark" y="27" font-size="6.5" text-anchor="middle" data-role="mult">×100</text>';
+      return dial(g, { R: 46, start: -120, sweep: 240, bandR: 36.8, bandW: 3, minors: 30, majors: 6,
+        minR: [39.4, 43], majR: [36.1, 43], redline: 0.8, redR: [34, 44], numR: 25, numSize: 11,
+        labels: [0, 1 / 3, 2 / 3, 1], needle: 0.84, hub: 5,
+        bands: [[0.1333, 0.6, 'green'], [0.6, 0.8, 'yellow']], face: face }) +
+        '<text class="engraved f-mark" y="71" font-size="9" letter-spacing="1.4" text-anchor="middle" data-role="cap"></text>' +
+        windowBox(-38, 80, 76, 28) + amber(0, 99, 15, 'val', ' letter-spacing="0.5"');
+    },
+    tank: function (g) {
+      var face = '<g class="f-mark" font-size="14" text-anchor="middle"><text x="-32" y="-15">E</text><text y="-34">½</text><text x="32" y="-15">F</text></g>' +
+        '<text class="f-mark" y="18" font-size="8.5" letter-spacing="1.6" text-anchor="middle" data-role="cap"></text>' +
+        '<rect x="-30" y="24" width="60" height="22" fill="url(#ck-window)" stroke="#2A2C2E" stroke-width="1"/>' + amber(0, 40, 15, 'pct');
+      return dial(g, { R: 62, start: -60, sweep: 120, bandR: 49.6, bandW: 3.4, minors: 8, majors: 4,
+        minR: [54, 59], majR: [49.6, 59], numR: 40, numSize: 0, labels: [], needle: 0.86, hub: 6.5,
+        bands: [[0, 0.8, 'green'], [0.8, 0.9, 'yellow'], [0.9, 1, 'red']], face: face }) +
+        windowBox(-62, 98, 124, 30) + amber(0, 118, 13, 'of');
+    },
+    tape: function (g) {
+      // A narrow gauge: green, yellow and red bands up its side, a white
+      // fill from the bottom and a pointer at the reading.
+      return '<rect width="26" height="108" rx="3" fill="#0A0A0B" stroke="#2C2E31" stroke-width="1"/>' +
+        '<rect x="4" y="4" width="18" height="100" rx="1" fill="url(#ck-face)"/>' +
+        '<rect class="f-green" x="19" y="24" width="3" height="80"/><rect class="f-yellow" x="19" y="9" width="3" height="15"/><rect class="f-red" x="19" y="4" width="3" height="5"/>' +
+        '<path class="s-mark" d="M4 104 h7 M4 79 h4 M4 54 h7 M4 29 h4 M4 4 h7" stroke-width="1"/>' +
+        '<rect class="f-needle" x="11" width="6" opacity="0.85" data-role="fill"/>' +
+        '<path class="f-needle" d="M0 0 l8 -5 v10 Z" stroke="#000" stroke-width="0.6" data-role="pointer"/>' +
+        amber(13, -6, 11, 'val') +
+        '<text class="engraved f-mark" x="13" y="124" font-size="8.5" letter-spacing="1.4" text-anchor="middle" data-role="cap"></text>';
+    },
+    hbar: function (g) {
+      // The narrow gauge lying on its side, for wide cells.
+      var w = +g.getAttribute('data-w') || 200, row = g.hasAttribute('data-row');
+      var x0 = row ? 108 : 0, x1 = row ? w - 72 : w, y = row ? 2 : 18, h = 26;
+      g.setAttribute('data-geom', [x0, x1, y, h].join(' '));
+      var len = x1 - x0 - 8, gx = x0 + 4;
+      return '<rect x="' + x0 + '" y="' + y + '" width="' + (x1 - x0) + '" height="' + h + '" rx="3" fill="#0A0A0B" stroke="#2C2E31" stroke-width="1"/>' +
+        '<rect x="' + gx + '" y="' + (y + 4) + '" width="' + len + '" height="' + (h - 8) + '" rx="1" fill="url(#ck-face)"/>' +
+        '<rect class="f-green" x="' + gx + '" y="' + (y + 4) + '" width="' + f1(len * 0.8) + '" height="3"/>' +
+        '<rect class="f-yellow" x="' + f1(gx + len * 0.8) + '" y="' + (y + 4) + '" width="' + f1(len * 0.15) + '" height="3"/>' +
+        '<rect class="f-red" x="' + f1(gx + len * 0.95) + '" y="' + (y + 4) + '" width="' + f1(len * 0.05) + '" height="3"/>' +
+        '<rect class="f-needle" x="' + gx + '" y="' + (y + 11) + '" height="6" opacity="0.85" data-role="fill"/>' +
+        '<path class="f-needle" d="M0 0 l-5 -8 h10 Z" stroke="#000" stroke-width="0.6" data-role="pointer"/>' +
+        (row ? '<text class="engraved f-mark" x="0" y="19" font-size="9" letter-spacing="1.4" data-role="cap"></text>' + '<text class="mono f-amber" x="' + w + '" y="20" font-size="13" text-anchor="end" filter="url(#ck-glow)" data-role="val">--</text>'
+             : '<text class="engraved f-mark" x="0" y="11" font-size="8.5" letter-spacing="1.4" data-role="cap"></text>' +
+               '<text class="mono f-amber" x="' + w + '" y="12" font-size="12" text-anchor="end" filter="url(#ck-glow)" data-role="val">--</text>');
+    },
+    readout: function () {
+      return '<text class="engraved f-mark" x="2" y="10" font-size="8.5" letter-spacing="1.4" data-role="cap"></text>' +
+        windowBox(0, 16, 130, 40) + amber(65, 44, 18, 'val');
+    },
+    toggle: function (g) { return toggle(g.hasAttribute('data-small')); },
+    hobbs: function () {
+      var s = '<rect width="188" height="56" rx="4" fill="#0A0A0B" stroke="#2C2E31" stroke-width="1.5"/>';
+      for (var i = 0; i < 5; i++) {
+        var x = 6 + i * 35.2;
+        s += '<rect x="' + f1(x) + '" y="6" width="27" height="44" fill="url(#' + (i < 4 ? 'ck-drum' : 'ck-drumW') + ')"/>' +
+          '<path d="M' + f1(x + 31) + ' 6 V50" stroke="#000" stroke-width="1.4"/>' +
+          '<text class="mono" x="' + f1(x + 13.5) + '" y="37" font-size="25" text-anchor="middle" fill="' + (i < 4 ? '#F2F0EA' : '#141414') + '" data-role="d' + i + '">0</text>';
+      }
+      return s + '<rect x="6" y="6" width="176" height="44" fill="none" stroke="#000" stroke-width="4" opacity="0.7" filter="url(#ck-blur1)"/>' +
+        '<path d="M6 7 H182" stroke="#FFFFFF" stroke-width="1" opacity="0.15"/>';
+    },
+    mfd: function () {
+      var s = '<rect x="48" y="18" width="352" height="328" rx="6" fill="#000"/>' +
+        '<rect x="54" y="24" width="340" height="316" rx="3" fill="url(#ck-screen)"/><rect x="54" y="24" width="340" height="316" fill="url(#ck-scan)" opacity="0.5"/>';
+      function key(x, y, w) {
+        return '<rect x="' + x + '" y="' + (y + 2) + '" width="' + w + '" height="22" rx="3" fill="#000" opacity="0.6"/>' +
+          '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="22" rx="3" fill="url(#ck-key)" stroke="#000" stroke-width="0.8"/>' +
+          '<rect x="' + (x + 3) + '" y="' + (y + 2) + '" width="' + (w - 6) + '" height="1.4" rx="0.7" fill="#FFFFFF" opacity="0.25"/>';
+      }
+      for (var i = 0; i < 5; i++) s += key(8, 58 + i * 58, 32) + key(408, 58 + i * 58, 32) + key(92 + i * 64, 362, 48);
+      s += '<g transform="translate(28 388)">' + knob(20) + '</g><g transform="translate(420 388)">' + knob(20) + '</g>' +
+        '<g font-size="8" letter-spacing="1.4" fill="#D8D6CE" text-anchor="middle"><text x="28" y="418">RANGE</text><text x="420" y="418">BRT</text>' +
+        '<text x="116" y="416">NET</text><text x="180" y="416">CPU</text><text x="244" y="416">MEM</text><text x="308" y="416">SYS</text><text x="372" y="416">MENU</text></g>';
+      var grid = 'M110 221 H346 M110 170 H346 M110 119 H346';
+      for (var v = 1; v < 6; v++) grid += ' M' + f1(110 + v * 236 / 6) + ' 68 V272';
+      s += '<g class="mono" filter="url(#ck-glow)">' +
+        '<text class="mono f-line1" x="106" y="46" font-size="13" letter-spacing="1">NET TRAFFIC</text>' +
+        '<text class="mono f-line1" x="342" y="46" font-size="11" text-anchor="end">60 S</text>' +
+        '<path class="s-line1" d="M102 54 H346" stroke-width="0.8" opacity="0.6"/>' +
+        '<path class="s-line1" d="' + grid + '" stroke-width="0.6" stroke-dasharray="1 4" opacity="0.6"/>' +
+        '<path class="s-line1" d="M110 64 V272 H346" fill="none" stroke-width="1"/>' +
+        '<g class="f-line1" font-size="8.5" text-anchor="end" opacity="0.85"><text class="mono" x="106" y="72" data-role="top">16</text><text class="mono" x="106" y="174" data-role="half">8</text><text class="mono" x="106" y="275">0</text></g>' +
+        '<path data-area fill="url(#ck-lineFill)"/>' +
+        '<path data-line="in" class="s-line1" fill="none" stroke-width="2.2" stroke-linejoin="round"/>' +
+        '<path data-line="out" class="s-line2" fill="none" stroke-width="1.6" stroke-dasharray="5 3" stroke-linejoin="round"/>' +
+        '<circle data-now class="s-line1 ck-pulse" r="4" fill="none" stroke-width="1.6" hidden/>' +
+        '<g class="f-line1" font-size="9" opacity="0.8"><text class="mono" x="116" y="294">-60</text><text class="mono" x="228" y="294" text-anchor="middle">-30</text><text class="mono" x="346" y="294" text-anchor="end">NOW</text></g>' +
+        '<text class="mono f-line1" x="114" y="326" font-size="11">IN</text><text class="mono f-line1" x="136" y="328" font-size="22" data-role="in">--</text>' +
+        '<text class="mono f-line2" x="232" y="326" font-size="11">OUT</text><text class="mono f-line2" x="264" y="328" font-size="22" data-role="out">--</text>' +
+        '<text class="mono f-line1" x="346" y="326" font-size="10" opacity="0.8" text-anchor="end" data-role="unit">MB/S</text>' +
+        '<g class="f-line1" font-size="9.5"><text class="mono" x="60" y="69">IN</text><text class="mono" x="60" y="127">OUT</text><text class="mono" x="60" y="185">BOTH</text>' +
+        '<text class="mono" x="60" y="243">SCL</text><text class="mono" x="60" y="301">HOLD</text></g>' +
+        '<rect class="s-line1" x="57" y="174" width="36" height="14" fill="none" stroke-width="1"/>' +
+        '<g class="f-line1" font-size="9.5" text-anchor="end"><text class="mono" x="388" y="69">RNG+</text><text class="mono" x="388" y="127">RNG-</text>' +
+        '<text class="mono" x="388" y="185">AUTO</text><text class="mono" x="388" y="243">LOG</text><text class="mono" x="388" y="301">BACK</text></g></g>' +
+        '<path d="M54 24 H394 V114 Q244 84 54 164 Z" fill="#FFFFFF" opacity="0.05"/>' +
+        '<rect x="54" y="24" width="340" height="316" rx="3" fill="none" stroke="#000" stroke-width="6" opacity="0.6" filter="url(#ck-blur1)"/>';
+      return s;
+    }
+  };
+  each('[data-ck]', function (g) {
+    var draw = DRAW[g.getAttribute('data-ck')];
+    if (draw) g.innerHTML = draw(g);
+  });
+  // Annunciators: a lens in a black case, lit or dark.
+  var ANN = { ok: ['SYS OK', '#3CFF6A', '#06200C', '#062A10'], temp: ['TEMP', '#FFB020', '#2A1A02', '#2A1400'], fan: ['FAN', '#FFB020', '#2A1A02', '#2A1400'] };
+  each('[data-ann]', function (g) {
+    var a = ANN[g.getAttribute('data-ann')];
+    g.innerHTML = '<rect x="3" y="4" width="58" height="38" rx="3" fill="' + a[1] + '" opacity="0" filter="url(#ck-annGlow)" data-role="glow"/>' +
+      '<rect width="64" height="44" rx="3" fill="#0A0A0B"/><rect x="4" y="4" width="56" height="36" rx="2" fill="' + a[2] + '" data-role="lens"/>' +
+      '<rect x="4" y="4" width="56" height="16" rx="2" fill="#FFFFFF" opacity="0.1"/>' +
+      '<text x="32" y="26" font-size="10.5" letter-spacing="1" text-anchor="middle" fill="rgba(200,200,190,0.22)" data-role="legend">' + a[0] + '</text>';
+  });
+  function annunciate(g, lit) {
+    var a = ANN[g.getAttribute('data-ann')];
+    attr(one(g, 'glow'), 'opacity', lit ? '0.75' : '0');
+    attr(one(g, 'lens'), 'fill', lit ? a[1] : a[2]);
+    attr(one(g, 'legend'), 'fill', lit ? a[3] : 'rgba(200,200,190,0.22)');
+  }
+
+  // ------------------------------------------------------- needles
+  // A needle has a target; while motion is on it eases there (damped like a
+  // real instrument) and wobbles very slightly, otherwise it jumps.
+  var moving = false;
+  function aim(g, deg) {
+    each('[data-needle]', function (el) {
+      el.setAttribute('data-target', deg.toFixed(2));
+      if (!moving || !el.hasAttribute('data-cur')) { el.setAttribute('data-cur', deg.toFixed(2)); place(el, deg); }
+    }, g);
+  }
+  function place(el, deg) {
+    var off = el.getAttribute('data-at');
+    attr(el, 'transform', (off ? 'translate(' + off + ') ' : '') + 'rotate(' + deg.toFixed(1) + ')');
+  }
+
+  // ------------------------------------------------------- history
+  var latest = {}, hist = {}, limit = {};
+  var everMapped = false;
+  var STORE = 'rg-cockpit-history';
+  try {
+    var saved = JSON.parse(sessionStorage.getItem(STORE) || 'null');
+    if (saved && Date.now() - saved.at < 90000 && saved.hist) {
+      Object.keys(saved.hist).forEach(function (id) { hist[id] = saved.hist[id].slice(-SAMPLES); });
+    }
+  } catch (e) { /* no storage: the display starts empty */ }
+  function fullScale(peak, fixed) {
+    if (fixed > 0) return fixed;
+    var full = 1;                       // 1, 2, 4, 8 ...: no rescale for every small change
+    while (full < peak) full *= 2;
+    return full;
+  }
+  function demo(kind) {
+    var out = [];
+    for (var i = 0; i < SAMPLES; i++) {
+      out.push(kind === 'out' ? 1.2 + 0.5 * Math.sin(i * 0.9) + 0.35 * Math.sin(i * 2.1 + 1)
+                              : 7.8 + 3.4 * Math.sin(i * 0.47 + 0.6) + 2.4 * Math.sin(i * 1.31) + 1.2 * Math.sin(i * 3.1 + 2));
+    }
+    return out;
+  }
+  function drawScreens() {
+    each('[data-ck="mfd"]', function (g) {
+      var inId = g.getAttribute('data-in'), outId = g.getAttribute('data-out');
+      var listIn = everMapped ? (hist[inId] || []) : demo('in');
+      var listOut = everMapped ? (hist[outId] || []) : demo('out');
+      var fixed = !everMapped ? 16 : limit[inId] > 0 ? limit[inId] : cssNum(g.getAttribute('data-scale'), 0);
+      var full = fullScale(Math.max.apply(null, listIn.concat(listOut, [0])), fixed);
+      text(one(g, 'top'), fmt(full, 1));
+      text(one(g, 'half'), fmt(full / 2, 1));
+      function pts(list) {
+        var n = list.length;
+        return list.map(function (val, i) { return [110 + (SAMPLES - n + i) * 236 / (SAMPLES - 1), 272 - clamp01(val / full) * 204]; });
+      }
+      function line(p) {
+        var d = '';
+        if (p.length > 1) {
+          d = 'M' + xy(p[0]);
+          for (var i = 1; i < p.length - 1; i++) d += ' Q' + xy(p[i]) + ' ' + xy([(p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2]);
+          d += ' L' + xy(p[p.length - 1]);
+        }
+        return d;
+      }
+      var pin = pts(listIn), din = line(pin);
+      attr(g.querySelector('[data-line="in"]'), 'd', din);
+      attr(g.querySelector('[data-area]'), 'd', din ? din + ' L' + xy([pin[pin.length - 1][0], 272]) + ' L' + xy([pin[0][0], 272]) + ' Z' : '');
+      attr(g.querySelector('[data-line="out"]'), 'd', line(pts(listOut)));
+      var now = g.querySelector('[data-now]');
+      hide(now, pin.length === 0);
+      if (pin.length) { attr(now, 'cx', f1(pin[pin.length - 1][0])); attr(now, 'cy', f1(pin[pin.length - 1][1])); }
+    });
+  }
+  function sample() {
+    var any = false;
+    each('[data-ck="mfd"]', function (g) {
+      [g.getAttribute('data-in'), g.getAttribute('data-out')].forEach(function (id) {
+        if (hist[id] && hist[id].stamp === sample.round) return;
+        if (!isFinite(latest[id])) return;
+        var list = hist[id] || (hist[id] = []);
+        list.push(Math.round(latest[id] * 100) / 100);
+        if (list.length > SAMPLES) list.shift();
+        list.stamp = sample.round;
+        any = true;
+      });
+    });
+    sample.round++;
+    if (!any) return;
+    drawScreens();
+    try { sessionStorage.setItem(STORE, JSON.stringify({ at: Date.now(), hist: hist })); } catch (e) { /* ignore */ }
+  }
+  sample.round = 1;
+  setInterval(sample, SAMPLE_MS);
+
+  // ------------------------------------------------------- values
+  function scaleLabel(n) {
+    if (Math.abs(n) >= 10000) return Math.round(n / 1000) + 'k';
+    if (Math.abs(n) >= 1000) return (Math.round(n / 100) / 10) + 'k';
+    return String(Math.round(n * 10) / 10);
+  }
+
+  // Text is cut to fit by its measured width, so measure again once the
+  // bundled fonts have loaded.
+  var lastValues = {};
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      each('[data-full]', function (el) { el.removeAttribute('data-full'); });
+      window.updateValues(lastValues);
+    });
+  }
+
+  window.updateValues = function (v) {
+    if (!v || typeof v !== 'object') return;
+    lastValues = v;
+    var anyMapped = Object.keys(v).some(function (k) { return known(v[k]); });
+    var first = anyMapped && !everMapped;
+    if (anyMapped) everMapped = true;
+
+    // Clocks: ten past ten until the time is known. "5:14 PM" reads as 17:14.
+    each('[data-ck="clock"]', function (g) {
+      var t = v[g.getAttribute('data-time')];
+      var hm = /(\d{1,2}):(\d{2})/.exec(known(t) ? String(t) : ''), h = hm ? +hm[1] : 10, m = hm ? +hm[2] : 10;
+      if (hm && /pm/i.test(String(t)) && h < 12) h += 12;
+      if (hm && /am/i.test(String(t)) && h === 12) h = 0;
+      each('[data-hand="hour"]', function (el) { place(el, (h % 12 + m / 60) * 30); }, g);
+      each('[data-hand="minute"]', function (el) { place(el, m * 6); }, g);
+      text(one(g, 'time'), hm ? ('0' + h).slice(-2) + ':' + hm[2] : '--:--');
+      var ids = (g.getAttribute('data-date') || '').split(' '), day = num(v[ids[1]]);
+      var name = known(v[ids[0]]) ? String(v[ids[0]]).slice(0, 3).toUpperCase() : '';
+      var month = known(v[ids[2]]) ? String(v[ids[2]]).slice(0, 3).toUpperCase() : '';
+      text(one(g, 'date'), [name, isFinite(day) ? String(Math.round(day)) : '', month].filter(Boolean).join(' ') || '--');
+    });
+
+    var hot = false;
+    each('[data-ck="gauge"]', function (g) {
+      var val = num(v[g.getAttribute('data-v')]), lo = 0, hi, unit = unitOf(v, g);
+      if (g.hasAttribute('data-lo')) { lo = +g.getAttribute('data-lo'); hi = +g.getAttribute('data-hi'); }
+      else { var r = reading(v, g); val = r.val; hi = r.full; }
+      var f = isFinite(val) ? clamp01((val - lo) / (hi - lo)) : 0;
+      aim(g, -135 + f * 270);
+      for (var n = 0; n < 5; n++) text(one(g, 'n' + n), scaleLabel(lo + (hi - lo) * n / 4));
+      text(one(g, 'cap'), caption(v, g), 96);
+      var temp = g.hasAttribute('data-lo') || /°|^c$/i.test(unit);
+      text(one(g, 'val'), isFinite(val) ? (temp ? String(Math.round(val)) : fmt(val, val < 10 ? 2 : 1)) : '--', 52);
+      text(one(g, 'unit'), temp ? '' : unit.toUpperCase(), 40);
+      flag(g, 'over', isFinite(val) && f >= 0.8125);
+      if (g.hasAttribute('data-lo') && val >= HOT) hot = true;
+    });
+    each('[data-ck="tape"]', function (g) {
+      var r = reading(v, g), f = isFinite(r.val) ? clamp01(r.val / r.full) : 0, y = 104 - f * 100;
+      var fill = one(g, 'fill');
+      attr(fill, 'y', f1(y)); attr(fill, 'height', f1(f * 100));
+      attr(one(g, 'pointer'), 'transform', 'translate(19 ' + f1(y) + ')');
+      var unit = unitOf(v, g), shown = fmt(r.val, unit === '%' ? 0 : r.val < 10 ? 2 : 1);
+      if (g.hasAttribute('data-short')) shown += unit === '%' || unit.length === 1 ? unit : '';
+      else shown += unit === '%' ? '%' : unit ? ' ' + unit : '';
+      text(one(g, 'val'), isFinite(r.val) ? shown : '--', g.hasAttribute('data-short') ? 52 : 80);
+      text(one(g, 'cap'), caption(v, g), g.hasAttribute('data-short') ? 52 : 76);
+      flag(g, 'over', isFinite(r.val) && f >= 0.95);
+    });
+    each('[data-ck="hbar"]', function (g) {
+      var r = reading(v, g), f = isFinite(r.val) ? clamp01(r.val / r.full) : 0;
+      var geom = g.getAttribute('data-geom').split(' ').map(Number), gx = geom[0] + 4, len = geom[1] - geom[0] - 8, y = geom[2];
+      attr(one(g, 'fill'), 'width', f1(len * f));
+      attr(one(g, 'pointer'), 'transform', 'translate(' + f1(gx + len * f) + ' ' + (y + 10) + ')');
+      var unit = unitOf(v, g), valEl = one(g, 'val');
+      text(valEl, isFinite(r.val) ? fmt(r.val, unit === '%' ? 0 : r.val < 10 ? 2 : 1) + (unit === '%' ? '%' : unit ? ' ' + unit : '') : '--', g.hasAttribute('data-row') ? 68 : 90);
+      var room = g.hasAttribute('data-row') ? 100 : (+g.getAttribute('data-w')) - (valEl.getBBox ? valEl.getBBox().width : 50) - 10;
+      text(one(g, 'cap'), caption(v, g), Math.max(room, 12));
+      flag(g, 'over', isFinite(r.val) && f >= 0.95);
+    });
+    var stalled = false;
+    each('[data-ck="rpm"]', function (g) {
+      var rpm = num(v[g.getAttribute('data-v')]), max = num(v[g.getAttribute('data-max')]);
+      var full = max > 0 ? max : cssNum('--fan-max', 3000);
+      var f = isFinite(rpm) ? clamp01(rpm / full) : 0;
+      aim(g, -120 + f * 240);
+      for (var n = 0; n < 4; n++) text(one(g, 'n' + n), String(Math.round(full * n / 3 / 100)));
+      text(one(g, 'cap'), caption(v, g), 104);
+      text(one(g, 'val'), isFinite(rpm) ? String(Math.round(rpm)) : '----');
+      flag(g, 'over', isFinite(rpm) && f >= 0.8);
+      if (isFinite(rpm) && rpm < STALL) stalled = true;
+    });
+    each('[data-ck="tank"]', function (g) {
+      var r = reading(v, g), f = isFinite(r.val) ? clamp01(r.val / r.full) : 0;
+      aim(g, -60 + f * 120);
+      text(one(g, 'cap'), caption(v, g), 80);
+      text(one(g, 'pct'), isFinite(r.val) ? Math.round(f * 100) + '%' : '--');
+      var unit = unitOf(v, g), max = num(v[g.getAttribute('data-max')]);
+      text(one(g, 'of'), isFinite(r.val) ? fmt(r.val, 1) + (max > 0 ? '/' + fmt(max, 1) : '') + (unit ? ' ' + unit : '') : '--', 112);
+      flag(g, 'over', isFinite(r.val) && f >= 0.9);
+    });
+    each('[data-ck="readout"]', function (g) {
+      var val = num(v[g.getAttribute('data-v')]), unit = unitOf(v, g);
+      if (isMhz(v, g.getAttribute('data-unit-of'))) val /= 1000;
+      text(one(g, 'cap'), caption(v, g), 126);
+      text(one(g, 'val'), isFinite(val) ? fmt(val, val < 10 ? 2 : 1) + (unit === '%' ? '%' : unit ? ' ' + unit : '') : '--', 116);
+    });
+    each('[data-ck="mfd"]', function (g) {
+      var unit = unitOf(v, g) || 'MB/s';
+      ['in', 'out'].forEach(function (k) {
+        var id = g.getAttribute('data-' + k), val = num(v[id]);
+        latest[id] = val;
+        text(one(g, k), isFinite(val) ? fmt(val, 1) : '--');
+      });
+      text(one(g, 'unit'), unit.toUpperCase());
+      limit[g.getAttribute('data-in')] = num(v[g.getAttribute('data-max')]);
+    });
+    if (first) { sample(); drawScreens(); }   // the sample minute makes way for real data
+    each('[data-uptime]', function (g) {      // whole hours, and tenths on the white drum
+      var sec = num(v[g.getAttribute('data-uptime')]), digits = '00000';
+      if (isFinite(sec)) {
+        var tenths = Math.floor(Math.max(sec, 0) / 360);
+        digits = ('0000' + tenths).slice(-5);
+      }
+      for (var i = 0; i < 5; i++) text(one(g, 'd' + i), digits.charAt(i));
+    });
+    each('[data-uptime-text]', function (el) {   // 4D 7H
+      var sec = num(v[el.getAttribute('data-uptime-text')]), out = '--';
+      if (isFinite(sec)) {
+        var d = Math.floor(sec / 86400), hr = Math.floor(sec / 3600) % 24, mn = Math.floor(sec / 60) % 60;
+        out = d > 0 ? d + 'D ' + hr + 'H' : hr + 'H ' + mn + 'M';
+      }
+      text(el, out);
+    });
+    // Annunciators: the temperatures and fans of the template's own gauges.
+    each('[data-ann="temp"]', function (g) {
+      g.getAttribute('data-temps').split(' ').forEach(function (id) { if (num(v[id]) >= HOT) hot = true; });
+      annunciate(g, hot);
+    });
+    each('[data-ann="fan"]', function (g) {
+      g.getAttribute('data-fans').split(' ').forEach(function (id) { var r = num(v[id]); if (isFinite(r) && r < STALL) stalled = true; });
+      annunciate(g, stalled);
+    });
+    each('[data-ann="ok"]', function (g) { annunciate(g, !hot && !stalled); });
+
+    // Hide what has no data. With nothing bound at all, show the whole design.
+    each('[data-need]', function (el) {
+      var raw = v[el.getAttribute('data-need')];
+      hide(el, anyMapped && !isFinite(num(raw)) && !known(raw));
+    });
+    each('[data-section]', function (el) {
+      hide(el, el.querySelector('[data-need]') !== null && el.querySelector('[data-need]:not([hidden])') === null);
+    });
+  };
+
+  // ------------------------------------------------------- motion
+  // Every CSS animation is paused and stepped from here at a fixed, low frame
+  // rate: each frame costs a repaint in the web process and a present in
+  // rg-Sens, so the rate is the cost. Positions follow the wall clock.
+  var fps = cssNum('--motion-fps', 0);
+  var reducedQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var reduced = !!(reducedQuery && reducedQuery.matches);
+  var enabled = true, speed = 1;
+  var timer = null, last = 0;
+  var EPOCH = 1700000000000;
+
+  function secondHands(seconds) {
+    each('[data-hand="second"]', function (el) { place(el, seconds * 6); });
+  }
+  function frame() {
+    var now = Date.now(), t = (now - EPOCH) * speed;
+    var dt = Math.min((now - last) / 1000, 1);
+    last = now;
+    // Asked for afresh each frame: a cached list would revive cancelled ones.
+    var anims = document.getAnimations();
+    for (var i = 0; i < anims.length; i++) anims[i].currentTime = t;
+    secondHands(new Date(now).getSeconds());
+    // Needles: damped towards the reading (about 300 ms), then a wobble of
+    // 0.7 degrees, each instrument at its own pace.
+    var k = 1 - Math.exp(-dt * speed / 0.1), n = 0;
+    each('[data-needle]', function (el) {
+      var target = +el.getAttribute('data-target'), cur = +el.getAttribute('data-cur');
+      if (!isFinite(target)) return;
+      cur = isFinite(cur) ? cur + (target - cur) * k : target;
+      el.setAttribute('data-cur', cur.toFixed(2));
+      var period = 1.1 + (Math.floor(n / 2) % 9) * 0.3;
+      place(el, cur + 0.7 * Math.sin(2 * Math.PI * t / 1000 / period + n));
+      n++;
+    });
+  }
+  function applyMotion() {
+    var on = enabled && !reduced && fps > 0;
+    moving = on;
+    root.classList.toggle('still', !on);
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!on) {
+      secondHands(21);
+      each('[data-needle]', function (el) { var target = +el.getAttribute('data-target'); if (isFinite(target)) { el.setAttribute('data-cur', target.toFixed(2)); place(el, target); } });
+      return;
+    }
+    last = Date.now();
+    timer = setInterval(frame, 1000 / Math.min(fps, 30));
+    frame();
+  }
+  // The panel's Animation switch and speed arrive with the first value update.
+  window.addEventListener('rg-motion', function (e) {
+    enabled = !!e.detail.enabled;
+    speed = e.detail.speed > 0 ? e.detail.speed : 1;
+    applyMotion();
+  });
+  if (reducedQuery && reducedQuery.addEventListener) {
+    reducedQuery.addEventListener('change', function (e) { reduced = e.matches; applyMotion(); });
+  }
+  if (root.getAttribute('data-rg-motion') === 'off') enabled = false;
+  drawScreens();
+  window.updateValues({});              // hands, needles and drums in place before the first values arrive
+  applyMotion();
+})();
+
+</script>
+</body>
+</html>
